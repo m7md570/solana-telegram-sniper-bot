@@ -7,6 +7,19 @@ RugCheck security integration, and on-chain developer fee routing.
 
 import os
 import sys
+
+# Force UTF-8 encoding on Windows console
+if sys.stdout is not None:
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+if sys.stderr is not None:
+    try:
+        sys.stderr.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
 import asyncio
 import logging
 from typing import Optional

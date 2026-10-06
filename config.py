@@ -9,6 +9,16 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
 
+# Auto-load .env file if present
+ENV_FILE = BASE_DIR / ".env"
+if ENV_FILE.exists():
+    with open(ENV_FILE, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                os.environ[k.strip()] = v.strip().strip('"').strip("'")
+
 # ==============================================================================
 # 🎯 DEVELOPER MONETIZATION & PLATFORM FEES
 # ==============================================================================

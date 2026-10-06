@@ -292,6 +292,18 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await status_msg.edit_text(f"❌ *فشل في إرسال المعاملة*: `{sig_or_err}`", parse_mode="Markdown")
 
+    elif data == "btn_snipe_guide":
+        text = (
+            "🎯 *دليل القنص والشراء الفوري* ⚡\n"
+            "━━━━━━━━━━━━━━━━━━━\n"
+            "1. افتح أي منصة (DexScreener, Pump.fun, Twitter, Photon).\n"
+            "2. انسخ عنوان العقد الذكي للعملة (Contract Address).\n"
+            "3. الصق العنوان هنا في هذه المحادثة مباشرة.\n"
+            "4. سيقوم البوت فوراً بفحص أمان العملة (RugCheck) وإظهار أزرار الشراء الفوري بنقرة واحدة!\n"
+        )
+        kb = [[InlineKeyboardButton("🔙 رجوع", callback_data="btn_refresh")]]
+        await query.edit_message_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+
     elif data.startswith("sell_"):
         parts = data.split("_")
         mint = parts[1]
@@ -299,10 +311,82 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text(f"⚡ *جاري تحضير أمر بيع {pct}% من العملة...*", parse_mode="Markdown")
 
 
+async def wallet_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for /wallet command."""
+    user_id = update.effective_user.id
+    pubkey, _ = get_or_create_wallet(user_id)
+    balance = get_sol_balance(pubkey)
+    text = (
+        f"💳 *إدارة المحفظة والإيداع* 🏦\n"
+        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"📍 *عنوان إيداع SOL*:\n`{pubkey}`\n\n"
+        f"💰 *الرصيد المتاح*: `{balance:.4f} SOL`\n"
+    )
+    kb = [
+        [InlineKeyboardButton("🔑 إظهار المفتاح الخاص (Private Key)", callback_data="btn_export_key")],
+        [InlineKeyboardButton("🔄 تحديث الرصيد", callback_data="btn_wallet")]
+    ]
+    await update.message.reply_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+
+
+async def positions_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for /positions command."""
+    user_id = update.effective_user.id
+    pubkey, _ = get_or_create_wallet(user_id)
+    tokens = get_token_accounts(pubkey)
+    if not tokens:
+        text = "📊 *لا توجد صفقات أو رموز مشتراة حالياً في محفظتك.*"
+    else:
+        text = "📊 *الرموز المفتوحة في محفظتك*:\n━━━━━━━━━━━━━━━━━━━\n"
+        for t in tokens:
+            text += f"• `{t['mint'][:6]}...{t['mint'][-4:]}`: `{t['amount']:,.2f}` رمز\n"
+    await update.message.reply_text(text, parse_mode="Markdown")
+
+
+async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for /settings command."""
+    user_id = update.effective_user.id
+    settings = get_user_settings(user_id)
+    current_slip = settings["slippage_bps"] / 100.0
+    text = (
+        f"⚙️ *إعدادات التداول والانزلاق (Slippage)*\n"
+        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"🎯 الانزلاق الحالي: `{current_slip}%`\n\n"
+        f"اختر نسبة الانزلاق المناسبة:"
+    )
+    kb = [
+        [
+            InlineKeyboardButton("0.5%", callback_data="slip_50"),
+            InlineKeyboardButton("1.0%", callback_data="slip_100"),
+            InlineKeyboardButton("2.0%", callback_data="slip_200"),
+            InlineKeyboardButton("5.0%", callback_data="slip_500")
+        ]
+    ]
+    await update.message.reply_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for /help command."""
+    text = (
+        "❓ *دليل استخدام بوت قنص سولانا* ⚡\n"
+        "━━━━━━━━━━━━━━━━━━━\n"
+        "• `/start` - فتح لوحة التحكم الرئيسية.\n"
+        "• `/wallet` - عرض عنوان المحفظة والإيداع وسحب المفاتيح.\n"
+        "• `/positions` - عرض صفقاتك والعملات المشتراة.\n"
+        "• `/settings` - ضبط نسبة الانزلاق وسرعة المعاملة.\n\n"
+        "💡 *للقنص الفوري*: انسخ عنوان أي عملة والصقه هنا مباشرة!"
+    )
+    await update.message.reply_text(text, parse_mode="Markdown")
+
+
 def build_application(token: str) -> Application:
     """Builds the Telegram Application instance."""
     app = Application.builder().token(token).build()
     app.add_handler(CommandHandler("start", start_command))
+    app.add_handler(CommandHandler("wallet", wallet_command))
+    app.add_handler(CommandHandler("positions", positions_command))
+    app.add_handler(CommandHandler("settings", settings_command))
+    app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CallbackQueryHandler(callback_router))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
     return app

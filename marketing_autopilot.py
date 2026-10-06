@@ -82,21 +82,26 @@ def generate_marketing_post() -> tuple:
     status_label = scan.get("status", "SAFE")
     emoji = "🟢" if status_label == "SAFE" else "🟡"
 
+    vol_m = vol / 1_000_000.0 if vol >= 1_000_000 else vol / 1_000.0
+    vol_unit = "M" if vol >= 1_000_000 else "K"
+
     post_lines = [
-        f"🔥 Solana Trending Alpha: ${symbol} is surging on DexScreener!",
+        f"🔥 Solana Alpha: ${symbol} Trending!",
+        f"📈 24h: {change_24h:+.1f}% | Vol: ${vol_m:.1f}{vol_unit}",
+        f"🛡️ RugCheck: {emoji} {status_label} ({rug_score})",
         f"",
-        f"📈 24h Change: {change_24h:+.1f}% | 1h: {change_1h:+.1f}%",
-        f"💵 Price: ${price:.8f}",
-        f"💧 Liquidity: ${liq:,.0f} | 24h Volume: ${vol:,.0f}",
-        f"🛡️ RugCheck Audit: {emoji} {status_label} (Risk Score: {rug_score})",
-        f"",
-        f"⚡ 1-Click Fast Sniper Execution (Sub-400ms):",
+        f"⚡ 1-Click Fast Sniper (Sub-400ms):",
         f"👉 https://t.me/PopcornSniperBot",
         f"",
-        f"#Solana #{symbol} #SOL #MemeCoin #CryptoTrading"
+        f"#Solana #{symbol} #SOL"
     ]
 
-    return "\n".join(post_lines), mint
+    post_text = "\n".join(post_lines)
+    # Strict 260 character guard for free X accounts
+    if len(post_text) > 260:
+        post_text = post_text[:257] + "..."
+
+    return post_text, mint
 
 
 def publish_post(text: str) -> bool:

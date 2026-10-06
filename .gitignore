@@ -4,6 +4,8 @@
 data/*.sqlite
 data/*.db
 data/
+*.sqlite
+*.db
 
 # Python
 __pycache__/

@@ -84,7 +84,8 @@ def init_database():
             ("total_referrals", "INTEGER DEFAULT 0"),
             ("referral_earnings_sol", "REAL DEFAULT 0.0"),
             ("auto_buy_enabled", "INTEGER DEFAULT 0"),
-            ("auto_buy_amount", "REAL DEFAULT 0.1")
+            ("auto_buy_amount", "REAL DEFAULT 0.1"),
+            ("language", "TEXT DEFAULT 'en'")
         ]
         for col_name, col_type in migrations:
             if col_name not in existing_cols:
@@ -109,7 +110,38 @@ def decrypt_secret(encrypted_secret: str) -> bytes:
     return _cipher.decrypt(encrypted_secret.encode("ascii"))
 
 
-def get_or_create_wallet(user_id: int, username: str = "") -> Tuple[str, bool]:
+def get_user_language(user_id: int) -> str:
+    """Retrieves user language preference ('en' or 'ar'). Defaults to 'en'."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        row = cursor.execute("SELECT language FROM users WHERE user_id = ?", (user_id,)).fetchone()
+        if row and row["language"]:
+            return row["language"]
+        return "en"
+    except Exception:
+        return "en"
+    finally:
+        conn.close()
+
+
+def set_user_language(user_id: int, language: str) -> bool:
+    """Updates user language preference ('en' or 'ar')."""
+    if language not in ("en", "ar"):
+        language = "en"
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE users SET language = ? WHERE user_id = ?", (language, user_id))
+        conn.commit()
+        return True
+    except Exception:
+        return False
+    finally:
+        conn.close()
+
+
+def get_or_create_wallet(user_id: int, username: str = "", initial_language: str = "en") -> Tuple[str, bool]:
     """
     Retrieves existing user wallet or generates a brand new one.
     Returns: (public_key_str, is_new_wallet)
@@ -128,8 +160,8 @@ def get_or_create_wallet(user_id: int, username: str = "") -> Tuple[str, bool]:
         encrypted_str = encrypt_secret(secret_bytes)
 
         cursor.execute(
-            "INSERT INTO users (user_id, username, public_key, encrypted_secret) VALUES (?, ?, ?, ?)",
-            (user_id, username or "", pubkey_str, encrypted_str)
+            "INSERT INTO users (user_id, username, public_key, encrypted_secret, language) VALUES (?, ?, ?, ?, ?)",
+            (user_id, username or "", pubkey_str, encrypted_str, initial_language)
         )
         conn.commit()
         return pubkey_str, True

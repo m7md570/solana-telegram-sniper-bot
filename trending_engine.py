@@ -84,38 +84,67 @@ def get_trending_tokens(limit: int = 5) -> List[Dict[str, Any]]:
     return trending[:limit]
 
 
-def format_trending_list(tokens: List[Dict[str, Any]]) -> str:
-    """Formats an executive HTML card of top trending Solana tokens."""
+def format_trending_list(tokens: List[Dict[str, Any]], lang: str = "en") -> str:
+    """Formats an executive HTML card of top trending Solana tokens in English or Arabic."""
     import html
     if not tokens:
-        return "⚠️ <b>تعذر جلب العملات الرائجة حالياً، يرجى المحاولة بعد قليل.</b>"
+        if lang == "ar":
+            return "⚠️ <b>تعذر جلب العملات الرائجة حالياً، يرجى المحاولة بعد قليل.</b>"
+        return "⚠️ <b>Could not fetch trending tokens right now. Please try again shortly.</b>"
 
-    lines = [
-        "🔥 <b>أكثر عملات سولانا رواجاً وزخماً الآن (Top Trending)</b> ⚡",
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    ]
+    if lang == "ar":
+        lines = [
+            "🔥 <b>أكثر عملات سولانا رواجاً وزخماً الآن (Top Trending)</b> ⚡",
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        ]
+        for idx, t in enumerate(tokens, 1):
+            sym = html.escape(t["symbol"])
+            mint = t["mint"]
+            price = t["price_usd"]
+            c24 = t["change_24h"]
+            c1 = t["change_1h"]
+            vol = t["volume_24h"]
+            liq = t["liquidity"]
+            emoji = "🚀" if c24 >= 0 else "🔻"
 
-    for idx, t in enumerate(tokens, 1):
-        sym = html.escape(t["symbol"])
-        mint = t["mint"]
-        price = t["price_usd"]
-        c24 = t["change_24h"]
-        c1 = t["change_1h"]
-        vol = t["volume_24h"]
-        liq = t["liquidity"]
-        emoji = "🚀" if c24 >= 0 else "🔻"
+            lines.extend([
+                f"{idx}. <b>${sym}</b> {emoji} <code>{c24:+.1f}% (24h)</code> | <code>{c1:+.1f}% (1h)</code>",
+                f"   💵 السعر: <code>${price:.8f}</code> | السيولة: <code>${liq:,.0f}</code>",
+                f"   📊 حجم التداول: <code>${vol:,.0f}</code>",
+                f"   📋 العقد: <code>{mint}</code>",
+                ""
+            ])
 
         lines.extend([
-            f"{idx}. <b>${sym}</b> {emoji} <code>{c24:+.1f}% (24h)</code> | <code>{c1:+.1f}% (1h)</code>",
-            f"   💵 السعر: <code>${price:.8f}</code> | السيولة: <code>${liq:,.0f}</code>",
-            f"   📊 حجم التداول: <code>${vol:,.0f}</code>",
-            f"   📋 العقد: <code>{mint}</code>",
-            ""
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            "💡 <i>اضغط على أي زر أدناه لقنص العملة وفحص أمانها فورياً!</i> 👇"
         ])
+    else:
+        lines = [
+            "🔥 <b>Top Trending Solana Tokens (Live DexScreener Radar)</b> ⚡",
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        ]
+        for idx, t in enumerate(tokens, 1):
+            sym = html.escape(t["symbol"])
+            mint = t["mint"]
+            price = t["price_usd"]
+            c24 = t["change_24h"]
+            c1 = t["change_1h"]
+            vol = t["volume_24h"]
+            liq = t["liquidity"]
+            emoji = "🚀" if c24 >= 0 else "🔻"
 
-    lines.extend([
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━",
-        "💡 <i>اضغط على أي زر أدناه لقنص العملة وفحص أمانها فورياً!</i> 👇"
-    ])
+            lines.extend([
+                f"{idx}. <b>${sym}</b> {emoji} <code>{c24:+.1f}% (24h)</code> | <code>{c1:+.1f}% (1h)</code>",
+                f"   💵 Price: <code>${price:.8f}</code> | Liq: <code>${liq:,.0f}</code>",
+                f"   📊 24h Vol: <code>${vol:,.0f}</code>",
+                f"   📋 CA: <code>{mint}</code>",
+                ""
+            ])
+
+        lines.extend([
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            "💡 <i>Tap any button below to inspect security & instant-snipe!</i> 👇"
+        ])
 
     return "\n".join(lines)

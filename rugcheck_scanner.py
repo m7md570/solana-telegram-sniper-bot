@@ -130,8 +130,8 @@ def extract_token_mint(text: str) -> Optional[str]:
     return None
 
 
-def format_token_card(scan: Dict[str, Any]) -> str:
-    """Formats an executive Arabic Telegram card using robust HTML."""
+def format_token_card(scan: Dict[str, Any], lang: str = "en") -> str:
+    """Formats an executive Telegram card using robust HTML in English or Arabic."""
     import html
     symbol = html.escape(scan["symbol"])
     name = html.escape(scan["name"])
@@ -139,39 +139,89 @@ def format_token_card(scan: Dict[str, Any]) -> str:
     mcap = scan["mcap"]
     liq = scan["liquidity_usd"]
     change = scan["price_change_24h"]
-    badge = html.escape(scan["badge"])
+    score = scan.get("rug_score", 0)
     mint = scan["mint"]
+    status = scan.get("status", "SAFE")
 
     change_emoji = "📈" if change >= 0 else "📉"
 
-    lines = [
-        f"🎯 <b>بطاقة العملة</b>: ${symbol} ({name})",
-        f"━━━━━━━━━━━━━━━━━━━━━━",
-        f"💵 <b>السعر الحالي</b>: <code>${price:.8f}</code>",
-        f"{change_emoji} <b>التغير 24h</b>: <code>{change:+.2f}%</code>",
-        f"💎 <b>القيمة السوقية (MCap)</b>: <code>${mcap:,.0f}</code>",
-        f"💧 <b>السيولة المتوفرة</b>: <code>${liq:,.0f}</code>",
-        f"",
-        f"🛡️ <b>فحص الأمان والتحقق</b>:",
-        f"• تقييم الأمان: {badge}",
-    ]
+    if lang == "ar":
+        if status == "SAFE":
+            badge = f"🟢 آمن (درجة الخطر: {score})"
+        elif status == "WARNING":
+            badge = f"🟡 مخاطرة متوسطة (درجة الخطر: {score})"
+        elif status == "DANGER":
+            badge = f"🔴 خطر شديد / فخ (درجة الخطر: {score})"
+        else:
+            badge = "ℹ️ فحص أساسي"
 
-    if scan.get("freeze_authority"):
-        lines.append("• ⚠️ <b>تحذير</b>: إمكانية تجميد المحافظ (Freeze Authority) مفعلة!")
-    if scan.get("mint_authority"):
-        lines.append("• ⚠️ <b>تحذير</b>: إمكانية طباعة عملات جديدة (Mint Authority) مفعلة!")
+        lines = [
+            f"🎯 <b>بطاقة العملة</b>: ${symbol} ({name})",
+            f"━━━━━━━━━━━━━━━━━━━━━━",
+            f"💵 <b>السعر الحالي</b>: <code>${price:.8f}</code>",
+            f"{change_emoji} <b>التغير 24h</b>: <code>{change:+.2f}%</code>",
+            f"💎 <b>القيمة السوقية (MCap)</b>: <code>${mcap:,.0f}</code>",
+            f"💧 <b>السيولة المتوفرة</b>: <code>${liq:,.0f}</code>",
+            f"",
+            f"🛡️ <b>فحص الأمان والتحقق</b>:",
+            f"• تقييم الأمان: {badge}",
+        ]
 
-    if scan.get("risks"):
-        safe_risks = [html.escape(r) for r in scan["risks"][:3]]
-        risk_str = ", ".join(safe_risks)
-        lines.append(f"• الملاحظات: <code>{risk_str}</code>")
+        if scan.get("freeze_authority"):
+            lines.append("• ⚠️ <b>تحذير</b>: إمكانية تجميد المحافظ (Freeze Authority) مفعلة!")
+        if scan.get("mint_authority"):
+            lines.append("• ⚠️ <b>تحذير</b>: إمكانية طباعة عملات جديدة (Mint Authority) مفعلة!")
 
-    lines.extend([
-        f"",
-        f"📋 <b>العقد الذكي (CA)</b>:",
-        f"<code>{mint}</code>",
-        f"",
-        f"⚡ <b>اختر كمية الشراء الفوري بنقرة واحدة أدناه:</b> 👇"
-    ])
+        if scan.get("risks"):
+            safe_risks = [html.escape(r) for r in scan["risks"][:3]]
+            risk_str = ", ".join(safe_risks)
+            lines.append(f"• الملاحظات: <code>{risk_str}</code>")
+
+        lines.extend([
+            f"",
+            f"📋 <b>العقد الذكي (CA)</b>:",
+            f"<code>{mint}</code>",
+            f"",
+            f"⚡ <b>اختر كمية الشراء الفوري بنقرة واحدة أدناه:</b> 👇"
+        ])
+    else:
+        if status == "SAFE":
+            badge = f"🟢 Safe (Risk Score: {score})"
+        elif status == "WARNING":
+            badge = f"🟡 Warning / Medium Risk (Risk Score: {score})"
+        elif status == "DANGER":
+            badge = f"🔴 High Risk / Danger (Risk Score: {score})"
+        else:
+            badge = "ℹ️ Basic Audit"
+
+        lines = [
+            f"🎯 <b>Token Card</b>: ${symbol} ({name})",
+            f"━━━━━━━━━━━━━━━━━━━━━━",
+            f"💵 <b>Current Price</b>: <code>${price:.8f}</code>",
+            f"{change_emoji} <b>24h Change</b>: <code>{change:+.2f}%</code>",
+            f"💎 <b>Market Cap (MCap)</b>: <code>${mcap:,.0f}</code>",
+            f"💧 <b>Liquidity</b>: <code>${liq:,.0f}</code>",
+            f"",
+            f"🛡️ <b>Security & RugCheck Audit</b>:",
+            f"• Risk Assessment: {badge}",
+        ]
+
+        if scan.get("freeze_authority"):
+            lines.append("• ⚠️ <b>WARNING</b>: Freeze Authority is ENABLED (Blacklist risk)!")
+        if scan.get("mint_authority"):
+            lines.append("• ⚠️ <b>WARNING</b>: Mint Authority is ENABLED (Dumping / minting risk)!")
+
+        if scan.get("risks"):
+            safe_risks = [html.escape(r) for r in scan["risks"][:3]]
+            risk_str = ", ".join(safe_risks)
+            lines.append(f"• Flags: <code>{risk_str}</code>")
+
+        lines.extend([
+            f"",
+            f"📋 <b>Contract Address (CA)</b>:",
+            f"<code>{mint}</code>",
+            f"",
+            f"⚡ <b>Select 1-Click Buy Amount Below:</b> 👇"
+        ])
 
     return "\n".join(lines)

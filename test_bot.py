@@ -72,10 +72,13 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertGreater(scan["price_usd"], 0.0, "Price USD should be positive")
         self.assertGreater(scan["mcap"], 10_000_000, "BONK MCap should be > $10M")
         
-        # Test formatting card
-        card = format_token_card(scan)
-        self.assertIn("bonk", card.lower())
-        self.assertIn("السعر الحالي", card)
+        # Test formatting card (both English and Arabic)
+        card_en = format_token_card(scan, lang="en")
+        self.assertIn("bonk", card_en.lower())
+        self.assertIn("Current Price", card_en)
+
+        card_ar = format_token_card(scan, lang="ar")
+        self.assertIn("السعر الحالي", card_ar)
 
     def test_04_jupiter_v6_quote_with_platform_fee(self):
         """Test Jupiter quote routing and platform fee calculation."""
@@ -132,9 +135,10 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         """Test trending Solana tokens fetcher and HTML formatting."""
         from trending_engine import get_trending_tokens, format_trending_list
         tokens = get_trending_tokens(limit=3)
-        self.assertIsInstance(tokens, list)
-        card = format_trending_list(tokens)
-        self.assertIn("سولانا", card)
+        card_en = format_trending_list(tokens, lang="en")
+        self.assertIn("Trending", card_en)
+        card_ar = format_trending_list(tokens, lang="ar")
+        self.assertIn("سولانا", card_ar)
 
     def test_09_referral_system(self):
         """Test referral attribution and statistics."""
@@ -157,6 +161,43 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         is_enabled, amt = get_auto_buy_settings(self.test_user_id)
         self.assertEqual(amt, 0.25)
         self.assertEqual(is_enabled, new_state)
+
+    def test_11_i18n_bilingual_engine(self):
+        """Test dual language (English & Arabic) localization engine."""
+        from i18n import t
+        from wallet_manager import get_user_language, set_user_language
+        from trending_engine import format_trending_list
+        from rugcheck_scanner import format_token_card
+
+        # Check English translations
+        en_title = t("welcome_title", "en")
+        self.assertIn("Welcome", en_title)
+
+        # Check Arabic translations
+        ar_title = t("welcome_title", "ar")
+        self.assertIn("مرحباً", ar_title)
+
+        # Check language persistence
+        set_user_language(self.test_user_id, "ar")
+        self.assertEqual(get_user_language(self.test_user_id), "ar")
+        set_user_language(self.test_user_id, "en")
+        self.assertEqual(get_user_language(self.test_user_id), "en")
+
+        # Check English card formatting
+        dummy_scan = {
+            "mint": "So11111111111111111111111111111111111111112",
+            "symbol": "SOL",
+            "name": "Wrapped SOL",
+            "price_usd": 150.0,
+            "mcap": 70000000000.0,
+            "liquidity_usd": 50000000.0,
+            "price_change_24h": 5.2,
+            "rug_score": 0,
+            "status": "SAFE"
+        }
+        en_card = format_token_card(dummy_scan, lang="en")
+        self.assertIn("Token Card", en_card)
+        self.assertIn("Current Price", en_card)
 
 
 if __name__ == "__main__":

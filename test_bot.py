@@ -6,6 +6,7 @@ and platform fee attribution on-chain.
 """
 
 import sys
+import time
 import unittest
 import base64
 from solders.keypair import Keypair
@@ -138,10 +139,11 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
     def test_09_referral_system(self):
         """Test referral attribution and statistics."""
         from wallet_manager import record_referral, get_referral_stats, get_or_create_wallet
-        user_a = 777111
-        user_b = 777222
-        get_or_create_wallet(user_a, "UserA")
-        get_or_create_wallet(user_b, "UserB")
+        rand_suffix = int(time.time() * 1000) % 1000000
+        user_a = 770000 + rand_suffix
+        user_b = 880000 + rand_suffix
+        get_or_create_wallet(user_a, f"UserA_{rand_suffix}")
+        get_or_create_wallet(user_b, f"UserB_{rand_suffix}")
 
         self.assertTrue(record_referral(user_b, user_a), "User B should be referred by User A")
         stats = get_referral_stats(user_a)

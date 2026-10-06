@@ -226,3 +226,82 @@ def get_token_accounts(public_key_str: str) -> List[Dict[str, Any]]:
             continue
 
     return []
+
+
+def get_recent_blockhash() -> Optional[Any]:
+    """Fetches the latest finalized blockhash from Solana RPC."""
+    from solders.hash import Hash
+    endpoints = [PRIMARY_RPC] + FALLBACK_RPCS
+    payload = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "getLatestBlockhash",
+        "params": [{"commitment": "finalized"}]
+    }
+
+    for rpc in endpoints:
+        try:
+            resp = requests.post(rpc, json=payload, timeout=6)
+            if resp.status_code == 200:
+                bh_str = resp.json().get("result", {}).get("value", {}).get("blockhash")
+                if bh_str:
+                    return Hash.from_string(bh_str)
+        except Exception:
+            continue
+    return None
+
+
+def withdraw_sol(user_id: int, dest_address: str, amount_sol: float) -> Tuple[bool, str]:
+    """
+    Withdraws SOL from user's bot wallet to an external Solana address (e.g. Phantom).
+    Returns: (is_success, tx_signature_or_error)
+    """
+    from solders.system_program import transfer, TransferParams
+    from solders.message import MessageV0
+    from solders.transaction import VersionedTransaction
+
+    kp = get_user_keypair(user_id)
+    if not kp:
+        return False, "تعذر العثور على محفظة المستخدم."
+
+    # Validate destination pubkey
+    try:
+        dest_pubkey = Pubkey.from_string(dest_address.strip())
+    except Exception:
+        return False, "عنوان المحفظة الوجهة غير صالح (Invalid Solana Address)."
+
+    user_pubkey_str = str(kp.pubkey())
+    current_bal = get_sol_balance(user_pubkey_str)
+
+    # Required gas buffer (0.0005 SOL)
+    gas_buffer = 0.0005
+    if current_bal < (amount_sol + gas_buffer):
+        return False, f"الرصيد غير كافٍ. المتاح: {current_bal:.4f} SOL (المطلوب: {amount_sol} SOL + الرسوم)."
+
+    recent_bh = get_recent_blockhash()
+    if not recent_bh:
+        return False, "تعذر جلب Blockhash من شبكة سولانا، يرجى المحاولة بعد لحظات."
+
+    lamports = int(amount_sol * 1_000_000_000)
+    try:
+        ix = transfer(TransferParams(
+            from_pubkey=kp.pubkey(),
+            to_pubkey=dest_pubkey,
+            lamports=lamports
+        ))
+
+        msg = MessageV0.try_compile(
+            payer=kp.pubkey(),
+            instructions=[ix],
+            address_lookup_table_accounts=[],
+            recent_blockhash=recent_bh
+        )
+        sig = kp.sign_message(bytes(msg))
+        signed_tx = VersionedTransaction.populate(msg, [sig])
+
+        # Broadcast via jupiter_engine.broadcast_transaction
+        from jupiter_engine import broadcast_transaction
+        success, sig_or_err = broadcast_transaction(bytes(signed_tx))
+        return success, sig_or_err
+    except Exception as e:
+        return False, f"خطأ في تنفيذ التحويل: {e}"

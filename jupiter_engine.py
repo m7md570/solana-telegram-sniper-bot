@@ -165,3 +165,77 @@ def record_trade_db(
             conn.commit()
     except Exception as e:
         print(f"Trade logging warning: {e}")
+
+
+def execute_sell_swap(
+    user_id: int,
+    token_mint: str,
+    pct_to_sell: int
+) -> Tuple[bool, str, float]:
+    """
+    Executes an on-chain market sell for a specific percentage of user's held token into SOL.
+    Returns: (is_success, tx_signature_or_error, sol_received)
+    """
+    from wallet_manager import get_user_keypair, get_token_accounts, get_user_settings
+
+    keypair = get_user_keypair(user_id)
+    if not keypair:
+        return False, "تعذر العثور على محفظة المستخدم.", 0.0
+
+    pubkey_str = str(keypair.pubkey())
+    tokens = get_token_accounts(pubkey_str)
+
+    # Find the target token
+    target_token = next((t for t in tokens if t["mint"] == token_mint), None)
+    if not target_token or target_token["amount"] <= 0:
+        return False, "لا تملك رصيداً من هذه العملة للبيع.", 0.0
+
+    total_amount = target_token["amount"]
+    decimals = target_token.get("decimals", 6)
+
+    # Calculate quantity to sell
+    sell_fraction = max(0.01, min(1.0, pct_to_sell / 100.0))
+    sell_amount = total_amount * sell_fraction
+    raw_atomic_units = int(sell_amount * (10 ** decimals))
+
+    if raw_atomic_units <= 0:
+        return False, "الكمية المراد بيعها صغيرة جداً.", 0.0
+
+    settings = get_user_settings(user_id)
+    slippage = settings["slippage_bps"]
+
+    # Fetch quote: token -> WSOL
+    quote = get_jupiter_quote(
+        input_mint=token_mint,
+        output_mint=WSOL_MINT,
+        amount_lamports=raw_atomic_units,
+        slippage_bps=slippage,
+        with_fee=True
+    )
+    if not quote:
+        return False, "تعذر العثور على مسار بيع أو سيولة في Jupiter.", 0.0
+
+    # Build and sign transaction
+    tx_bytes = build_and_sign_swap_tx(quote, keypair, settings["priority_fee"])
+    if not tx_bytes:
+        return False, "فشل في بناء وتوقيع معاملة البيع الذكية.", 0.0
+
+    # Broadcast to Solana RPC
+    success, sig_or_err = broadcast_transaction(tx_bytes)
+    if success:
+        out_lamports = float(quote.get("outAmount", 0))
+        sol_received = out_lamports / 1e9
+        fee_lamports = float(quote.get("platformFee", {}).get("amount", 0))
+        record_trade_db(
+            user_id=user_id,
+            input_mint=token_mint,
+            output_mint=WSOL_MINT,
+            amount_in=sell_amount,
+            amount_out=sol_received,
+            fee_sol=fee_lamports / 1e9,
+            tx_sig=sig_or_err,
+            status="CONFIRMED"
+        )
+        return True, sig_or_err, sol_received
+    else:
+        return False, sig_or_err, 0.0

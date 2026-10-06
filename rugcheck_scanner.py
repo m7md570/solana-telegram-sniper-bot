@@ -92,46 +92,86 @@ def scan_token_security(mint: str) -> Dict[str, Any]:
     return result
 
 
+def extract_token_mint(text: str) -> Optional[str]:
+    """
+    Extracts a valid Solana Mint address from raw text or various platform URLs:
+    DexScreener, Pump.fun, Solscan, Birdeye, Photon, or plain Base58.
+    """
+    import re
+    if not text:
+        return None
+    text = text.strip()
+
+    # 1. URL Matching
+    patterns = [
+        r"dexscreener\.com/solana/([1-9A-HJ-NP-Za-km-z]{32,44})",
+        r"pump\.fun/coin/([1-9A-HJ-NP-Za-km-z]{32,44})",
+        r"pump\.fun/([1-9A-HJ-NP-Za-km-z]{32,44})",
+        r"solscan\.io/token/([1-9A-HJ-NP-Za-km-z]{32,44})",
+        r"solanatracker\.io/token/([1-9A-HJ-NP-Za-km-z]{32,44})",
+        r"birdeye\.so/token/([1-9A-HJ-NP-Za-km-z]{32,44})"
+    ]
+    for pat in patterns:
+        m = re.search(pat, text, re.I)
+        if m:
+            return m.group(1)
+
+    # 2. Raw Base58 Address
+    base58_pat = re.compile(r"^[1-9A-HJ-NP-Za-km-z]{32,44}$")
+    if base58_pat.match(text):
+        return text
+
+    # 3. Search for any word that matches Base58 32-44 chars
+    for token in text.split():
+        clean = re.sub(r"[^\w]", "", token)
+        if 32 <= len(clean) <= 44 and base58_pat.match(clean):
+            return clean
+
+    return None
+
+
 def format_token_card(scan: Dict[str, Any]) -> str:
-    """Formats an executive Arabic Telegram card for the audited token."""
-    symbol = scan["symbol"]
-    name = scan["name"]
+    """Formats an executive Arabic Telegram card using robust HTML."""
+    import html
+    symbol = html.escape(scan["symbol"])
+    name = html.escape(scan["name"])
     price = scan["price_usd"]
     mcap = scan["mcap"]
     liq = scan["liquidity_usd"]
     change = scan["price_change_24h"]
-    badge = scan["badge"]
+    badge = html.escape(scan["badge"])
     mint = scan["mint"]
 
     change_emoji = "📈" if change >= 0 else "📉"
 
     lines = [
-        f"🎯 *بطاقة العملة*: ${symbol} ({name})",
+        f"🎯 <b>بطاقة العملة</b>: ${symbol} ({name})",
         f"━━━━━━━━━━━━━━━━━━━━━━",
-        f"💵 *السعر الحالي*: `${price:.8f}`",
-        f"{change_emoji} *التغير 24h*: `{change:+.2f}%`",
-        f"💎 *القيمة السوقية (MCap)*: `${mcap:,.0f}`",
-        f"💧 *السيولة المتوفرة*: `${liq:,.0f}`",
+        f"💵 <b>السعر الحالي</b>: <code>${price:.8f}</code>",
+        f"{change_emoji} <b>التغير 24h</b>: <code>{change:+.2f}%</code>",
+        f"💎 <b>القيمة السوقية (MCap)</b>: <code>${mcap:,.0f}</code>",
+        f"💧 <b>السيولة المتوفرة</b>: <code>${liq:,.0f}</code>",
         f"",
-        f"🛡️ *فحص الأمان والتحقق*:",
+        f"🛡️ <b>فحص الأمان والتحقق</b>:",
         f"• تقييم الأمان: {badge}",
     ]
 
     if scan.get("freeze_authority"):
-        lines.append("• ⚠️ تحذير: إمكانية تجميد المحافظ (Freeze Authority) مفعلة!")
+        lines.append("• ⚠️ <b>تحذير</b>: إمكانية تجميد المحافظ (Freeze Authority) مفعلة!")
     if scan.get("mint_authority"):
-        lines.append("• ⚠️ تحذير: إمكانية طباعة عملات جديدة (Mint Authority) مفعلة!")
+        lines.append("• ⚠️ <b>تحذير</b>: إمكانية طباعة عملات جديدة (Mint Authority) مفعلة!")
 
     if scan.get("risks"):
-        risk_str = ", ".join(scan["risks"][:3])
-        lines.append(f"• الملاحظات: `{risk_str}`")
+        safe_risks = [html.escape(r) for r in scan["risks"][:3]]
+        risk_str = ", ".join(safe_risks)
+        lines.append(f"• الملاحظات: <code>{risk_str}</code>")
 
     lines.extend([
         f"",
-        f"📋 *العقد الذكي (CA)*:",
-        f"`{mint}`",
+        f"📋 <b>العقد الذكي (CA)</b>:",
+        f"<code>{mint}</code>",
         f"",
-        f"⚡ *اختر كمية الشراء الفوري بنقرة واحدة أدناه:* 👇"
+        f"⚡ <b>اختر كمية الشراء الفوري بنقرة واحدة أدناه:</b> 👇"
     ])
 
     return "\n".join(lines)

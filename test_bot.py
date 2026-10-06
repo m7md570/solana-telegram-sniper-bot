@@ -113,7 +113,19 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
             tx_sig="5SimulatedSigForUnitTest11111111111111111111111111111111111111111111111111111111111111111",
             status="CONFIRMED"
         )
-        # Passed if no exception thrown
+
+    def test_07_extract_token_mint_urls(self):
+        """Test extracting token CA from various platform URLs."""
+        from rugcheck_scanner import extract_token_mint
+        raw_ca = "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"
+        url1 = f"https://dexscreener.com/solana/{raw_ca}"
+        url2 = f"https://pump.fun/coin/{raw_ca}"
+        url3 = f"Check this gem: {raw_ca} to the moon!"
+
+        self.assertEqual(extract_token_mint(raw_ca), raw_ca)
+        self.assertEqual(extract_token_mint(url1), raw_ca)
+        self.assertEqual(extract_token_mint(url2), raw_ca)
+        self.assertEqual(extract_token_mint(url3), raw_ca)
 
 
 if __name__ == "__main__":

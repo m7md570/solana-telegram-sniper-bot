@@ -127,6 +127,35 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertEqual(extract_token_mint(url2), raw_ca)
         self.assertEqual(extract_token_mint(url3), raw_ca)
 
+    def test_08_trending_engine(self):
+        """Test trending Solana tokens fetcher and HTML formatting."""
+        from trending_engine import get_trending_tokens, format_trending_list
+        tokens = get_trending_tokens(limit=3)
+        self.assertIsInstance(tokens, list)
+        card = format_trending_list(tokens)
+        self.assertIn("سولانا", card)
+
+    def test_09_referral_system(self):
+        """Test referral attribution and statistics."""
+        from wallet_manager import record_referral, get_referral_stats, get_or_create_wallet
+        user_a = 777111
+        user_b = 777222
+        get_or_create_wallet(user_a, "UserA")
+        get_or_create_wallet(user_b, "UserB")
+
+        self.assertTrue(record_referral(user_b, user_a), "User B should be referred by User A")
+        stats = get_referral_stats(user_a)
+        self.assertGreaterEqual(stats["total_referrals"], 1, "User A must have at least 1 referral")
+
+    def test_10_autobuy_settings(self):
+        """Test toggling auto-buy mode and setting buy amount."""
+        from wallet_manager import get_auto_buy_settings, toggle_auto_buy, set_auto_buy_amount
+        set_auto_buy_amount(self.test_user_id, 0.25)
+        new_state = toggle_auto_buy(self.test_user_id)
+        is_enabled, amt = get_auto_buy_settings(self.test_user_id)
+        self.assertEqual(amt, 0.25)
+        self.assertEqual(is_enabled, new_state)
+
 
 if __name__ == "__main__":
     unittest.main()

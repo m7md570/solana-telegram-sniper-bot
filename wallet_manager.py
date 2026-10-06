@@ -41,7 +41,7 @@ def get_db_connection() -> sqlite3.Connection:
 
 
 def init_database():
-    """Initializes SQLite database schemas for users, wallets, and trades."""
+    """Initializes SQLite database schemas for users, wallets, and trades with migrations."""
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
@@ -53,6 +53,11 @@ def init_database():
                 encrypted_secret TEXT NOT NULL,
                 slippage_bps INTEGER DEFAULT 100,
                 priority_fee INTEGER DEFAULT 50000,
+                referrer_id INTEGER DEFAULT NULL,
+                total_referrals INTEGER DEFAULT 0,
+                referral_earnings_sol REAL DEFAULT 0.0,
+                auto_buy_enabled INTEGER DEFAULT 0,
+                auto_buy_amount REAL DEFAULT 0.1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -71,6 +76,20 @@ def init_database():
                 FOREIGN KEY (user_id) REFERENCES users(user_id)
             )
         """)
+        
+        # Migration: Ensure all columns exist on older tables
+        existing_cols = [r[1] for r in cursor.execute("PRAGMA table_info(users)").fetchall()]
+        migrations = [
+            ("referrer_id", "INTEGER DEFAULT NULL"),
+            ("total_referrals", "INTEGER DEFAULT 0"),
+            ("referral_earnings_sol", "REAL DEFAULT 0.0"),
+            ("auto_buy_enabled", "INTEGER DEFAULT 0"),
+            ("auto_buy_amount", "REAL DEFAULT 0.1")
+        ]
+        for col_name, col_type in migrations:
+            if col_name not in existing_cols:
+                cursor.execute(f"ALTER TABLE users ADD COLUMN {col_name} {col_type}")
+
         conn.commit()
     finally:
         conn.close()
@@ -305,3 +324,82 @@ def withdraw_sol(user_id: int, dest_address: str, amount_sol: float) -> Tuple[bo
         return success, sig_or_err
     except Exception as e:
         return False, f"خطأ في تنفيذ التحويل: {e}"
+
+
+def record_referral(new_user_id: int, referrer_id: int) -> bool:
+    """Links a new user to their referrer."""
+    if new_user_id == referrer_id:
+        return False
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        # Verify referrer exists
+        ref_row = cursor.execute("SELECT user_id FROM users WHERE user_id = ?", (referrer_id,)).fetchone()
+        if not ref_row:
+            return False
+
+        # Check if user already has a referrer
+        user_row = cursor.execute("SELECT referrer_id FROM users WHERE user_id = ?", (new_user_id,)).fetchone()
+        if user_row and user_row["referrer_id"] is None:
+            cursor.execute("UPDATE users SET referrer_id = ? WHERE user_id = ?", (referrer_id, new_user_id))
+            cursor.execute("UPDATE users SET total_referrals = total_referrals + 1 WHERE user_id = ?", (referrer_id,))
+            conn.commit()
+            return True
+        return False
+    finally:
+        conn.close()
+
+
+def get_referral_stats(user_id: int) -> Dict[str, Any]:
+    """Retrieves referral count and total earned SOL for a user."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        row = cursor.execute("SELECT total_referrals, referral_earnings_sol FROM users WHERE user_id = ?", (user_id,)).fetchone()
+        if row:
+            return {
+                "total_referrals": row["total_referrals"] or 0,
+                "earnings_sol": row["referral_earnings_sol"] or 0.0
+            }
+        return {"total_referrals": 0, "earnings_sol": 0.0}
+    finally:
+        conn.close()
+
+
+def get_auto_buy_settings(user_id: int) -> Tuple[bool, float]:
+    """Returns (is_enabled, amount_sol) for auto-buy."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        row = cursor.execute("SELECT auto_buy_enabled, auto_buy_amount FROM users WHERE user_id = ?", (user_id,)).fetchone()
+        if row:
+            return bool(row["auto_buy_enabled"]), float(row["auto_buy_amount"] or 0.1)
+        return False, 0.1
+    finally:
+        conn.close()
+
+
+def toggle_auto_buy(user_id: int) -> bool:
+    """Toggles auto-buy enabled state and returns new state."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        row = cursor.execute("SELECT auto_buy_enabled FROM users WHERE user_id = ?", (user_id,)).fetchone()
+        current = bool(row["auto_buy_enabled"]) if row else False
+        new_state = not current
+        cursor.execute("UPDATE users SET auto_buy_enabled = ? WHERE user_id = ?", (1 if new_state else 0, user_id))
+        conn.commit()
+        return new_state
+    finally:
+        conn.close()
+
+
+def set_auto_buy_amount(user_id: int, amount_sol: float):
+    """Sets the auto-buy amount in SOL."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE users SET auto_buy_amount = ? WHERE user_id = ?", (amount_sol, user_id))
+        conn.commit()
+    finally:
+        conn.close()

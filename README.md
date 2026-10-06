@@ -1,6 +1,5 @@
 # ⚡ Solana High-Velocity Telegram Sniper & Trading Bot
 
-[![CI Test Suite](https://github.com/m7md570/solana-telegram-sniper-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/m7md570/solana-telegram-sniper-bot/actions)
 [![Telegram](https://img.shields.io/badge/Live_Bot-@PopcornSniperBot-2CA5E0?logo=telegram&logoColor=white)](https://t.me/PopcornSniperBot)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)

@@ -7,6 +7,10 @@ and platform fee attribution on-chain.
 
 import sys
 import time
+import os
+import sys
+import time
+import tempfile
 import unittest
 import base64
 from solders.keypair import Keypair
@@ -17,6 +21,7 @@ from config import (
     WSOL_MINT,
     USDC_MINT
 )
+import wallet_manager
 from wallet_manager import (
     get_or_create_wallet,
     get_user_keypair,
@@ -34,6 +39,15 @@ from jupiter_engine import (
     build_and_sign_swap_tx,
     record_trade_db
 )
+
+# Completely isolate test execution database from live production database
+TEST_DB_PATH = os.path.join(tempfile.gettempdir(), "test_sniper_bot.sqlite")
+if os.path.exists(TEST_DB_PATH):
+    try:
+        os.remove(TEST_DB_PATH)
+    except Exception:
+        pass
+wallet_manager.DB_PATH = TEST_DB_PATH
 
 
 class TestSolanaTelegramSniperBot(unittest.TestCase):

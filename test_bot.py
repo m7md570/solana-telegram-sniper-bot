@@ -848,6 +848,59 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         items = get_user_watchlist(test_uid)
         self.assertEqual(len(items), 0)
 
+    def test_31_smart_buy_and_sell_argument_resolution(self):
+        """Test flexible argument orders and default amounts for /buy and /sell."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock, patch
+        from telegram_bot import buy_command, sell_command
+
+        test_uid = 99881177
+        get_or_create_wallet(test_uid, "SmartTrader")
+        test_mint = "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"
+
+        mock_update = MagicMock()
+        mock_update.effective_user.id = test_uid
+        mock_update.message.reply_text = AsyncMock()
+        mock_status = AsyncMock()
+        mock_update.message.reply_text.return_value = mock_status
+        mock_context = MagicMock()
+
+        # 1. Test /sell 50 bonk (swapped args: percent first, token second)
+        mock_context.args = ["50", "bonk"]
+        with patch("telegram_bot.search_solana_token", return_value={"mint": test_mint, "symbol": "BONK"}), \
+             patch("telegram_bot.execute_sell_swap", return_value=(True, "mock_sell_sig", 0.05)):
+            asyncio.run(sell_command(mock_update, mock_context))
+            self.assertTrue(mock_status.edit_text.called)
+            sell_msg = mock_status.edit_text.call_args[0][0]
+            self.assertIn("Sell Swap Executed", sell_msg)
+            self.assertIn("0.0500 SOL", sell_msg)
+
+        # 2. Test /sell all bonk (keyword 'all' with token)
+        mock_status.reset_mock()
+        mock_context.args = ["all", "bonk"]
+        with patch("telegram_bot.search_solana_token", return_value={"mint": test_mint, "symbol": "BONK"}), \
+             patch("telegram_bot.execute_sell_swap", return_value=(True, "mock_sell_all_sig", 0.12)):
+            asyncio.run(sell_command(mock_update, mock_context))
+            self.assertTrue(mock_status.edit_text.called)
+            sell_all_msg = mock_status.edit_text.call_args[0][0]
+            self.assertIn("Sell Swap Executed", sell_all_msg)
+            self.assertIn("0.1200 SOL", sell_all_msg)
+
+        # 3. Test /buy 0.05 bonk (amount first, token second)
+        mock_status.reset_mock()
+        mock_context.args = ["0.05", "bonk"]
+        mock_quote = {"outAmount": "1000000000", "platformFee": {"amount": "500000"}}
+        with patch("telegram_bot.search_solana_token", return_value={"mint": test_mint, "symbol": "BONK"}), \
+             patch("telegram_bot.get_sol_balance", return_value=1.0), \
+             patch("telegram_bot.get_jupiter_quote", return_value=mock_quote), \
+             patch("telegram_bot.build_and_sign_swap_tx", return_value=b"mock_tx"), \
+             patch("telegram_bot.broadcast_transaction", return_value=(True, "mock_buy_sig")):
+            asyncio.run(buy_command(mock_update, mock_context))
+            self.assertTrue(mock_status.edit_text.called)
+            buy_msg = mock_status.edit_text.call_args[0][0]
+            self.assertIn("Buy Swap Executed", buy_msg)
+            self.assertIn("0.05 SOL", buy_msg)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1744,7 +1744,7 @@ async def sl_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def sell_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler for /sell command: /sell [CA_OR_TICKER] [PERCENT]"""
+    """Handler for /sell command: /sell [CA_OR_TICKER] [PERCENT] or /sell [PERCENT] [CA_OR_TICKER]"""
     user = update.effective_user
     user_id = user.id
     user_lang = get_user_language(user_id)
@@ -1754,21 +1754,59 @@ async def sell_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(t("sell_syntax_help", user_lang), parse_mode="HTML")
         return
 
-    raw_target = args[0].strip()
-    pct = 100
-    if len(args) >= 2:
-        try:
-            pct_val = int(args[1].strip().rstrip("%"))
-            if 1 <= pct_val <= 100:
-                pct = pct_val
+    raw1 = args[0].strip()
+    raw2 = args[1].strip() if len(args) >= 2 else None
+
+    # Smart detect whether raw1 is the percentage/keyword or the token target
+    clean1 = raw1.rstrip("%").lower()
+    is_raw1_pct = False
+    pct_from_1 = 100
+    if clean1 in ("all", "max"):
+        is_raw1_pct = True
+        pct_from_1 = 100
+    elif clean1.isdigit():
+        val = int(clean1)
+        if 1 <= val <= 100:
+            is_raw1_pct = True
+            pct_from_1 = val
+
+    if is_raw1_pct and raw2:
+        raw_target = raw2
+        pct = pct_from_1
+    else:
+        raw_target = raw1
+        pct = 100
+        if raw2:
+            clean2 = raw2.rstrip("%").lower()
+            if clean2 in ("all", "max"):
+                pct = 100
             else:
-                await update.message.reply_text(t("sell_invalid_pct", user_lang), parse_mode="HTML")
-                return
-        except ValueError:
-            await update.message.reply_text(t("sell_invalid_pct", user_lang), parse_mode="HTML")
-            return
+                try:
+                    pct_val = int(clean2)
+                    if 1 <= pct_val <= 100:
+                        pct = pct_val
+                    else:
+                        await update.message.reply_text(t("sell_invalid_pct", user_lang), parse_mode="HTML")
+                        return
+                except ValueError:
+                    await update.message.reply_text(t("sell_invalid_pct", user_lang), parse_mode="HTML")
+                    return
 
     mint = extract_token_mint(raw_target)
+    if not mint:
+        # Check if user holds this token in wallet by symbol
+        keypair = get_user_keypair(user_id)
+        if keypair:
+            try:
+                tokens = get_token_accounts(str(keypair.pubkey()))
+                clean_sym = raw_target.lower().lstrip("$")
+                for t_acc in tokens:
+                    if t_acc.get("symbol", "").lower() == clean_sym:
+                        mint = t_acc["mint"]
+                        break
+            except Exception:
+                pass
+
     if not mint:
         matched = search_solana_token(raw_target)
         if matched:
@@ -2047,36 +2085,59 @@ async def alerts_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def buy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler for /buy command: /buy [CA_OR_TICKER] [AMOUNT_SOL]"""
+    """Handler for /buy command: /buy [CA_OR_TICKER] [AMOUNT_SOL] or /buy [AMOUNT_SOL] [CA_OR_TICKER] or /buy [CA_OR_TICKER]"""
     user = update.effective_user
     user_id = user.id
     user_lang = get_user_language(user_id)
     args = context.args
 
-    if len(args) < 2:
+    if not args:
         help_msg = (
             "ℹ️ <b>Instant Buy Syntax</b>:\n"
             "<code>/buy [CONTRACT_OR_TICKER] [AMOUNT_SOL]</code>\n\n"
             "<b>Example:</b>\n"
             "<code>/buy DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263 0.1</code>\n"
-            "<code>/buy bonk 0.05</code>"
+            "<code>/buy bonk 0.05</code> or <code>/buy 0.1 bonk</code>"
         ) if user_lang == "en" else (
             "ℹ️ <b>صيغة الشراء الفوري</b>:\n"
             "<code>/buy [عنوان العقد أو الرمز] [مبلغ SOL]</code>\n\n"
             "<b>مثال:</b>\n"
             "<code>/buy DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263 0.1</code>\n"
-            "<code>/buy bonk 0.05</code>"
+            "<code>/buy bonk 0.05</code> أو <code>/buy 0.1 bonk</code>"
         )
         await update.message.reply_text(help_msg, parse_mode="HTML")
         return
 
-    raw_target = args[0].strip()
+    raw1 = args[0].strip()
+    raw2 = args[1].strip() if len(args) >= 2 else None
+
+    # Check if raw1 is numeric amount: e.g. /buy 0.1 bonk
+    is_raw1_amt = False
     try:
-        amount_sol = float(args[1].strip())
+        val1 = float(raw1)
+        if 0.001 <= val1 <= 100.0:
+            is_raw1_amt = True
+            amt_from_1 = val1
     except ValueError:
-        err = "❌ Invalid SOL amount. Use e.g. 0.1" if user_lang == "en" else "❌ مبلغ SOL غير صحيح، يرجى كتابة رقم مثل 0.1"
-        await update.message.reply_text(err, parse_mode="HTML")
-        return
+        is_raw1_amt = False
+
+    if is_raw1_amt and raw2:
+        raw_target = raw2
+        amount_sol = amt_from_1
+    else:
+        raw_target = raw1
+        if raw2:
+            try:
+                amount_sol = float(raw2)
+                if amount_sol <= 0:
+                    raise ValueError()
+            except ValueError:
+                err = "❌ Invalid SOL amount. Use e.g. 0.1" if user_lang == "en" else "❌ مبلغ SOL غير صحيح، يرجى كتابة رقم مثل 0.1"
+                await update.message.reply_text(err, parse_mode="HTML")
+                return
+        else:
+            _, auto_amt = get_auto_buy_settings(user_id)
+            amount_sol = auto_amt if auto_amt > 0 else 0.1
 
     mint = extract_token_mint(raw_target)
     if not mint:

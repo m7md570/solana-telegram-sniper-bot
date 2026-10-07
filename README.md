@@ -148,7 +148,7 @@ python telegram_bot.py
 ## 🧪 Benchmark & Quality Assurance
 
 * **RPC Broadcast Latency:** < 350ms via Jupiter V6
-* **Unit Test Coverage:** 32/32 comprehensive tests passing (`test_bot.py`)
+* **Unit Test Coverage:** 33/33 comprehensive tests passing (`test_bot.py`)
 * **Security Checks:** Zero plain-text private key logging. Local AES-256 database encryption.
 * **MEV Defense:** Dynamic price-impact slippage auto-scaling and anti-sandwich protection.
 

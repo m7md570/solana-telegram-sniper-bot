@@ -30,10 +30,13 @@ def scan_token_security(mint: str) -> Dict[str, Any]:
         "symbol": "UNKNOWN",
         "name": "Unknown Token",
         "price_usd": 0.0,
+        "price_sol": 0.0,
+        "dex": "Raydium",
         "mcap": 0.0,
         "liquidity_usd": 0.0,
         "volume_24h": 0.0,
         "price_change_24h": 0.0,
+        "price_change_1h": 0.0,
         "rug_score": 0,
         "status": "SAFE",
         "badge": "🛡️ آمن (Safe)",
@@ -56,10 +59,13 @@ def scan_token_security(mint: str) -> Dict[str, Any]:
                     result["symbol"] = p.get("baseToken", {}).get("symbol", "UNKNOWN")
                     result["name"] = p.get("baseToken", {}).get("name", "Unknown Token")
                     result["price_usd"] = float(p.get("priceUsd") or 0.0)
+                    result["price_sol"] = float(p.get("priceNative") or 0.0)
+                    result["dex"] = str(p.get("dexId") or "raydium").capitalize()
                     result["mcap"] = float(p.get("fdv") or p.get("marketCap") or 0.0)
                     result["liquidity_usd"] = float(p.get("liquidity", {}).get("usd") or 0.0)
                     result["volume_24h"] = float(p.get("volume", {}).get("h24") or 0.0)
                     result["price_change_24h"] = float(p.get("priceChange", {}).get("h24") or 0.0)
+                    result["price_change_1h"] = float(p.get("priceChange", {}).get("h1") or 0.0)
                     result["is_valid"] = True
                     break
         except Exception as e:
@@ -154,14 +160,18 @@ def format_token_card(scan: Dict[str, Any], lang: str = "en") -> str:
     symbol = html.escape(scan["symbol"])
     name = html.escape(scan["name"])
     price = scan["price_usd"]
+    price_sol = scan.get("price_sol", 0.0)
+    dex = scan.get("dex", "Raydium")
     mcap = scan["mcap"]
     liq = scan["liquidity_usd"]
     change = scan["price_change_24h"]
+    change_1h = scan.get("price_change_1h", 0.0)
     score = scan.get("rug_score", 0)
     mint = scan["mint"]
     status = scan.get("status", "SAFE")
 
     change_emoji = "📈" if change >= 0 else "📉"
+    price_sol_str = f" (<code>{price_sol:.6f} SOL</code>)" if price_sol > 0 else ""
 
     if lang == "ar":
         if status == "SAFE":
@@ -176,8 +186,9 @@ def format_token_card(scan: Dict[str, Any], lang: str = "en") -> str:
         lines = [
             f"🎯 <b>بطاقة العملة</b>: ${symbol} ({name})",
             f"━━━━━━━━━━━━━━━━━━━━━━",
-            f"💵 <b>السعر الحالي</b>: <code>${price:.8f}</code>",
-            f"{change_emoji} <b>التغير 24h</b>: <code>{change:+.2f}%</code>",
+            f"💵 <b>السعر الحالي</b>: <code>${price:.8f}</code>{price_sol_str}",
+            f"{change_emoji} <b>التغير اللحظي</b>: <code>{change:+.2f}% (24h)</code> | <code>{change_1h:+.2f}% (1h)</code>",
+            f"🏛️ <b>المنصة المضيفة (DEX)</b>: <code>{dex}</code>",
             f"💎 <b>القيمة السوقية (MCap)</b>: <code>${mcap:,.0f}</code>",
             f"💧 <b>السيولة المتوفرة</b>: <code>${liq:,.0f}</code>",
             f"",
@@ -215,8 +226,9 @@ def format_token_card(scan: Dict[str, Any], lang: str = "en") -> str:
         lines = [
             f"🎯 <b>Token Card</b>: ${symbol} ({name})",
             f"━━━━━━━━━━━━━━━━━━━━━━",
-            f"💵 <b>Current Price</b>: <code>${price:.8f}</code>",
-            f"{change_emoji} <b>24h Change</b>: <code>{change:+.2f}%</code>",
+            f"💵 <b>Current Price</b>: <code>${price:.8f}</code>{price_sol_str}",
+            f"{change_emoji} <b>Price Momentum</b>: <code>{change:+.2f}% (24h)</code> | <code>{change_1h:+.2f}% (1h)</code>",
+            f"🏛️ <b>DEX Venue</b>: <code>{dex}</code>",
             f"💎 <b>Market Cap (MCap)</b>: <code>${mcap:,.0f}</code>",
             f"💧 <b>Liquidity</b>: <code>${liq:,.0f}</code>",
             f"",

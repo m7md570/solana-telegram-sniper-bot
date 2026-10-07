@@ -980,6 +980,46 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         cancel_reply = mock_cancel_update.message.reply_text.call_args[0][0]
         self.assertIn("cancelled", cancel_reply.lower())
 
+    def test_33_dex_venue_sol_price_and_momentum(self):
+        """Test DEX venue (Raydium/Pump.fun), native SOL price, and 1h momentum card formatting."""
+        from rugcheck_scanner import format_token_card
+
+        mock_scan = {
+            "mint": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
+            "symbol": "BONK",
+            "name": "Bonk",
+            "price_usd": 0.000028,
+            "price_sol": 0.000000185,
+            "dex": "Raydium",
+            "mcap": 1800000000.0,
+            "liquidity_usd": 15000000.0,
+            "volume_24h": 45000000.0,
+            "price_change_24h": 14.5,
+            "price_change_1h": 2.3,
+            "rug_score": 120,
+            "status": "SAFE",
+            "badge": "🟢 Safe",
+            "risks": [],
+            "mint_authority": False,
+            "freeze_authority": False
+        }
+
+        # 1. Test English card contains DEX venue, SOL price, and 1h change
+        card_en = format_token_card(mock_scan, lang="en")
+        self.assertIn("DEX Venue", card_en)
+        self.assertIn("Raydium", card_en)
+        self.assertIn("0.000000 SOL", card_en)
+        self.assertIn("+2.30% (1h)", card_en)
+        self.assertIn("+14.50% (24h)", card_en)
+
+        # 2. Test Arabic card contains corresponding localized labels
+        card_ar = format_token_card(mock_scan, lang="ar")
+        self.assertIn("المنصة المضيفة (DEX)", card_ar)
+        self.assertIn("Raydium", card_ar)
+        self.assertIn("0.000000 SOL", card_ar)
+        self.assertIn("+2.30% (1h)", card_ar)
+        self.assertIn("+14.50% (24h)", card_ar)
+
 
 if __name__ == "__main__":
     unittest.main()

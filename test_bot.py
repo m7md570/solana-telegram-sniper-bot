@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.28.0", card_text)
+        self.assertIn("v3.29.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.28.0")
+        self.assertEqual(BOT_VERSION, "v3.29.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -1664,6 +1664,57 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
             self.assertIsNotNone(tok_2022)
             self.assertEqual(tok_2022["amount"], 1250.75)
             self.assertEqual(tok_2022["program"], TOKEN_2022_PROGRAM_ID)
+
+    def test_53_viral_referral_push_notifications_and_x_share(self):
+        """Test instant Telegram push notifications to referrers and viral 1-click X share buttons."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock
+        from telegram_bot import start_command, referral_command
+        from wallet_manager import get_or_create_wallet, set_user_language
+
+        referrer_uid = 55443322
+        new_user_uid = 99118822
+
+        get_or_create_wallet(referrer_uid, "TopReferrer", initial_language="en")
+        set_user_language(referrer_uid, "en")
+
+        # 1. Test start_command with referral parameter triggering push notification
+        mock_update = MagicMock()
+        mock_new_user = MagicMock()
+        mock_new_user.id = new_user_uid
+        mock_new_user.username = "LuckyTrader"
+        mock_new_user.language_code = "en"
+        mock_update.effective_user = mock_new_user
+        mock_update.message.reply_text = AsyncMock()
+
+        mock_context = MagicMock()
+        mock_context.args = [f"ref_{referrer_uid}"]
+        mock_context.bot.send_message = AsyncMock()
+
+        asyncio.run(start_command(mock_update, mock_context))
+
+        # Referrer must have received instant Telegram alert
+        mock_context.bot.send_message.assert_called_once()
+        call_kwargs = mock_context.bot.send_message.call_args[1]
+        self.assertEqual(call_kwargs["chat_id"], referrer_uid)
+        self.assertIn("New Referral Joined", call_kwargs["text"])
+        self.assertIn("@LuckyTrader", call_kwargs["text"])
+        self.assertIn("25%", call_kwargs["text"])
+
+        # 2. Test referral_command keyboard includes X / Twitter share intent
+        mock_update_ref = MagicMock()
+        mock_update_ref.effective_user.id = referrer_uid
+        mock_update_ref.message.reply_text = AsyncMock()
+        mock_context_ref = MagicMock()
+        mock_context_ref.bot.username = "PopcornSniperBot"
+
+        asyncio.run(referral_command(mock_update_ref, mock_context_ref))
+        self.assertTrue(mock_update_ref.message.reply_text.called)
+        kb = mock_update_ref.message.reply_text.call_args[1]["reply_markup"]
+        all_btns = [b for row in kb.inline_keyboard for b in row]
+        x_btn = next((b for b in all_btns if b.url and "twitter.com/intent/tweet" in b.url), None)
+        self.assertIsNotNone(x_btn, "Share on X button must be present in /referral card")
+        self.assertIn(f"ref_{referrer_uid}", x_btn.url)
 
 
 if __name__ == "__main__":

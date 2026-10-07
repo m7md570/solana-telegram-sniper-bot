@@ -366,6 +366,35 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 referrer_id = int(ref_arg.replace("ref_", ""))
                 if record_referral(user_id, referrer_id):
                     logger.info(f"User {user_id} referred by {referrer_id}")
+                    # Dispatch instant notification to referrer
+                    try:
+                        ref_lang = get_user_language(referrer_id)
+                        ref_username = f"@{username}" if username else f"User {user_id}"
+                        if ref_lang == "ar":
+                            ref_msg = (
+                                "🎉 <b>إحالة جديدة انضمت بنجاح!</b>\n"
+                                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                                f"👤 انضم المتداول <b>{html.escape(ref_username)}</b> عبر رابط إحالتك.\n"
+                                "💰 ستحصل تلقائياً على <b>25%</b> من جميع عمولات التداول التي ينفذها مدى الحياة!\n"
+                                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                                "📊 تفقد أرباحك عبر الأمر /referral"
+                            )
+                        else:
+                            ref_msg = (
+                                "🎉 <b>New Referral Joined!</b>\n"
+                                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                                f"👤 Trader <b>{html.escape(ref_username)}</b> joined via your referral link.\n"
+                                "💰 You will automatically earn <b>25%</b> of all their trading fees for life!\n"
+                                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                                "📊 Track earnings anytime via /referral"
+                            )
+                        await context.bot.send_message(
+                            chat_id=referrer_id,
+                            text=ref_msg,
+                            parse_mode="HTML"
+                        )
+                    except Exception as ref_err:
+                        logger.warning(f"Failed to send referral notification to {referrer_id}: {ref_err}")
             except Exception as e:
                 logger.warning(f"Referral parsing error: {e}")
 
@@ -424,10 +453,20 @@ async def referral_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = f"{title}\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n{body}"
 
     share_text = "⚡ Fastest Solana Sniper & Trading Bot on Jupiter V6!" if user_lang == "en" else "⚡ أقوى بوت قنص وتداول على سولانا مع فحص RugCheck!"
-    share_btn_text = "📤 Share Link with Friends" if user_lang == "en" else "📤 مشاركة الرابط مع الأصدقاء"
+    share_btn_text = "📤 Share on Telegram" if user_lang == "en" else "📤 مشاركة عبر تيليجرام"
+
+    x_intent_text = (
+        f"Trade Solana memecoins with sub-400ms execution on Popcorn Sniper Bot! 🍿⚡\n\n"
+        f"Built-in RugCheck auditor, auto-buy, and non-custodial wallets.\n\n"
+        f"Start trading: {ref_link}"
+    )
+    x_share_url = f"https://twitter.com/intent/tweet?text={urllib.parse.quote(x_intent_text)}"
 
     kb = [
-        [InlineKeyboardButton(share_btn_text, url=f"https://t.me/share/url?url={ref_link}&text={share_text}")],
+        [
+            InlineKeyboardButton(share_btn_text, url=f"https://t.me/share/url?url={urllib.parse.quote(ref_link)}&text={urllib.parse.quote(share_text)}"),
+            InlineKeyboardButton("📢 Share on X", url=x_share_url)
+        ],
         [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
     ]
     await update.message.reply_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb), disable_web_page_preview=True)

@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.51.0", card_text)
+        self.assertIn("v3.52.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.51.0")
+        self.assertEqual(BOT_VERSION, "v3.52.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -2982,6 +2982,94 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
 
         asyncio.run(history_command(mock_cmd_update, mock_cmd_context))
         self.assertTrue(mock_cmd_update.message.reply_document.called)
+
+    def test_76_settings_card_dynamic_checkmarks_and_reset_button(self):
+        """Test build_settings_card dynamic checkmarks for slip, gas, tp, sl and reset defaults button."""
+        from telegram_bot import build_settings_card, callback_router
+        from wallet_manager import (
+            get_or_create_wallet,
+            update_user_slippage,
+            update_user_priority_fee,
+            update_user_tp,
+            update_user_sl,
+            reset_user_settings_to_defaults,
+            get_user_settings
+        )
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock
+
+        test_uid = 99882244
+        get_or_create_wallet(test_uid, "SettingsCheckmarkTester", initial_language="en")
+        reset_user_settings_to_defaults(test_uid)
+
+        # 1. Default settings: 100 bps (1.0%), 50000 lamports (Normal), +50% TP, -25% SL
+        _, kb_def = build_settings_card(test_uid, user_lang="en")
+        all_btns = [b for row in kb_def.inline_keyboard for b in row]
+
+        slip_100_btn = next((b for b in all_btns if b.callback_data == "slip_100"), None)
+        slip_50_btn = next((b for b in all_btns if b.callback_data == "slip_50"), None)
+        self.assertIsNotNone(slip_100_btn)
+        self.assertTrue(slip_100_btn.text.startswith("✅"))
+        self.assertFalse(slip_50_btn.text.startswith("✅"))
+
+        gas_norm_btn = next((b for b in all_btns if b.callback_data == "gas_50000"), None)
+        gas_turbo_btn = next((b for b in all_btns if b.callback_data == "gas_250000"), None)
+        self.assertTrue(gas_norm_btn.text.startswith("✅"))
+        self.assertFalse(gas_turbo_btn.text.startswith("✅"))
+
+        tp_50_btn = next((b for b in all_btns if b.callback_data == "tp_50"), None)
+        sl_25_btn = next((b for b in all_btns if b.callback_data == "sl_25"), None)
+        self.assertTrue(tp_50_btn.text.startswith("✅"))
+        self.assertTrue(sl_25_btn.text.startswith("✅"))
+
+        # 2. Check reset button and autobuy button exist
+        reset_btn = next((b for b in all_btns if b.callback_data == "btn_reset_defaults"), None)
+        autobuy_btn = next((b for b in all_btns if b.callback_data == "btn_autobuy"), None)
+        self.assertIsNotNone(reset_btn)
+        self.assertIsNotNone(autobuy_btn)
+        self.assertIn("Reset Defaults", reset_btn.text)
+
+        # 3. Modify settings and verify checkmark moves
+        update_user_slippage(test_uid, 200)
+        update_user_priority_fee(test_uid, 250000)
+        update_user_tp(test_uid, 100)
+        update_user_sl(test_uid, 50)
+
+        _, kb_mod = build_settings_card(test_uid, user_lang="en")
+        mod_btns = [b for row in kb_mod.inline_keyboard for b in row]
+
+        mod_slip_200 = next((b for b in mod_btns if b.callback_data == "slip_200"), None)
+        mod_gas_turbo = next((b for b in mod_btns if b.callback_data == "gas_250000"), None)
+        mod_tp_100 = next((b for b in mod_btns if b.callback_data == "tp_100"), None)
+        mod_sl_50 = next((b for b in mod_btns if b.callback_data == "sl_50"), None)
+
+        self.assertTrue(mod_slip_200.text.startswith("✅"))
+        self.assertTrue(mod_gas_turbo.text.startswith("✅"))
+        self.assertTrue(mod_tp_100.text.startswith("✅"))
+        self.assertTrue(mod_sl_50.text.startswith("✅"))
+
+        # 4. Test callback btn_reset_defaults resets user settings back
+        mock_query = MagicMock()
+        mock_query.from_user.id = test_uid
+        mock_query.data = "btn_reset_defaults"
+        mock_query.answer = AsyncMock()
+        mock_query.edit_message_text = AsyncMock()
+        mock_query.message.edit_text = AsyncMock()
+
+        mock_update = MagicMock()
+        mock_update.callback_query = mock_query
+        mock_update.effective_user.id = test_uid
+        mock_context = MagicMock()
+
+        asyncio.run(callback_router(mock_update, mock_context))
+        self.assertTrue(mock_query.answer.called)
+
+        # Verify settings restored in DB
+        restored = get_user_settings(test_uid)
+        self.assertEqual(restored["slippage_bps"], 100)
+        self.assertEqual(restored["priority_fee"], 50000)
+        self.assertEqual(restored["default_tp_pct"], 50)
+        self.assertEqual(restored["default_sl_pct"], 25)
 
 
 if __name__ == "__main__":

@@ -256,9 +256,10 @@ def get_token_card_keyboard(mint: str, user_lang: str, user_id: int = 0, symbol:
 
 
 def build_settings_card(user_id: int, user_lang: str) -> Tuple[str, InlineKeyboardMarkup]:
-    """Constructs the unified trading settings interface with slippage, gas, and volatility alert toggles."""
+    """Constructs the unified trading settings interface with dynamic checkmarks, slippage, gas, and volatility alert toggles."""
     settings = get_user_settings(user_id)
-    current_slip = settings["slippage_bps"] / 100.0
+    current_bps = settings.get("slippage_bps", 100)
+    current_slip = current_bps / 100.0
     gas_lamports = settings.get("priority_fee", 50000)
     gas_sol = gas_lamports / 1e9
     current_tp = settings.get("default_tp_pct", 50)
@@ -282,6 +283,8 @@ def build_settings_card(user_id: int, user_lang: str) -> Tuple[str, InlineKeyboa
             f"Select parameters or speed tiers below:"
         )
         alerts_btn_text = f"🔔 Alerts: ON (±{alert_th:.0f}%)" if alerts_on else "🔕 Alerts: OFF"
+        reset_label = "🔄 Reset Defaults"
+        autobuy_label = "🎯 Auto-Buy Radar"
     else:
         extra_info = (
             f"\n\n⚡ <b>أولوية الغاز:</b> <code>{gas_sol:.5f} SOL</code> ({tier_label})\n"
@@ -291,33 +294,52 @@ def build_settings_card(user_id: int, user_lang: str) -> Tuple[str, InlineKeyboa
             f"اختر الإعدادات المناسبة لاستراتيجيتك أدناه:"
         )
         alerts_btn_text = f"🔔 التنبيهات: مفعلة (±{alert_th:.0f}%)" if alerts_on else "🔕 التنبيهات: معطلة"
+        reset_label = "🔄 استعادة الافتراضيات"
+        autobuy_label = "🎯 رادار القنص التلقائي"
+
     text = f"{title}\n━━━━━━━━━━━━━━━━━━━\n{body}{extra_info}\n🕒 <code>{now_str}</code>"
 
+    # Slippage row with active checkmark
+    slip_btns = [
+        InlineKeyboardButton(f"{'✅ ' if current_bps == 50 else ''}0.5%", callback_data="slip_50"),
+        InlineKeyboardButton(f"{'✅ ' if current_bps == 100 else ''}1.0%", callback_data="slip_100"),
+        InlineKeyboardButton(f"{'✅ ' if current_bps == 200 else ''}2.0%", callback_data="slip_200"),
+        InlineKeyboardButton(f"{'✅ ' if current_bps == 500 else ''}5.0%", callback_data="slip_500")
+    ]
+
+    # Priority fee row with active checkmark
+    gas_btns = [
+        InlineKeyboardButton(f"{'✅ ' if gas_lamports == 50000 else ''}⚡ Normal", callback_data="gas_50000"),
+        InlineKeyboardButton(f"{'✅ ' if gas_lamports == 250000 else ''}🚀 Turbo", callback_data="gas_250000"),
+        InlineKeyboardButton(f"{'✅ ' if gas_lamports == 1000000 else ''}🏎️ Ultra", callback_data="gas_1000000")
+    ]
+
+    # Take-Profit row with active checkmark
+    tp_btns = [
+        InlineKeyboardButton(f"{'✅ ' if current_tp == 25 else ''}🎯 +25%", callback_data="tp_25"),
+        InlineKeyboardButton(f"{'✅ ' if current_tp == 50 else ''}🎯 +50%", callback_data="tp_50"),
+        InlineKeyboardButton(f"{'✅ ' if current_tp == 100 else ''}🎯 +100%", callback_data="tp_100")
+    ]
+
+    # Stop-Loss row with active checkmark
+    sl_btns = [
+        InlineKeyboardButton(f"{'✅ ' if current_sl == 15 else ''}🛑 -15%", callback_data="sl_15"),
+        InlineKeyboardButton(f"{'✅ ' if current_sl == 25 else ''}🛑 -25%", callback_data="sl_25"),
+        InlineKeyboardButton(f"{'✅ ' if current_sl == 50 else ''}🛑 -50%", callback_data="sl_50")
+    ]
+
     kb = [
-        [
-            InlineKeyboardButton("0.5%", callback_data="slip_50"),
-            InlineKeyboardButton("1.0%", callback_data="slip_100"),
-            InlineKeyboardButton("2.0%", callback_data="slip_200"),
-            InlineKeyboardButton("5.0%", callback_data="slip_500")
-        ],
-        [
-            InlineKeyboardButton("⚡ Normal (50k)", callback_data="gas_50000"),
-            InlineKeyboardButton("🚀 Turbo (250k)", callback_data="gas_250000"),
-            InlineKeyboardButton("🏎️ Ultra (1M)", callback_data="gas_1000000")
-        ],
-        [
-            InlineKeyboardButton("🎯 TP +25%", callback_data="tp_25"),
-            InlineKeyboardButton("🎯 TP +50%", callback_data="tp_50"),
-            InlineKeyboardButton("🎯 TP +100%", callback_data="tp_100")
-        ],
-        [
-            InlineKeyboardButton("🛑 SL -15%", callback_data="sl_15"),
-            InlineKeyboardButton("🛑 SL -25%", callback_data="sl_25"),
-            InlineKeyboardButton("🛑 SL -50%", callback_data="sl_50")
-        ],
+        slip_btns,
+        gas_btns,
+        tp_btns,
+        sl_btns,
         [
             InlineKeyboardButton(alerts_btn_text, callback_data="toggle_alerts"),
-            InlineKeyboardButton(t("btn_gas_radar", user_lang), callback_data="btn_gas_fees")
+            InlineKeyboardButton(autobuy_label, callback_data="btn_autobuy")
+        ],
+        [
+            InlineKeyboardButton(t("btn_gas_radar", user_lang), callback_data="btn_gas_fees"),
+            InlineKeyboardButton(reset_label, callback_data="btn_reset_defaults")
         ],
         [
             InlineKeyboardButton(t("btn_lang_toggle", user_lang), callback_data="btn_toggle_lang"),
@@ -1936,6 +1958,13 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await safe_edit_text(query, text, reply_markup=InlineKeyboardMarkup(kb))
 
     elif data == "btn_settings":
+        text, kb = build_settings_card(user_id, user_lang)
+        await safe_edit_text(query, text, reply_markup=kb)
+
+    elif data == "btn_reset_defaults":
+        reset_user_settings_to_defaults(user_id)
+        ack = "Settings restored to defaults! 🔄" if user_lang == "en" else "تمت استعادة الإعدادات الافتراضية! 🔄"
+        await query.answer(ack, show_alert=False)
         text, kb = build_settings_card(user_id, user_lang)
         await safe_edit_text(query, text, reply_markup=kb)
 

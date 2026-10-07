@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.52.0", card_text)
+        self.assertIn("v3.53.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.52.0")
+        self.assertEqual(BOT_VERSION, "v3.53.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -3070,6 +3070,70 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertEqual(restored["priority_fee"], 50000)
         self.assertEqual(restored["default_tp_pct"], 50)
         self.assertEqual(restored["default_sl_pct"], 25)
+
+    def test_77_interactive_withdraw_radar_and_callback(self):
+        """Test render_withdraw_card formatting, gas reserve accounting, /withdraw command without args, and callback routing."""
+        from telegram_bot import render_withdraw_card, withdraw_command, callback_router
+        from wallet_manager import get_or_create_wallet
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        test_uid = 99883355
+        pubkey, _ = get_or_create_wallet(test_uid, "WithdrawRadarTester", initial_language="en")
+
+        # 1. Test render_withdraw_card with mocked balance
+        with patch("telegram_bot.get_sol_balance", return_value=0.50):
+            mock_target = MagicMock()
+            mock_target.reply_text = AsyncMock()
+
+            asyncio.run(render_withdraw_card(mock_target, test_uid, user_lang="en", is_edit=False))
+            self.assertTrue(mock_target.reply_text.called)
+            card_text = mock_target.reply_text.call_args[0][0]
+            self.assertIn("Fast SOL Withdrawal Radar", card_text)
+            self.assertIn("0.5000 SOL", card_text)
+            self.assertIn("Gas Reserve (Auto-Kept):", card_text)
+            self.assertIn("0.005 SOL", card_text)
+            self.assertIn("0.4950 SOL", card_text)
+            self.assertIn("/withdraw", card_text)
+
+            kb = mock_target.reply_text.call_args[1]["reply_markup"]
+            all_btns = [b for row in kb.inline_keyboard for b in row]
+            refresh_btn = next((b for b in all_btns if b.callback_data == "btn_withdraw"), None)
+            qr_btn = next((b for b in all_btns if b.callback_data == "btn_show_qr"), None)
+            wallet_btn = next((b for b in all_btns if b.callback_data == "btn_wallet"), None)
+            self.assertIsNotNone(refresh_btn)
+            self.assertIsNotNone(qr_btn)
+            self.assertIsNotNone(wallet_btn)
+
+        # 2. Test withdraw_command without args routes to render_withdraw_card
+        with patch("telegram_bot.get_sol_balance", return_value=0.20):
+            mock_cmd_update = MagicMock()
+            mock_cmd_update.effective_user.id = test_uid
+            mock_cmd_update.message.reply_text = AsyncMock()
+            mock_cmd_context = MagicMock()
+            mock_cmd_context.args = []
+
+            asyncio.run(withdraw_command(mock_cmd_update, mock_cmd_context))
+            self.assertTrue(mock_cmd_update.message.reply_text.called)
+            card_text_cmd = mock_cmd_update.message.reply_text.call_args[0][0]
+            self.assertIn("Fast SOL Withdrawal Radar", card_text_cmd)
+
+        # 3. Test callback_router routes btn_withdraw
+        with patch("telegram_bot.get_sol_balance", return_value=0.20):
+            mock_query = MagicMock()
+            mock_query.from_user.id = test_uid
+            mock_query.data = "btn_withdraw"
+            mock_query.answer = AsyncMock()
+            mock_query.edit_message_text = AsyncMock()
+            mock_query.message.edit_text = AsyncMock()
+
+            mock_update = MagicMock()
+            mock_update.callback_query = mock_query
+            mock_update.effective_user.id = test_uid
+            mock_ctx = MagicMock()
+
+            asyncio.run(callback_router(mock_update, mock_ctx))
+            self.assertTrue(mock_query.edit_message_text.called or mock_query.message.edit_text.called)
 
 
 if __name__ == "__main__":

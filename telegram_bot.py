@@ -1540,6 +1540,78 @@ async def render_alerts_card(target, user_id: int, user_lang: str, is_edit: bool
         await target.reply_text(text, parse_mode="HTML", reply_markup=markup)
 
 
+async def render_withdraw_card(target, user_id: int, user_lang: str, is_edit: bool = False):
+    """Renders interactive withdrawal radar with balance telemetry, gas reserve, and syntax examples."""
+    pubkey, _ = get_or_create_wallet(user_id)
+    balance = get_sol_balance(pubkey)
+    now_str = get_current_time_str()
+    gas_reserve = 0.005
+    max_withdrawable = max(0.0, balance - gas_reserve)
+
+    if user_lang == "ar":
+        title = "💸 <b>رادار سحب رصيد SOL الفوري</b> 🏦"
+        body = (
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📍 <b>عنوان محفظة البوت:</b>\n<code>{pubkey}</code>\n\n"
+            f"💰 <b>إجمالي الرصيد المتاح:</b> <code>{balance:.4f} SOL</code>\n"
+            f"🛡️ <b>احتياطي رسوم الغاز (محجوز):</b> <code>{gas_reserve:.3f} SOL</code>\n"
+            f"💎 <b>الحد الأقصى القابل للسحب:</b> <code>{max_withdrawable:.4f} SOL</code>\n\n"
+            "💡 <b>صيغة أمر السحب:</b>\n"
+            "<code>/withdraw [عنوان_المحفظة_المستلمة] [المبلغ|all]</code>\n\n"
+            "<b>أمثلة سريعة:</b>\n"
+            "• <code>/withdraw 7kz1mcQcaZhYzFUHBFHH6s5tGrDHc7gNhN5WAUyXyq5r 0.05</code>\n"
+            "• <code>/withdraw 7kz1mcQcaZhYzFUHBFHH6s5tGrDHc7gNhN5WAUyXyq5r all</code>\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🕒 <code>{now_str}</code>"
+        )
+        refresh_label = "🔄 تحديث الرصيد"
+        deposit_label = "📲 رمز QR للإيداع"
+        wallet_label = "💳 المحفظة"
+    else:
+        title = "💸 <b>Fast SOL Withdrawal Radar</b> 🏦"
+        body = (
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📍 <b>Bot Wallet Address:</b>\n<code>{pubkey}</code>\n\n"
+            f"💰 <b>Total Balance:</b> <code>{balance:.4f} SOL</code>\n"
+            f"🛡️ <b>Gas Reserve (Auto-Kept):</b> <code>{gas_reserve:.3f} SOL</code>\n"
+            f"💎 <b>Max Withdrawable:</b> <code>{max_withdrawable:.4f} SOL</code>\n\n"
+            "💡 <b>Command Syntax:</b>\n"
+            "<code>/withdraw [DEST_ADDRESS] [AMOUNT|all]</code>\n\n"
+            "<b>Quick Examples:</b>\n"
+            "• <code>/withdraw 7kz1mcQcaZhYzFUHBFHH6s5tGrDHc7gNhN5WAUyXyq5r 0.05</code>\n"
+            "• <code>/withdraw 7kz1mcQcaZhYzFUHBFHH6s5tGrDHc7gNhN5WAUyXyq5r all</code>\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🕒 <code>{now_str}</code>"
+        )
+        refresh_label = "🔄 Refresh Balance"
+        deposit_label = "📲 Instant QR Deposit"
+        wallet_label = "💳 Wallet"
+
+    text = f"{title}\n{body}"
+    if balance < 0.005:
+        action_btn = InlineKeyboardButton(deposit_label, callback_data="btn_qr")
+    else:
+        action_btn = InlineKeyboardButton(refresh_label, callback_data="btn_withdraw_guide")
+
+    kb = [
+        [
+            action_btn,
+            InlineKeyboardButton(wallet_label, callback_data="btn_wallet")
+        ],
+        [
+            InlineKeyboardButton(deposit_label, callback_data="btn_show_qr"),
+            InlineKeyboardButton(refresh_label, callback_data="btn_withdraw")
+        ],
+        [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
+    ]
+
+    markup = InlineKeyboardMarkup(kb)
+    if is_edit:
+        await safe_edit_text(target, text, reply_markup=markup)
+    else:
+        await target.reply_text(text, parse_mode="HTML", reply_markup=markup, disable_web_page_preview=True)
+
+
 async def render_panic_confirm(target, user_id: int, user_lang: str, is_edit: bool = False):
     """Renders the emergency panic sell-all confirmation warning card."""
     pubkey, _ = get_or_create_wallet(user_id)
@@ -1831,21 +1903,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "btn_gas_fees":
         await render_gas_card(query, user_id, user_lang, is_edit=True)
 
-    elif data == "btn_withdraw_guide":
-        pubkey, _ = get_or_create_wallet(user_id)
-        bal = get_sol_balance(pubkey)
-        title = t("withdraw_title", user_lang)
-        body = t("withdraw_body", user_lang, balance=bal)
-        text = f"{title}\n━━━━━━━━━━━━━━━━━━━\n{body}"
-        action_btn = InlineKeyboardButton(t("btn_show_qr", user_lang), callback_data="btn_qr") if bal < 0.005 else InlineKeyboardButton(t("btn_refresh", user_lang), callback_data="btn_withdraw_guide")
-        kb = [
-            [
-                action_btn,
-                InlineKeyboardButton(t("btn_wallet", user_lang), callback_data="btn_wallet")
-            ],
-            [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
-        ]
-        await safe_edit_text(query, text, reply_markup=InlineKeyboardMarkup(kb))
+    elif data in ("btn_withdraw", "btn_withdraw_guide"):
+        await render_withdraw_card(query, user_id, user_lang, is_edit=True)
 
     elif data == "btn_export_key":
         p_key = export_private_key_b58(user_id)
@@ -2198,20 +2257,7 @@ async def withdraw_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args
 
     if len(args) < 2:
-        help_text = (
-            "ℹ️ <b>Withdrawal Syntax</b>:\n"
-            "<code>/withdraw [DESTINATION_ADDRESS] [AMOUNT_SOL|all]</code>\n\n"
-            "<b>Examples:</b>\n"
-            "<code>/withdraw 7kz1mcQcaZhYzFUHBFHH6s5tGrDHc7gNhN5WAUyXyq5r 0.05</code>\n"
-            "<code>/withdraw 7kz1mcQcaZhYzFUHBFHH6s5tGrDHc7gNhN5WAUyXyq5r all</code> (Withdraw full balance)"
-        ) if user_lang == "en" else (
-            "ℹ️ <b>صيغة السحب</b>:\n"
-            "<code>/withdraw [عنوان_محفظتك] [المبلغ_SOL|all]</code>\n\n"
-            "<b>أمثلة:</b>\n"
-            "<code>/withdraw 7kz1mcQcaZhYzFUHBFHH6s5tGrDHc7gNhN5WAUyXyq5r 0.05</code>\n"
-            "<code>/withdraw 7kz1mcQcaZhYzFUHBFHH6s5tGrDHc7gNhN5WAUyXyq5r all</code> (سحب كامل الرصيد المتاح)"
-        )
-        await update.message.reply_text(help_text, parse_mode="HTML")
+        await render_withdraw_card(update.message, user_id, user_lang, is_edit=False)
         return
 
     raw1 = args[0].strip()

@@ -1124,6 +1124,64 @@ async def render_fees_card(target, user_id: int, user_lang: str, is_edit: bool =
         await target.reply_text(card, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb), disable_web_page_preview=True)
 
 
+async def render_gas_card(target, user_id: int, user_lang: str, is_edit: bool = False):
+    """Renders real-time Solana on-chain priority fee congestion radar with user's active gas tier."""
+    gas_data = get_network_gas_fees()
+    badge = gas_data["congestion_badge_ar"] if user_lang == "ar" else gas_data["congestion_badge_en"]
+    card_title = t("gas_card_title", user_lang)
+    card_body = t(
+        "gas_card_body",
+        user_lang,
+        congestion_badge=badge,
+        median_fee=gas_data["median_micro_lamports"],
+        median_sol=gas_data["median_sol"],
+        p95_fee=gas_data["p95_micro_lamports"],
+        p95_sol=gas_data["p95_sol"],
+        rec_normal=gas_data["recommended_normal"],
+        rec_turbo=gas_data["recommended_turbo"],
+        rec_ultra=gas_data["recommended_ultra"],
+    )
+    settings = get_user_settings(user_id)
+    user_lamports = settings.get("priority_fee", 50000)
+    user_sol = user_lamports / 1e9
+
+    if user_lang == "ar":
+        tier_name = "عادي" if user_lamports <= 100000 else ("تيربو" if user_lamports <= 500000 else "فائق")
+        user_info = f"\n\n🎯 <b>رسوم الأولوية النشطة لديك:</b> <code>{user_sol:.5f} SOL</code> ({tier_name})"
+        normal_btn = f"⚡ عادي (50k) {'✅' if user_lamports == 50000 else ''}".strip()
+        turbo_btn = f"🚀 تيربو (250k) {'✅' if user_lamports == 250000 else ''}".strip()
+        ultra_btn = f"🏎️ فائق (1M) {'✅' if user_lamports == 1000000 else ''}".strip()
+        settings_label = "⚙️ الإعدادات"
+    else:
+        tier_name = "Normal" if user_lamports <= 100000 else ("Turbo" if user_lamports <= 500000 else "Ultra")
+        user_info = f"\n\n🎯 <b>Your Active Priority Fee:</b> <code>{user_sol:.5f} SOL</code> ({tier_name})"
+        normal_btn = f"⚡ Normal (50k) {'✅' if user_lamports == 50000 else ''}".strip()
+        turbo_btn = f"🚀 Turbo (250k) {'✅' if user_lamports == 250000 else ''}".strip()
+        ultra_btn = f"🏎️ Ultra (1M) {'✅' if user_lamports == 1000000 else ''}".strip()
+        settings_label = "⚙️ Settings"
+
+    text = f"{card_title}\n{card_body}{user_info}"
+    kb = [
+        [
+            InlineKeyboardButton(normal_btn, callback_data="gas_50000"),
+            InlineKeyboardButton(turbo_btn, callback_data="gas_250000"),
+            InlineKeyboardButton(ultra_btn, callback_data="gas_1000000")
+        ],
+        [
+            InlineKeyboardButton(t("btn_refresh", user_lang), callback_data="btn_gas_fees"),
+            InlineKeyboardButton(settings_label, callback_data="btn_settings")
+        ],
+        [
+            InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
+        ]
+    ]
+    markup = InlineKeyboardMarkup(kb)
+    if is_edit:
+        await safe_edit_text(target, text, reply_markup=markup)
+    else:
+        await target.reply_text(text, parse_mode="HTML", reply_markup=markup)
+
+
 async def render_panic_confirm(target, user_id: int, user_lang: str, is_edit: bool = False):
     """Renders the emergency panic sell-all confirmation warning card."""
     pubkey, _ = get_or_create_wallet(user_id)
@@ -1434,33 +1492,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_photo(photo=qr_buf, caption=caption, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
 
     elif data == "btn_gas_fees":
-        await query.message.reply_chat_action("typing")
-        gas_data = get_network_gas_fees()
-        badge = gas_data["congestion_badge_ar"] if user_lang == "ar" else gas_data["congestion_badge_en"]
-        card_title = t("gas_card_title", user_lang)
-        card_body = t(
-            "gas_card_body",
-            user_lang,
-            congestion_badge=badge,
-            median_fee=gas_data["median_micro_lamports"],
-            median_sol=gas_data["median_sol"],
-            p95_fee=gas_data["p95_micro_lamports"],
-            p95_sol=gas_data["p95_sol"],
-            rec_normal=gas_data["recommended_normal"],
-            rec_turbo=gas_data["recommended_turbo"],
-            rec_ultra=gas_data["recommended_ultra"],
-        )
-        text = f"{card_title}\n{card_body}"
-        kb = [
-            [
-                InlineKeyboardButton("⚡ Normal (50k)", callback_data="gas_50000"),
-                InlineKeyboardButton("🚀 Turbo (250k)", callback_data="gas_250000"),
-                InlineKeyboardButton("🏎️ Ultra (1M)", callback_data="gas_1000000")
-            ],
-            [InlineKeyboardButton(t("btn_refresh", user_lang), callback_data="btn_gas_fees")],
-            [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_settings")]
-        ]
-        await safe_edit_text(query, text, reply_markup=InlineKeyboardMarkup(kb))
+        await render_gas_card(query, user_id, user_lang, is_edit=True)
 
     elif data == "btn_withdraw_guide":
         pubkey, _ = get_or_create_wallet(user_id)
@@ -1645,8 +1677,12 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update_user_priority_fee(user_id, new_lamports)
         ack = f"Priority fee set to {new_lamports/1e9:.5f} SOL" if user_lang == "en" else f"تم ضبط رسوم أولوية الغاز إلى {new_lamports/1e9:.5f} SOL"
         await query.answer(ack, show_alert=False)
-        text, kb = build_settings_card(user_id, user_lang)
-        await safe_edit_text(query, text, reply_markup=kb)
+        msg_text = (query.message.text or "") if query.message else ""
+        if "Priority Fee" in msg_text or "أولوية الغاز" in msg_text or "Solana Priority" in msg_text:
+            await render_gas_card(query, user_id, user_lang, is_edit=True)
+        else:
+            text, kb = build_settings_card(user_id, user_lang)
+            await safe_edit_text(query, text, reply_markup=kb)
 
     elif data.startswith("tp_"):
         new_tp = int(data.split("_")[1])
@@ -1991,33 +2027,24 @@ async def gas_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler for /gas command: queries Solana on-chain priority fees and displays live congestion radar."""
     user_id = update.effective_user.id
     user_lang = get_user_language(user_id)
-    await update.message.reply_chat_action("typing")
-    gas_data = get_network_gas_fees()
-    badge = gas_data["congestion_badge_ar"] if user_lang == "ar" else gas_data["congestion_badge_en"]
-    card_title = t("gas_card_title", user_lang)
-    card_body = t(
-        "gas_card_body",
-        user_lang,
-        congestion_badge=badge,
-        median_fee=gas_data["median_micro_lamports"],
-        median_sol=gas_data["median_sol"],
-        p95_fee=gas_data["p95_micro_lamports"],
-        p95_sol=gas_data["p95_sol"],
-        rec_normal=gas_data["recommended_normal"],
-        rec_turbo=gas_data["recommended_turbo"],
-        rec_ultra=gas_data["recommended_ultra"],
-    )
-    text = f"{card_title}\n{card_body}"
-    kb = [
-        [
-            InlineKeyboardButton("⚡ Normal (50k)", callback_data="gas_50000"),
-            InlineKeyboardButton("🚀 Turbo (250k)", callback_data="gas_250000"),
-            InlineKeyboardButton("🏎️ Ultra (1M)", callback_data="gas_1000000")
-        ],
-        [InlineKeyboardButton(t("btn_refresh", user_lang), callback_data="btn_gas_fees")],
-        [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
-    ]
-    await update.message.reply_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
+    if context.args:
+        raw_arg = context.args[0].lower().strip()
+        new_lamports = None
+        if raw_arg in ("normal", "عادي"):
+            new_lamports = 50_000
+        elif raw_arg in ("turbo", "تيربو"):
+            new_lamports = 250_000
+        elif raw_arg in ("ultra", "فائق"):
+            new_lamports = 1_000_000
+        else:
+            try:
+                val = float(raw_arg)
+                new_lamports = int(val * 1e9) if val < 1.0 else int(val)
+            except ValueError:
+                pass
+        if new_lamports and 1_000 <= new_lamports <= 50_000_000:
+            update_user_priority_fee(user_id, new_lamports)
+    await render_gas_card(update.message, user_id, user_lang, is_edit=False)
 
 
 

@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.44.0", card_text)
+        self.assertIn("v3.45.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.44.0")
+        self.assertEqual(BOT_VERSION, "v3.45.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -2453,6 +2453,61 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
             edited_cbs = [b.callback_data for row in kb_edited.inline_keyboard for b in row if b.callback_data]
             self.assertIn("btn_tour", edited_cbs)
             self.assertIn("btn_status", edited_cbs)
+
+    def test_69_gas_card_radar_parity_and_cli_args(self):
+        """Test render_gas_card active checkmarks, gas_command CLI arg parsing, and contextual callback routing."""
+        import asyncio
+        from unittest.mock import MagicMock, AsyncMock, patch
+        from telegram_bot import render_gas_card, gas_command, callback_router
+        from wallet_manager import get_or_create_wallet, get_user_settings, update_user_priority_fee
+
+        test_uid = 99886655
+        get_or_create_wallet(test_uid)
+        update_user_priority_fee(test_uid, 50000)
+
+        # 1. Test render_gas_card has Normal checked (✅)
+        mock_target = MagicMock()
+        mock_target.reply_text = AsyncMock()
+
+        asyncio.run(render_gas_card(mock_target, test_uid, user_lang="en", is_edit=False))
+        self.assertTrue(mock_target.reply_text.called)
+        kb = mock_target.reply_text.call_args[1]["reply_markup"]
+        all_btns = [b for row in kb.inline_keyboard for b in row]
+        normal_btn = next((b for b in all_btns if b.callback_data == "gas_50000"), None)
+        self.assertIsNotNone(normal_btn)
+        self.assertIn("✅", normal_btn.text)
+
+        # 2. Test gas_command with CLI arg "turbo" updates user priority fee to 250000
+        mock_update_cmd = MagicMock()
+        mock_update_cmd.effective_user.id = test_uid
+        mock_update_cmd.message.reply_text = AsyncMock()
+        mock_context = MagicMock()
+        mock_context.args = ["turbo"]
+
+        asyncio.run(gas_command(mock_update_cmd, mock_context))
+        new_settings = get_user_settings(test_uid)
+        self.assertEqual(new_settings["priority_fee"], 250000)
+        kb_cmd = mock_update_cmd.message.reply_text.call_args[1]["reply_markup"]
+        all_btns_cmd = [b for row in kb_cmd.inline_keyboard for b in row]
+        turbo_btn = next((b for b in all_btns_cmd if b.callback_data == "gas_250000"), None)
+        self.assertIsNotNone(turbo_btn)
+        self.assertIn("✅", turbo_btn.text)
+
+        # 3. Test callback_router with btn_gas_fees
+        mock_query_cb = MagicMock()
+        mock_query_cb.from_user.id = test_uid
+        mock_query_cb.data = "btn_gas_fees"
+        mock_query_cb.answer = AsyncMock()
+        mock_query_cb.edit_message_text = AsyncMock()
+        mock_update_cb = MagicMock(callback_query=mock_query_cb)
+
+        with patch("telegram_bot.get_user_language", return_value="en"):
+            asyncio.run(callback_router(mock_update_cb, mock_context))
+            self.assertTrue(mock_query_cb.edit_message_text.called)
+            kb_fees = mock_query_cb.edit_message_text.call_args[1]["reply_markup"]
+            fees_cbs = [b.callback_data for row in kb_fees.inline_keyboard for b in row if b.callback_data]
+            self.assertIn("gas_50000", fees_cbs)
+            self.assertIn("btn_gas_fees", fees_cbs)
 
 
 if __name__ == "__main__":

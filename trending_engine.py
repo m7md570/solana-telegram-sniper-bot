@@ -240,7 +240,9 @@ def get_top_gainers(limit: int = 5) -> List[Dict[str, Any]]:
     Filters out tokens with negligible liquidity (< $10,000) to ensure tradeability.
     """
     tokens = get_trending_tokens(limit=15)
-    liquid_tokens = [t for t in tokens if t.get("liquidity", 0.0) >= 10_000]
+    liquid_tokens = [t for t in tokens if t.get("liquidity", 0.0) >= 5_000]
+    if not liquid_tokens and tokens:
+        liquid_tokens = tokens
     # Sort by 1h momentum first, then 24h momentum
     sorted_gainers = sorted(liquid_tokens, key=lambda x: (x.get("change_1h", 0.0), x.get("change_24h", 0.0)), reverse=True)
     return sorted_gainers[:limit]

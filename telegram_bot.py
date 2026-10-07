@@ -772,12 +772,18 @@ async def render_surge_radar(target, user_id: int, user_lang: str, is_edit: bool
     tokens = get_top_gainers(limit=5)
     text = format_gainers_list(tokens, lang=user_lang)
     keyboard = []
-    for tkn in tokens:
-        sym = html.escape(tkn["symbol"])
-        mint = tkn["mint"]
-        btn_label = f"🚀 قنص ${sym} ({tkn['change_1h']:+.1f}%)" if user_lang == "ar" else f"🚀 Snipe ${sym} ({tkn['change_1h']:+.1f}%)"
+    if tokens:
+        for tkn in tokens:
+            sym = html.escape(tkn["symbol"])
+            mint = tkn["mint"]
+            btn_label = f"🚀 قنص ${sym} ({tkn['change_1h']:+.1f}%)" if user_lang == "ar" else f"🚀 Snipe ${sym} ({tkn['change_1h']:+.1f}%)"
+            keyboard.append([
+                InlineKeyboardButton(btn_label, callback_data=f"inspect_{mint}")
+            ])
+    else:
+        trending_btn = "🔥 " + ("Explore Trending" if user_lang == "en" else "استكشاف العملات الرائجة")
         keyboard.append([
-            InlineKeyboardButton(btn_label, callback_data=f"inspect_{mint}")
+            InlineKeyboardButton(trending_btn, callback_data="btn_trending")
         ])
     refresh_label = "🔄 " + ("Refresh Gainers" if user_lang == "en" else "تحديث القائمة")
     keyboard.append([

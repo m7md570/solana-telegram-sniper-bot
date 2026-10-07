@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.41.0", card_text)
+        self.assertIn("v3.42.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.41.0")
+        self.assertEqual(BOT_VERSION, "v3.42.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -2304,6 +2304,52 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertIn("ar", short_langs, "Arabic locale must be synced with English short description")
         for c in short_calls:
             self.assertIn("Ultra-fast Solana Sniper", c.args[0])
+
+    def test_66_surge_radar_resilience_and_empty_state_action(self):
+        """Test render_surge_radar renders snipe buttons when gainers exist and explore trending when empty."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock, patch
+        from telegram_bot import render_surge_radar
+
+        test_uid = 99881155
+
+        # 1. Test populated gainers renders 1-click inspect buttons
+        mock_target_pop = MagicMock()
+        mock_target_pop.reply_text = AsyncMock()
+
+        fake_gainers = [
+            {
+                "mint": self.bonk_mint,
+                "symbol": "BONK",
+                "price_usd": 0.000025,
+                "change_1h": 15.2,
+                "change_24h": 40.0,
+                "volume_24h": 5000000,
+                "liquidity": 1200000
+            }
+        ]
+
+        with patch("telegram_bot.get_top_gainers", return_value=fake_gainers):
+            asyncio.run(render_surge_radar(mock_target_pop, test_uid, user_lang="en", is_edit=False))
+            self.assertTrue(mock_target_pop.reply_text.called)
+            kb = mock_target_pop.reply_text.call_args[1]["reply_markup"]
+            all_cbs = [b.callback_data for row in kb.inline_keyboard for b in row if b.callback_data]
+            self.assertIn(f"inspect_{self.bonk_mint}", all_cbs)
+            self.assertIn("btn_surge", all_cbs)
+            self.assertIn("btn_refresh", all_cbs)
+
+        # 2. Test empty gainers renders explore trending action button
+        mock_target_empty = MagicMock()
+        mock_target_empty.reply_text = AsyncMock()
+
+        with patch("telegram_bot.get_top_gainers", return_value=[]):
+            asyncio.run(render_surge_radar(mock_target_empty, test_uid, user_lang="en", is_edit=False))
+            self.assertTrue(mock_target_empty.reply_text.called)
+            kb_empty = mock_target_empty.reply_text.call_args[1]["reply_markup"]
+            empty_cbs = [b.callback_data for row in kb_empty.inline_keyboard for b in row if b.callback_data]
+            self.assertIn("btn_trending", empty_cbs)
+            self.assertIn("btn_surge", empty_cbs)
+            self.assertIn("btn_refresh", empty_cbs)
 
 
 if __name__ == "__main__":

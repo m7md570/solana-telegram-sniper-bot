@@ -71,6 +71,6 @@ MAX_SLIPPAGE_BPS = 1500        # 15% slippage cap
 DEFAULT_PRIORITY_FEE_LAMPORTS = 50_000  # 0.00005 SOL priority fee for fast landing
 
 # System Version & Token Programs
-BOT_VERSION = "v3.41.0"
+BOT_VERSION = "v3.42.0"
 TOKEN_PROGRAM_ID = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
 TOKEN_2022_PROGRAM_ID = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"

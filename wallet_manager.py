@@ -121,7 +121,8 @@ def init_database():
             ("default_tp_pct", "INTEGER DEFAULT 50"),
             ("default_sl_pct", "INTEGER DEFAULT 25"),
             ("price_alerts_enabled", "INTEGER DEFAULT 1"),
-            ("default_alert_pct", "REAL DEFAULT 10.0")
+            ("default_alert_pct", "REAL DEFAULT 10.0"),
+            ("default_buy_amount", "REAL DEFAULT 0.1")
         ]
         for col_name, col_type in migrations:
             if col_name not in existing_cols:
@@ -262,18 +263,20 @@ def get_sol_balance(public_key_str: str) -> float:
     return 0.0
 
 
-def get_user_settings(user_id: int) -> Dict[str, int]:
-    """Returns user's slippage, priority fee, TP, and SL settings."""
+def get_user_settings(user_id: int) -> Dict[str, Any]:
+    """Returns user's slippage, priority fee, TP, SL, and default buy amount settings."""
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        row = cursor.execute("SELECT slippage_bps, priority_fee, default_tp_pct, default_sl_pct FROM users WHERE user_id = ?", (user_id,)).fetchone()
+        row = cursor.execute("SELECT slippage_bps, priority_fee, default_tp_pct, default_sl_pct, default_buy_amount FROM users WHERE user_id = ?", (user_id,)).fetchone()
         if row:
+            buy_amt = float(row["default_buy_amount"]) if "default_buy_amount" in row.keys() and row["default_buy_amount"] is not None else 0.1
             return {
                 "slippage_bps": row["slippage_bps"] or DEFAULT_SLIPPAGE_BPS,
                 "priority_fee": row["priority_fee"] or DEFAULT_PRIORITY_FEE_LAMPORTS,
                 "default_tp_pct": row["default_tp_pct"] or 50,
-                "default_sl_pct": row["default_sl_pct"] or 25
+                "default_sl_pct": row["default_sl_pct"] or 25,
+                "default_buy_amount": buy_amt
             }
     finally:
         conn.close()
@@ -281,8 +284,35 @@ def get_user_settings(user_id: int) -> Dict[str, int]:
         "slippage_bps": DEFAULT_SLIPPAGE_BPS,
         "priority_fee": DEFAULT_PRIORITY_FEE_LAMPORTS,
         "default_tp_pct": 50,
-        "default_sl_pct": 25
+        "default_sl_pct": 25,
+        "default_buy_amount": 0.1
     }
+
+
+def get_user_default_buy_amount(user_id: int) -> float:
+    """Returns the user's default quick-snipe buy amount in SOL (default: 0.1 SOL)."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        row = cursor.execute("SELECT default_buy_amount FROM users WHERE user_id = ?", (user_id,)).fetchone()
+        if row and "default_buy_amount" in row.keys() and row["default_buy_amount"] is not None:
+            return float(row["default_buy_amount"])
+    finally:
+        conn.close()
+    return 0.1
+
+
+def update_user_default_buy_amount(user_id: int, amount: float) -> bool:
+    """Updates user's default quick-buy amount setting in SOL."""
+    if amount <= 0:
+        return False
+    conn = get_db_connection()
+    try:
+        conn.execute("UPDATE users SET default_buy_amount = ? WHERE user_id = ?", (amount, user_id))
+        conn.commit()
+        return True
+    finally:
+        conn.close()
 
 
 def update_user_slippage(user_id: int, slippage_bps: int):
@@ -306,7 +336,7 @@ def update_user_priority_fee(user_id: int, priority_fee_lamports: int):
 
 
 def reset_user_settings_to_defaults(user_id: int) -> bool:
-    """Resets user trading parameters (slippage, priority fee, TP/SL, auto-buy) to recommended factory defaults."""
+    """Resets user trading parameters (slippage, priority fee, TP/SL, auto-buy, quick buy size) to recommended factory defaults."""
     conn = get_db_connection()
     try:
         conn.execute("""
@@ -316,7 +346,8 @@ def reset_user_settings_to_defaults(user_id: int) -> bool:
                 default_tp_pct = 50,
                 default_sl_pct = 25,
                 auto_buy_enabled = 0,
-                auto_buy_amount = 0.1
+                auto_buy_amount = 0.1,
+                default_buy_amount = 0.1
             WHERE user_id = ?
         """, (DEFAULT_SLIPPAGE_BPS, DEFAULT_PRIORITY_FEE_LAMPORTS, user_id))
         conn.commit()

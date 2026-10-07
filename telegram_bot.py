@@ -92,7 +92,9 @@ from wallet_manager import (
     get_all_active_watchlist_subscriptions,
     update_watchlist_price_and_alert,
     generate_deposit_qr_buffer,
-    reset_user_settings_to_defaults
+    reset_user_settings_to_defaults,
+    get_user_default_buy_amount,
+    update_user_default_buy_amount
 )
 from rugcheck_scanner import (
     scan_token_security,
@@ -272,6 +274,8 @@ def build_settings_card(user_id: int, user_lang: str) -> Tuple[str, InlineKeyboa
         (t("gas_tier_turbo", user_lang) if gas_lamports <= 500000 else t("gas_tier_ultra", user_lang))
     )
 
+    current_buy_amt = settings.get("default_buy_amount", 0.1)
+
     title = t("settings_title", user_lang)
     body = t("settings_body", user_lang, slippage=current_slip)
     if user_lang == "en":
@@ -279,23 +283,27 @@ def build_settings_card(user_id: int, user_lang: str) -> Tuple[str, InlineKeyboa
             f"\n\n⚡ <b>Priority Gas:</b> <code>{gas_sol:.5f} SOL</code> ({tier_label})\n"
             f"🎯 <b>Auto Take-Profit:</b> <code>+{current_tp}%</code>\n"
             f"🛑 <b>Auto Stop-Loss:</b> <code>-{current_sl}%</code>\n"
+            f"💰 <b>Default Quick-Buy:</b> <code>{current_buy_amt:.2f} SOL</code>\n"
             f"🔔 <b>Price Movement Alerts:</b> <code>{'ENABLED' if alerts_on else 'DISABLED'} (±{alert_th:.0f}%)</code>\n\n"
             f"Select parameters or speed tiers below:"
         )
         alerts_btn_text = f"🔔 Alerts: ON (±{alert_th:.0f}%)" if alerts_on else "🔕 Alerts: OFF"
         reset_label = "🔄 Reset Defaults"
         autobuy_label = "🎯 Auto-Buy Radar"
+        presets_label = f"🎯 Quick-Buy ({current_buy_amt:.2f} SOL)"
     else:
         extra_info = (
             f"\n\n⚡ <b>أولوية الغاز:</b> <code>{gas_sol:.5f} SOL</code> ({tier_label})\n"
             f"🎯 <b>جني الأرباح التلقائي:</b> <code>+{current_tp}%</code>\n"
             f"🛑 <b>وقف الخسارة التلقائي:</b> <code>-{current_sl}%</code>\n"
+            f"💰 <b>مبلغ القنص السريع الافتراضي:</b> <code>{current_buy_amt:.2f} SOL</code>\n"
             f"🔔 <b>تنبيهات تقلبات الأسعار:</b> <code>{'مفعلة' if alerts_on else 'معطلة'} (±{alert_th:.0f}%)</code>\n\n"
             f"اختر الإعدادات المناسبة لاستراتيجيتك أدناه:"
         )
         alerts_btn_text = f"🔔 التنبيهات: مفعلة (±{alert_th:.0f}%)" if alerts_on else "🔕 التنبيهات: معطلة"
         reset_label = "🔄 استعادة الافتراضيات"
         autobuy_label = "🎯 رادار القنص التلقائي"
+        presets_label = f"🎯 مبالغ القنص ({current_buy_amt:.2f} SOL)"
 
     text = f"{title}\n━━━━━━━━━━━━━━━━━━━\n{body}{extra_info}\n🕒 <code>{now_str}</code>"
 
@@ -338,14 +346,17 @@ def build_settings_card(user_id: int, user_lang: str) -> Tuple[str, InlineKeyboa
             InlineKeyboardButton(autobuy_label, callback_data="btn_autobuy")
         ],
         [
-            InlineKeyboardButton(t("btn_gas_radar", user_lang), callback_data="btn_gas_fees"),
+            InlineKeyboardButton(presets_label, callback_data="btn_presets"),
             InlineKeyboardButton(reset_label, callback_data="btn_reset_defaults")
         ],
         [
-            InlineKeyboardButton(t("btn_lang_toggle", user_lang), callback_data="btn_toggle_lang"),
-            InlineKeyboardButton("❓ Help" if user_lang == "en" else "❓ المساعدة", callback_data="btn_help")
+            InlineKeyboardButton(t("btn_gas_radar", user_lang), callback_data="btn_gas_fees"),
+            InlineKeyboardButton(t("btn_lang_toggle", user_lang), callback_data="btn_toggle_lang")
         ],
-        [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
+        [
+            InlineKeyboardButton("❓ Help" if user_lang == "en" else "❓ المساعدة", callback_data="btn_help"),
+            InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
+        ]
     ]
 
     return text, InlineKeyboardMarkup(kb)
@@ -1612,6 +1623,76 @@ async def render_withdraw_card(target, user_id: int, user_lang: str, is_edit: bo
         await target.reply_text(text, parse_mode="HTML", reply_markup=markup, disable_web_page_preview=True)
 
 
+async def render_presets_card(target, user_id: int, user_lang: str, is_edit: bool = False):
+    """Renders interactive quick-snipe buy amount presets card with dynamic checkmarks."""
+    current_amt = get_user_default_buy_amount(user_id)
+    now_str = get_current_time_str()
+
+    p005 = f"0.05 SOL {'✅' if abs(current_amt - 0.05) < 0.001 else ''}".strip()
+    p010 = f"0.10 SOL {'✅' if abs(current_amt - 0.10) < 0.001 else ''}".strip()
+    p025 = f"0.25 SOL {'✅' if abs(current_amt - 0.25) < 0.001 else ''}".strip()
+    p050 = f"0.50 SOL {'✅' if abs(current_amt - 0.50) < 0.001 else ''}".strip()
+    p100 = f"1.00 SOL {'✅' if abs(current_amt - 1.00) < 0.001 else ''}".strip()
+    p200 = f"2.00 SOL {'✅' if abs(current_amt - 2.00) < 0.001 else ''}".strip()
+
+    if user_lang == "ar":
+        title = "🎯 <b>إعدادات مبالغ القنص السريع الافتراضية (Quick Buy Presets)</b>"
+        body = (
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"• <b>مبلغ القنص النشط حالياً:</b> <code>{current_amt:.2f} SOL</code>\n\n"
+            f"اختر حجم الصفقة السريعة المفضل لديك بنقرة واحدة لتسهيل قنص وتداول العملات اللحظي.\n\n"
+            f"💡 <b>صيغة الأمر المباشر:</b> <code>/presets [المبلغ_SOL]</code>\n"
+            f"مثال: <code>/presets 0.25</code>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🕒 <code>{now_str}</code>"
+        )
+        refresh_label = "🔄 تحديث"
+        settings_label = "⚙️ الإعدادات"
+        autobuy_label = "🎯 رادار القنص التلقائي"
+    else:
+        title = "🎯 <b>Quick-Snipe Buy Presets Radar</b>"
+        body = (
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"• <b>Active Quick-Buy Size:</b> <code>{current_amt:.2f} SOL</code>\n\n"
+            f"Select your default 1-click execution size for lightning-fast token entries:\n\n"
+            f"💡 <b>Direct Command:</b> <code>/presets [AMOUNT_SOL]</code>\n"
+            f"Example: <code>/presets 0.25</code>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🕒 <code>{now_str}</code>"
+        )
+        refresh_label = "🔄 Refresh"
+        settings_label = "⚙️ Settings"
+        autobuy_label = "🎯 Auto-Buy Radar"
+
+    text = f"{title}\n{body}"
+    kb = [
+        [
+            InlineKeyboardButton(p005, callback_data="preset_buy_0.05"),
+            InlineKeyboardButton(p010, callback_data="preset_buy_0.10"),
+            InlineKeyboardButton(p025, callback_data="preset_buy_0.25")
+        ],
+        [
+            InlineKeyboardButton(p050, callback_data="preset_buy_0.50"),
+            InlineKeyboardButton(p100, callback_data="preset_buy_1.00"),
+            InlineKeyboardButton(p200, callback_data="preset_buy_2.00")
+        ],
+        [
+            InlineKeyboardButton(autobuy_label, callback_data="btn_autobuy"),
+            InlineKeyboardButton(settings_label, callback_data="btn_settings")
+        ],
+        [
+            InlineKeyboardButton(refresh_label, callback_data="btn_presets"),
+            InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
+        ]
+    ]
+
+    markup = InlineKeyboardMarkup(kb)
+    if is_edit:
+        await safe_edit_text(target, text, reply_markup=markup)
+    else:
+        await target.reply_text(text, parse_mode="HTML", reply_markup=markup, disable_web_page_preview=True)
+
+
 async def render_panic_confirm(target, user_id: int, user_lang: str, is_edit: bool = False):
     """Renders the emergency panic sell-all confirmation warning card."""
     pubkey, _ = get_or_create_wallet(user_id)
@@ -2026,6 +2107,16 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer(ack, show_alert=False)
         text, kb = build_settings_card(user_id, user_lang)
         await safe_edit_text(query, text, reply_markup=kb)
+
+    elif data == "btn_presets":
+        await render_presets_card(query, user_id, user_lang, is_edit=True)
+
+    elif data.startswith("preset_buy_"):
+        new_amt = float(data.split("_")[2])
+        update_user_default_buy_amount(user_id, new_amt)
+        ack = f"Default quick-buy size set to {new_amt:.2f} SOL" if user_lang == "en" else f"تم ضبط مبلغ القنص السريع إلى {new_amt:.2f} SOL"
+        await query.answer(ack, show_alert=False)
+        await render_presets_card(query, user_id, user_lang, is_edit=True)
 
     elif data == "btn_help":
         await render_help_card(query, user_id, user_lang, is_edit=True)
@@ -2596,6 +2687,30 @@ async def autobuy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
 
     await render_autobuy_card(update.message, user_id, user_lang, is_edit=False)
+
+
+async def presets_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for /presets, /preset, /quickbuy command: /presets [AMOUNT_SOL]"""
+    user_id = update.effective_user.id
+    user_lang = get_user_language(user_id)
+    args = context.args
+
+    if args:
+        try:
+            amt = float(args[0].strip())
+            if amt < 0.001 or amt > 100.0:
+                err = "❌ Please specify an amount between 0.001 and 100 SOL." if user_lang == "en" else "❌ يرجى تحديد مبلغ بين 0.001 و 100 SOL."
+                await update.message.reply_text(err, parse_mode="HTML")
+                return
+            update_user_default_buy_amount(user_id, amt)
+            ack = f"✅ Default quick-buy size set to <code>{amt:.2f} SOL</code>" if user_lang == "en" else f"✅ تم ضبط مبلغ القنص السريع الافتراضي إلى <code>{amt:.2f} SOL</code>"
+            await update.message.reply_text(ack, parse_mode="HTML")
+        except ValueError:
+            err = "❌ Usage: <code>/presets [AMOUNT_SOL]</code> (e.g. <code>/presets 0.25</code>)" if user_lang == "en" else "❌ الاستخدام: <code>/presets [المبلغ_SOL]</code> (مثال: <code>/presets 0.25</code>)"
+            await update.message.reply_text(err, parse_mode="HTML")
+            return
+
+    await render_presets_card(update.message, user_id, user_lang, is_edit=False)
 
 
 async def price_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -3442,6 +3557,9 @@ def build_application(token: str) -> Application:
     app.add_handler(CommandHandler("slip", slippage_command))
     app.add_handler(CommandHandler("autobuy", autobuy_command))
     app.add_handler(CommandHandler("auto", autobuy_command))
+    app.add_handler(CommandHandler("presets", presets_command))
+    app.add_handler(CommandHandler("preset", presets_command))
+    app.add_handler(CommandHandler("quickbuy", presets_command))
     app.add_handler(CommandHandler("price", price_command))
     app.add_handler(CommandHandler("chart", price_command))
     app.add_handler(CommandHandler("tp", tp_command))

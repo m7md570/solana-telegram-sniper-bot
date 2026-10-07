@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.53.0", card_text)
+        self.assertIn("v3.54.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.53.0")
+        self.assertEqual(BOT_VERSION, "v3.54.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -3134,6 +3134,99 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
 
             asyncio.run(callback_router(mock_update, mock_ctx))
             self.assertTrue(mock_query.edit_message_text.called or mock_query.message.edit_text.called)
+
+    def test_78_quick_buy_presets_radar_and_cli(self):
+        """Test quick-buy presets radar formatting, dynamic checkmarks, DB persistence, and /presets CLI."""
+        from telegram_bot import render_presets_card, presets_command, build_application, callback_router
+        from wallet_manager import (
+            get_or_create_wallet,
+            get_user_default_buy_amount,
+            update_user_default_buy_amount,
+            reset_user_settings_to_defaults
+        )
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock
+        from telegram.ext import CommandHandler
+
+        test_uid = 99112233
+        get_or_create_wallet(test_uid, "PresetsTester", initial_language="en")
+        reset_user_settings_to_defaults(test_uid)
+
+        # 1. Test DB default value and updates
+        self.assertEqual(get_user_default_buy_amount(test_uid), 0.1)
+        self.assertTrue(update_user_default_buy_amount(test_uid, 0.25))
+        self.assertEqual(get_user_default_buy_amount(test_uid), 0.25)
+
+        # 2. Test render_presets_card in English with active checkmark on 0.25 SOL
+        mock_target = MagicMock()
+        mock_target.reply_text = AsyncMock()
+        asyncio.run(render_presets_card(mock_target, test_uid, "en", is_edit=False))
+        self.assertTrue(mock_target.reply_text.called)
+
+        card_text = mock_target.reply_text.call_args[0][0]
+        self.assertIn("Quick-Snipe Buy Presets Radar", card_text)
+        self.assertIn("0.25 SOL", card_text)
+
+        kb = mock_target.reply_text.call_args[1]["reply_markup"]
+        all_btns = [b for row in kb.inline_keyboard for b in row]
+        btn_025 = next((b for b in all_btns if b.callback_data == "preset_buy_0.25"), None)
+        btn_010 = next((b for b in all_btns if b.callback_data == "preset_buy_0.10"), None)
+        self.assertIsNotNone(btn_025)
+        self.assertIsNotNone(btn_010)
+        self.assertTrue(btn_025.text.endswith("✅"))
+        self.assertFalse(btn_010.text.endswith("✅"))
+
+        # Check navigation buttons
+        self.assertIsNotNone(next((b for b in all_btns if b.callback_data == "btn_autobuy"), None))
+        self.assertIsNotNone(next((b for b in all_btns if b.callback_data == "btn_settings"), None))
+        self.assertIsNotNone(next((b for b in all_btns if b.callback_data == "btn_presets"), None))
+
+        # 3. Test presets_command with argument updates default amount
+        mock_cmd_update = MagicMock()
+        mock_cmd_update.effective_user.id = test_uid
+        mock_cmd_update.message.reply_text = AsyncMock()
+        mock_cmd_ctx = MagicMock()
+        mock_cmd_ctx.args = ["0.50"]
+
+        asyncio.run(presets_command(mock_cmd_update, mock_cmd_ctx))
+        self.assertEqual(get_user_default_buy_amount(test_uid), 0.50)
+        self.assertTrue(mock_cmd_update.message.reply_text.called)
+
+        # 4. Test presets_command with no args renders presets card
+        mock_cmd_ctx.args = []
+        mock_cmd_update.message.reply_text.reset_mock()
+        asyncio.run(presets_command(mock_cmd_update, mock_cmd_ctx))
+        self.assertTrue(mock_cmd_update.message.reply_text.called)
+        card_text_noargs = mock_cmd_update.message.reply_text.call_args[0][0]
+        self.assertIn("Quick-Snipe Buy Presets Radar", card_text_noargs)
+
+        # 5. Test callback_router routes btn_presets and preset_buy_1.00
+        mock_query = MagicMock()
+        mock_query.from_user.id = test_uid
+        mock_query.data = "preset_buy_1.00"
+        mock_query.answer = AsyncMock()
+        mock_query.edit_message_text = AsyncMock()
+        mock_query.message.edit_text = AsyncMock()
+
+        mock_update = MagicMock()
+        mock_update.callback_query = mock_query
+        mock_update.effective_user.id = test_uid
+        mock_ctx = MagicMock()
+
+        asyncio.run(callback_router(mock_update, mock_ctx))
+        self.assertEqual(get_user_default_buy_amount(test_uid), 1.00)
+        self.assertTrue(mock_query.answer.called)
+
+        # 6. Test CommandHandler registration for presets, preset, and quickbuy
+        app = build_application("8935718262:AAGZc-RLQplBfx6cWzTtk2zyorXo5o74NqE")
+        command_handlers = [h for h in app.handlers[0] if isinstance(h, CommandHandler)]
+        registered_commands = set()
+        for h in command_handlers:
+            registered_commands.update(h.commands)
+
+        self.assertIn("presets", registered_commands)
+        self.assertIn("preset", registered_commands)
+        self.assertIn("quickbuy", registered_commands)
 
 
 if __name__ == "__main__":

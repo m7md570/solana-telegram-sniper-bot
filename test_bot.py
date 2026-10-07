@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.45.0", card_text)
+        self.assertIn("v3.46.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.45.0")
+        self.assertEqual(BOT_VERSION, "v3.46.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -2508,6 +2508,61 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
             fees_cbs = [b.callback_data for row in kb_fees.inline_keyboard for b in row if b.callback_data]
             self.assertIn("gas_50000", fees_cbs)
             self.assertIn("btn_gas_fees", fees_cbs)
+
+    def test_70_slippage_card_radar_parity_and_cli_args(self):
+        """Test render_slippage_card checkmarks, slippage_command CLI args, and in-place callback routing."""
+        import asyncio
+        from unittest.mock import MagicMock, AsyncMock, patch
+        from telegram_bot import render_slippage_card, slippage_command, callback_router
+        from wallet_manager import get_or_create_wallet, get_user_settings, update_user_slippage
+
+        test_uid = 99885544
+        get_or_create_wallet(test_uid)
+        update_user_slippage(test_uid, 100)
+
+        # 1. Test render_slippage_card has 1.0% checked (✅)
+        mock_target = MagicMock()
+        mock_target.reply_text = AsyncMock()
+
+        asyncio.run(render_slippage_card(mock_target, test_uid, user_lang="en", is_edit=False))
+        self.assertTrue(mock_target.reply_text.called)
+        kb = mock_target.reply_text.call_args[1]["reply_markup"]
+        all_btns = [b for row in kb.inline_keyboard for b in row]
+        slip100_btn = next((b for b in all_btns if b.callback_data == "slip_100"), None)
+        self.assertIsNotNone(slip100_btn)
+        self.assertIn("✅", slip100_btn.text)
+
+        # 2. Test slippage_command with CLI arg "0.5" updates slippage to 50 BPS
+        mock_update_cmd = MagicMock()
+        mock_update_cmd.effective_user.id = test_uid
+        mock_update_cmd.message.reply_text = AsyncMock()
+        mock_context = MagicMock()
+        mock_context.args = ["0.5"]
+
+        asyncio.run(slippage_command(mock_update_cmd, mock_context))
+        new_settings = get_user_settings(test_uid)
+        self.assertEqual(new_settings["slippage_bps"], 50)
+        kb_cmd = mock_update_cmd.message.reply_text.call_args[1]["reply_markup"]
+        all_btns_cmd = [b for row in kb_cmd.inline_keyboard for b in row]
+        slip50_btn = next((b for b in all_btns_cmd if b.callback_data == "slip_50"), None)
+        self.assertIsNotNone(slip50_btn)
+        self.assertIn("✅", slip50_btn.text)
+
+        # 3. Test callback_router with btn_slippage
+        mock_query_cb = MagicMock()
+        mock_query_cb.from_user.id = test_uid
+        mock_query_cb.data = "btn_slippage"
+        mock_query_cb.answer = AsyncMock()
+        mock_query_cb.edit_message_text = AsyncMock()
+        mock_update_cb = MagicMock(callback_query=mock_query_cb)
+
+        with patch("telegram_bot.get_user_language", return_value="en"):
+            asyncio.run(callback_router(mock_update_cb, mock_context))
+            self.assertTrue(mock_query_cb.edit_message_text.called)
+            kb_slip = mock_query_cb.edit_message_text.call_args[1]["reply_markup"]
+            slip_cbs = [b.callback_data for row in kb_slip.inline_keyboard for b in row if b.callback_data]
+            self.assertIn("slip_50", slip_cbs)
+            self.assertIn("btn_slippage", slip_cbs)
 
 
 if __name__ == "__main__":

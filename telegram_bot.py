@@ -1182,6 +1182,62 @@ async def render_gas_card(target, user_id: int, user_lang: str, is_edit: bool = 
         await target.reply_text(text, parse_mode="HTML", reply_markup=markup)
 
 
+async def render_slippage_card(target, user_id: int, user_lang: str, is_edit: bool = False):
+    """Renders interactive slippage tolerance configuration card with active checkmarks."""
+    settings = get_user_settings(user_id)
+    current_bps = settings.get("slippage_bps", 100)
+    current_pct = current_bps / 100.0
+    now_str = get_current_time_str()
+
+    s50 = f"0.5% {'✅' if current_bps == 50 else ''}".strip()
+    s100 = f"1.0% {'✅' if current_bps == 100 else ''}".strip()
+    s200 = f"2.0% {'✅' if current_bps == 200 else ''}".strip()
+    s500 = f"5.0% {'✅' if current_bps == 500 else ''}".strip()
+
+    if user_lang == "ar":
+        title = "🎯 <b>إعدادات نسبة الانزلاق السعري (Slippage Tolerance)</b>"
+        body = (
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"• <b>النسبة النشطة حالياً:</b> <code>{current_pct:.2f}%</code> (<code>{current_bps} BPS</code>)\n\n"
+            f"{t('slippage_syntax_help', user_lang)}\n\n"
+            f"🕒 <code>{now_str}</code>"
+        )
+        refresh_label = "🔄 تحديث"
+        settings_label = "⚙️ الإعدادات"
+    else:
+        title = "🎯 <b>Slippage Tolerance Configuration</b>"
+        body = (
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"• <b>Active Slippage:</b> <code>{current_pct:.2f}%</code> (<code>{current_bps} BPS</code>)\n\n"
+            f"{t('slippage_syntax_help', user_lang)}\n\n"
+            f"🕒 <code>{now_str}</code>"
+        )
+        refresh_label = "🔄 Refresh"
+        settings_label = "⚙️ Settings"
+
+    text = f"{title}\n{body}"
+    kb = [
+        [
+            InlineKeyboardButton(s50, callback_data="slip_50"),
+            InlineKeyboardButton(s100, callback_data="slip_100"),
+            InlineKeyboardButton(s200, callback_data="slip_200"),
+            InlineKeyboardButton(s500, callback_data="slip_500")
+        ],
+        [
+            InlineKeyboardButton(refresh_label, callback_data="btn_slippage"),
+            InlineKeyboardButton(settings_label, callback_data="btn_settings")
+        ],
+        [
+            InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
+        ]
+    ]
+    markup = InlineKeyboardMarkup(kb)
+    if is_edit:
+        await safe_edit_text(target, text, reply_markup=markup)
+    else:
+        await target.reply_text(text, parse_mode="HTML", reply_markup=markup)
+
+
 async def render_panic_confirm(target, user_id: int, user_lang: str, is_edit: bool = False):
     """Renders the emergency panic sell-all confirmation warning card."""
     pubkey, _ = get_or_create_wallet(user_id)
@@ -1664,13 +1720,20 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "btn_help":
         await render_help_card(query, user_id, user_lang, is_edit=True)
 
+    elif data == "btn_slippage":
+        await render_slippage_card(query, user_id, user_lang, is_edit=True)
+
     elif data.startswith("slip_"):
         new_bps = int(data.split("_")[1])
         update_user_slippage(user_id, new_bps)
         ack = f"Slippage tolerance set to {new_bps/100.0}%" if user_lang == "en" else f"تم ضبط نسبة الانزلاق إلى {new_bps/100.0}%"
         await query.answer(ack, show_alert=False)
-        text, kb = build_settings_card(user_id, user_lang)
-        await safe_edit_text(query, text, reply_markup=kb)
+        msg_text = (query.message.text or "") if query.message else ""
+        if "Slippage" in msg_text or "الانزلاق" in msg_text:
+            await render_slippage_card(query, user_id, user_lang, is_edit=True)
+        else:
+            text, kb = build_settings_card(user_id, user_lang)
+            await safe_edit_text(query, text, reply_markup=kb)
 
     elif data.startswith("gas_"):
         new_lamports = int(data.split("_")[1])
@@ -2159,40 +2222,20 @@ async def slippage_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_lang = get_user_language(user_id)
     args = context.args
 
-    if not args:
-        settings = get_user_settings(user_id)
-        current_pct = settings["slippage_bps"] / 100.0
-        current_bps = settings["slippage_bps"]
-        info_text = (
-            f"🎯 <b>Current Slippage Tolerance:</b> <code>{current_pct:.2f}%</code> (<code>{current_bps} BPS</code>)\n\n"
-            f"{t('slippage_syntax_help', user_lang)}"
-        ) if user_lang == "en" else (
-            f"🎯 <b>نسبة الانزلاق المحددة حالياً:</b> <code>{current_pct:.2f}%</code> (<code>{current_bps} BPS</code>)\n\n"
-            f"{t('slippage_syntax_help', user_lang)}"
-        )
-        kb = [
-            [
-                InlineKeyboardButton("0.5%", callback_data="slip_50"),
-                InlineKeyboardButton("1.0%", callback_data="slip_100"),
-                InlineKeyboardButton("2.0%", callback_data="slip_200"),
-                InlineKeyboardButton("5.0%", callback_data="slip_500")
-            ],
-            [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_settings")]
-        ]
-        await update.message.reply_text(info_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
-        return
-
-    try:
-        val = float(args[0].strip().rstrip("%"))
-        if val < 0.1 or val > 50.0:
-            await update.message.reply_text(t("slippage_invalid", user_lang), parse_mode="HTML")
+    if args:
+        try:
+            val = float(args[0].strip().rstrip("%"))
+            if 0.1 <= val <= 50.0:
+                bps = int(val * 100)
+                update_user_slippage(user_id, bps)
+            else:
+                await update.message.reply_text(t("slippage_invalid", user_lang), parse_mode="HTML")
+                return
+        except ValueError:
+            await update.message.reply_text(t("slippage_syntax_help", user_lang), parse_mode="HTML")
             return
-        bps = int(val * 100)
-        update_user_slippage(user_id, bps)
-        msg = t("slippage_updated", user_lang, pct=val, bps=bps)
-        await update.message.reply_text(msg, parse_mode="HTML")
-    except ValueError:
-        await update.message.reply_text(t("slippage_syntax_help", user_lang), parse_mode="HTML")
+
+    await render_slippage_card(update.message, user_id, user_lang, is_edit=False)
 
 
 async def autobuy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):

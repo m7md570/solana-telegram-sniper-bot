@@ -1046,9 +1046,36 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertGreaterEqual(gas_data["recommended_ultra"], gas_data["recommended_turbo"])
         self.assertGreaterEqual(gas_data["recommended_turbo"], gas_data["recommended_normal"])
 
+    def test_36_onboarding_tour_and_guide(self):
+        """Test /tour and onboarding guide response structure and keyboard."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock
+        from telegram_bot import tour_command
+
+        mock_update = MagicMock()
+        mock_user = MagicMock()
+        mock_user.id = 99881122
+        mock_update.effective_user = mock_user
+        mock_update.message.reply_text = AsyncMock()
+
+        mock_context = MagicMock()
+
+        asyncio.run(tour_command(mock_update, mock_context))
+
+        mock_update.message.reply_text.assert_called_once()
+        text_arg = mock_update.message.reply_text.call_args[0][0]
+        kb_arg = mock_update.message.reply_text.call_args[1].get("reply_markup")
+
+        self.assertIn("Quick Tour", text_arg)
+        self.assertIn("Step 1", text_arg)
+        self.assertIn("Step 2", text_arg)
+        self.assertIn("Step 3", text_arg)
+        self.assertIsNotNone(kb_arg)
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
 
 

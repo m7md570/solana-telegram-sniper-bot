@@ -179,17 +179,19 @@ def record_trade_db(
     status: str
 ):
     """Logs the executed trade into SQLite database for PnL and analytics."""
+    conn = get_db_connection()
     try:
-        with get_db_connection() as conn:
-            conn.execute("""
-                INSERT INTO trades (
-                    user_id, input_mint, output_mint, amount_in,
-                    amount_out, platform_fee_sol, tx_signature, status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (user_id, input_mint, output_mint, amount_in, amount_out, fee_sol, tx_sig, status))
-            conn.commit()
+        conn.execute("""
+            INSERT INTO trades (
+                user_id, input_mint, output_mint, amount_in,
+                amount_out, platform_fee_sol, tx_signature, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (user_id, input_mint, output_mint, amount_in, amount_out, fee_sol, tx_sig, status))
+        conn.commit()
     except Exception as e:
         print(f"Trade logging warning: {e}")
+    finally:
+        conn.close()
 
 
 def execute_sell_swap(

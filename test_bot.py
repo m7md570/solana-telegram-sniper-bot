@@ -318,6 +318,26 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         gas_title_ar = t("gas_title", "ar")
         self.assertIn("الغاز", gas_title_ar)
 
+    def test_19_viral_share_keyboard(self):
+        """Test token card keyboard generation and viral referral link construction."""
+        from telegram_bot import get_token_card_keyboard
+        test_uid = 99887766
+        kb_en = get_token_card_keyboard(self.bonk_mint, user_lang="en", user_id=test_uid, symbol="BONK")
+        self.assertIsNotNone(kb_en)
+
+        # Verify share button URL contains referral parameter
+        buttons = [btn for row in kb_en.inline_keyboard for btn in row]
+        share_btn = next((b for b in buttons if "Share" in b.text), None)
+        self.assertIsNotNone(share_btn, "Share button must be present in card keyboard")
+        self.assertIn(f"ref_{test_uid}", share_btn.url, "Share link must encode referral parameter")
+
+        # Verify Arabic version
+        kb_ar = get_token_card_keyboard(self.bonk_mint, user_lang="ar", user_id=test_uid, symbol="BONK")
+        buttons_ar = [btn for row in kb_ar.inline_keyboard for btn in row]
+        share_btn_ar = next((b for b in buttons_ar if "مشاركة" in b.text), None)
+        self.assertIsNotNone(share_btn_ar)
+        self.assertIn(f"ref_{test_uid}", share_btn_ar.url)
+
 
 if __name__ == "__main__":
     unittest.main()

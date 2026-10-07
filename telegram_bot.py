@@ -143,11 +143,24 @@ def get_main_menu_keyboard(user_id: int, lang: str = "en") -> InlineKeyboardMark
     return InlineKeyboardMarkup(keyboard)
 
 
-def get_token_card_keyboard(mint: str, user_lang: str) -> InlineKeyboardMarkup:
-    """Builds interactive inline keyboard for audited token card with custom buy and watchlist tracking."""
+def get_token_card_keyboard(mint: str, user_lang: str, user_id: int = 0, symbol: str = "TOKEN") -> InlineKeyboardMarkup:
+    """Builds interactive inline keyboard for audited token card with custom buy, watchlist tracking, and viral share."""
     sell_prefix = "بيع" if user_lang == "ar" else "Sell"
     track_btn_label = "⭐ " + t("btn_track", user_lang)
     custom_buy_label = "✏️ " + t("btn_custom_buy", user_lang)
+
+    # Pre-generate viral sharing link with user's referral parameter
+    ref_param = f"?start=ref_{user_id}" if user_id else ""
+    share_bot_url = f"https://t.me/PopcornSniperBot{ref_param}"
+    share_msg = (
+        f"🔥 Check out ${symbol} on @PopcornSniperBot! Audited with RugCheck & 1-click sub-400ms sniper."
+        if user_lang == "en" else
+        f"🔥 تفحص عملة ${symbol} على بوت @PopcornSniperBot! فحص أمان فوري وقنص سريع بنقرة واحدة."
+    )
+    import urllib.parse
+    tg_share_link = f"https://t.me/share/url?url={share_bot_url}&text={urllib.parse.quote(share_msg)}"
+    share_btn_label = "📤 " + ("Share Signal" if user_lang == "en" else "مشاركة التوصية")
+
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("🟢 0.05 SOL", callback_data=f"buy_{mint}_0.05"),
@@ -166,10 +179,11 @@ def get_token_card_keyboard(mint: str, user_lang: str) -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(track_btn_label, callback_data=f"track_{mint}"),
-            InlineKeyboardButton(t("btn_dexscreener", user_lang), url=f"https://dexscreener.com/solana/{mint}"),
-            InlineKeyboardButton(t("btn_rugcheck", user_lang), url=f"https://rugcheck.xyz/tokens/{mint}")
+            InlineKeyboardButton(share_btn_label, url=tg_share_link),
+            InlineKeyboardButton(t("btn_dexscreener", user_lang), url=f"https://dexscreener.com/solana/{mint}")
         ],
         [
+            InlineKeyboardButton(t("btn_rugcheck", user_lang), url=f"https://rugcheck.xyz/tokens/{mint}"),
             InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
         ]
     ])
@@ -461,7 +475,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                             await status_msg.edit_text(success_text, parse_mode="HTML", disable_web_page_preview=True)
                             return
 
-        await status_msg.edit_text(card_text, parse_mode="HTML", reply_markup=get_token_card_keyboard(mint, user_lang), disable_web_page_preview=True)
+        await status_msg.edit_text(card_text, parse_mode="HTML", reply_markup=get_token_card_keyboard(mint, user_lang, user_id=user_id, symbol=scan.get("symbol", "TOKEN")), disable_web_page_preview=True)
     else:
         # Check if user sent a token ticker or name (e.g. BONK, $POPCAT, WIF)
         clean_text = text.strip().lstrip("$")
@@ -471,7 +485,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                 found_mint = matched_token["mint"]
                 scan = scan_token_security(found_mint)
                 card_text = format_token_card(scan, lang=user_lang)
-                await update.message.reply_text(card_text, parse_mode="HTML", reply_markup=get_token_card_keyboard(found_mint, user_lang), disable_web_page_preview=True)
+                await update.message.reply_text(card_text, parse_mode="HTML", reply_markup=get_token_card_keyboard(found_mint, user_lang, user_id=user_id, symbol=scan.get("symbol", "TOKEN")), disable_web_page_preview=True)
                 return
 
         hint_text = (
@@ -521,7 +535,11 @@ async def render_watchlist(target, user_id: int, user_lang: str, is_edit: bool =
             InlineKeyboardButton("🗑️ Untrack", callback_data=f"untrack_{mint}")
         ])
     text_lines.append(f"🕒 <code>{now_str}</code>")
-    kb.append([InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")])
+    refresh_btn_text = "🔄 " + ("Refresh Prices" if user_lang == "en" else "تحديث الأسعار")
+    kb.append([
+        InlineKeyboardButton(refresh_btn_text, callback_data="btn_watchlist"),
+        InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
+    ])
 
     full_text = "\n".join(text_lines)
     if is_edit:
@@ -579,7 +597,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_chat_action("typing")
         scan = scan_token_security(mint)
         card_text = format_token_card(scan, lang=user_lang)
-        await safe_edit_text(query, card_text, reply_markup=get_token_card_keyboard(mint, user_lang))
+        await safe_edit_text(query, card_text, reply_markup=get_token_card_keyboard(mint, user_lang, user_id=user_id, symbol=scan.get("symbol", "TOKEN")))
 
     elif data == "btn_referral":
         bot_username = context.bot.username or "PopcornSniperBot"
@@ -1164,7 +1182,7 @@ async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     mint = matched["mint"]
     scan = scan_token_security(mint)
     card_text = format_token_card(scan, lang=user_lang)
-    await status_msg.edit_text(card_text, parse_mode="HTML", reply_markup=get_token_card_keyboard(mint, user_lang), disable_web_page_preview=True)
+    await status_msg.edit_text(card_text, parse_mode="HTML", reply_markup=get_token_card_keyboard(mint, user_lang, user_id=user_id, symbol=scan.get("symbol", "TOKEN")), disable_web_page_preview=True)
 
 
 async def watchlist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):

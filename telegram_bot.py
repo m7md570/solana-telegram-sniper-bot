@@ -1047,6 +1047,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "btn_wallet":
         pubkey, _ = get_or_create_wallet(user_id)
         balance = get_sol_balance(pubkey)
+        tokens = get_token_accounts(pubkey)
         qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=solana:{pubkey}"
         if user_lang == "ar":
             text = (
@@ -1054,12 +1055,14 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"━━━━━━━━━━━━━━━━━━━\n"
                 f"📍 <b>عنوان إيداع SOL (اضغط للنسخ)</b>:\n<code>{pubkey}</code>\n\n"
                 f"💰 <b>الرصيد المتاح</b>: <code>{balance:.4f} SOL</code>\n"
+                f"📊 <b>العملات المفتوحة</b>: <code>{len(tokens)} صفقات</code>\n"
                 f"🕒 وقت الفحص: <code>{now_str}</code>\n\n"
                 f"🔗 <a href='https://solscan.io/account/{pubkey}'>عرض المحفظة على Solscan</a>\n"
                 f"📷 <a href='{qr_url}'>عرض رمز QR للإيداع السريع عبر الكاميرا</a>\n\n"
                 f"⚠️ <i>مفتاحك الخاص مشفر محلياً بنظام AES-256 لحمايتك الكاملة.</i>\n"
             )
             kb = [
+                [InlineKeyboardButton("📊 عرض الصفقات المفتوحة", callback_data="btn_positions")],
                 [InlineKeyboardButton("💸 سحب SOL إلى محفظتك الخارجية", callback_data="btn_withdraw_guide")],
                 [InlineKeyboardButton("🔑 إظهار المفتاح الخاص (Private Key)", callback_data="btn_export_key")],
                 [InlineKeyboardButton("🔙 العودة للرئيسية", callback_data="btn_refresh")]
@@ -1070,12 +1073,14 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"━━━━━━━━━━━━━━━━━━━\n"
                 f"📍 <b>SOL Deposit Address (Tap to copy)</b>:\n<code>{pubkey}</code>\n\n"
                 f"💰 <b>Available Balance</b>: <code>{balance:.4f} SOL</code>\n"
+                f"📊 <b>Open Token Holdings</b>: <code>{len(tokens)} positions</code>\n"
                 f"🕒 Checked: <code>{now_str}</code>\n\n"
                 f"🔗 <a href='https://solscan.io/account/{pubkey}'>View Account on Solscan</a>\n"
                 f"📷 <a href='{qr_url}'>Instant QR Code Deposit</a>\n\n"
                 f"⚠️ <i>Your private key is encrypted locally with AES-256 for non-custodial ownership.</i>\n"
             )
             kb = [
+                [InlineKeyboardButton("📊 View Open Positions", callback_data="btn_positions")],
                 [InlineKeyboardButton("💸 Withdraw SOL to External Wallet", callback_data="btn_withdraw_guide")],
                 [InlineKeyboardButton("🔑 Export Private Key", callback_data="btn_export_key")],
                 [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
@@ -1378,25 +1383,53 @@ async def withdraw_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(args) < 2:
         help_text = (
             "ℹ️ <b>Withdrawal Syntax</b>:\n"
-            "<code>/withdraw [DESTINATION_ADDRESS] [AMOUNT_SOL]</code>\n\n"
-            "<b>Example:</b>\n"
-            "<code>/withdraw 7kz1mcQcaZhYzFUHBFHH6s5tGrDHc7gNhN5WAUyXyq5r 0.05</code>"
+            "<code>/withdraw [DESTINATION_ADDRESS] [AMOUNT_SOL|all]</code>\n\n"
+            "<b>Examples:</b>\n"
+            "<code>/withdraw 7kz1mcQcaZhYzFUHBFHH6s5tGrDHc7gNhN5WAUyXyq5r 0.05</code>\n"
+            "<code>/withdraw 7kz1mcQcaZhYzFUHBFHH6s5tGrDHc7gNhN5WAUyXyq5r all</code> (Withdraw full balance)"
         ) if user_lang == "en" else (
             "ℹ️ <b>صيغة السحب</b>:\n"
-            "<code>/withdraw [عنوان_محفظتك] [المبلغ_SOL]</code>\n\n"
-            "<b>مثال:</b>\n"
-            "<code>/withdraw 7kz1mcQcaZhYzFUHBFHH6s5tGrDHc7gNhN5WAUyXyq5r 0.05</code>"
+            "<code>/withdraw [عنوان_محفظتك] [المبلغ_SOL|all]</code>\n\n"
+            "<b>أمثلة:</b>\n"
+            "<code>/withdraw 7kz1mcQcaZhYzFUHBFHH6s5tGrDHc7gNhN5WAUyXyq5r 0.05</code>\n"
+            "<code>/withdraw 7kz1mcQcaZhYzFUHBFHH6s5tGrDHc7gNhN5WAUyXyq5r all</code> (سحب كامل الرصيد المتاح)"
         )
         await update.message.reply_text(help_text, parse_mode="HTML")
         return
 
-    dest_address = args[0].strip()
-    try:
-        amount_sol = float(args[1].strip())
-    except ValueError:
-        invalid_num = "❌ Invalid amount entered. Please specify a valid number like 0.1" if user_lang == "en" else "❌ المبلغ المدخل غير صحيح، يرجى كتابة رقم صالح مثل 0.1"
-        await update.message.reply_text(invalid_num, parse_mode="HTML")
-        return
+    raw1 = args[0].strip()
+    raw2 = args[1].strip()
+
+    # Smart detect which arg is the destination address vs amount
+    if len(raw1) >= 32 and not raw1.replace(".", "").isdigit() and raw1.lower() not in ("all", "max"):
+        dest_address = raw1
+        amt_str = raw2
+    elif len(raw2) >= 32 and not raw2.replace(".", "").isdigit() and raw2.lower() not in ("all", "max"):
+        dest_address = raw2
+        amt_str = raw1
+    else:
+        dest_address = raw1
+        amt_str = raw2
+
+    pubkey, _ = get_or_create_wallet(user_id)
+    current_bal = get_sol_balance(pubkey)
+
+    if amt_str.lower() in ("all", "max", "100%"):
+        # Reserve buffer 0.0008 SOL for rent & signature fees
+        amount_sol = max(0.0, current_bal - 0.0008)
+        if amount_sol <= 0.0001:
+            err = "❌ الرصيد المتاح غير كافٍ لتغطية رسوم المعاملة (الحد الأدنى 0.001 SOL)." if user_lang == "ar" else "❌ Balance too low to cover Solana transaction fees (minimum 0.001 SOL)."
+            await update.message.reply_text(err, parse_mode="HTML")
+            return
+    else:
+        try:
+            amount_sol = float(amt_str.rstrip("%"))
+            if amount_sol <= 0:
+                raise ValueError()
+        except ValueError:
+            invalid_num = "❌ Invalid amount entered. Please specify a valid number (e.g. <code>0.1</code>) or <code>all</code>." if user_lang == "en" else "❌ المبلغ المدخل غير صحيح، يرجى كتابة رقم صالح (مثل <code>0.1</code>) أو كلمة <code>all</code>."
+            await update.message.reply_text(invalid_num, parse_mode="HTML")
+            return
 
     wait_tx = "⚡ <b>Preparing and broadcasting withdrawal transaction on Solana...</b>" if user_lang == "en" else "⚡ <b>جاري تحضير وتوقيع معاملة السحب على شبكة سولانا...</b>"
     status_msg = await update.message.reply_text(wait_tx, parse_mode="HTML")
@@ -1405,14 +1438,14 @@ async def withdraw_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if success:
         if user_lang == "en":
             text = (
-                f"🎉 <b>Successfully Withdrawn {amount_sol} SOL!</b> 💸\n"
+                f"🎉 <b>Successfully Withdrawn {amount_sol:.4f} SOL!</b> 💸\n"
                 f"━━━━━━━━━━━━━━━━━━━\n"
                 f"📍 Recipient Address: <code>{dest_address}</code>\n\n"
                 f"🔗 <a href='https://solscan.io/tx/{sig_or_err}'>View Transaction on Solscan</a>"
             )
         else:
             text = (
-                f"🎉 <b>تم سحب {amount_sol} SOL بنجاح!</b> 💸\n"
+                f"🎉 <b>تم سحب {amount_sol:.4f} SOL بنجاح!</b> 💸\n"
                 f"━━━━━━━━━━━━━━━━━━━\n"
                 f"📍 المحفظة المستلمة: <code>{dest_address}</code>\n\n"
                 f"🔗 <a href='https://solscan.io/tx/{sig_or_err}'>عرض المعاملة على Solscan</a>"
@@ -1423,11 +1456,12 @@ async def withdraw_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def wallet_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler for /wallet command."""
+    """Handler for /wallet command with open token holdings preview."""
     user_id = update.effective_user.id
     user_lang = get_user_language(user_id)
     pubkey, _ = get_or_create_wallet(user_id)
     balance = get_sol_balance(pubkey)
+    tokens = get_token_accounts(pubkey)
     now_str = get_current_time_str()
     qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=solana:{pubkey}"
 
@@ -1437,12 +1471,14 @@ async def wallet_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"━━━━━━━━━━━━━━━━━━━\n"
             f"📍 <b>عنوان إيداع SOL (اضغط للنسخ)</b>:\n<code>{pubkey}</code>\n\n"
             f"💰 <b>الرصيد المتاح</b>: <code>{balance:.4f} SOL</code>\n"
+            f"📊 <b>العملات المفتوحة</b>: <code>{len(tokens)} صفقات</code>\n"
             f"🕒 وقت الفحص: <code>{now_str}</code>\n\n"
             f"🔗 <a href='https://solscan.io/account/{pubkey}'>عرض المحفظة على Solscan</a>\n"
             f"📷 <a href='{qr_url}'>عرض رمز QR للإيداع السريع عبر الكاميرا</a>\n\n"
             f"⚠️ <i>مفتاحك الخاص مشفر محلياً بنظام AES-256 لحمايتك الكاملة.</i>\n"
         )
         kb = [
+            [InlineKeyboardButton("📊 عرض الصفقات المفتوحة", callback_data="btn_positions")],
             [InlineKeyboardButton("💸 سحب SOL للخارج", callback_data="btn_withdraw_guide")],
             [InlineKeyboardButton("🔑 إظهار المفتاح الخاص", callback_data="btn_export_key")],
             [InlineKeyboardButton("🔄 تحديث الرصيد", callback_data="btn_wallet")]
@@ -1453,12 +1489,14 @@ async def wallet_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"━━━━━━━━━━━━━━━━━━━\n"
             f"📍 <b>SOL Deposit Address (Tap to copy)</b>:\n<code>{pubkey}</code>\n\n"
             f"💰 <b>Available Balance</b>: <code>{balance:.4f} SOL</code>\n"
+            f"📊 <b>Open Token Holdings</b>: <code>{len(tokens)} positions</code>\n"
             f"🕒 Checked: <code>{now_str}</code>\n\n"
             f"🔗 <a href='https://solscan.io/account/{pubkey}'>View Account on Solscan</a>\n"
             f"📷 <a href='{qr_url}'>Instant QR Code Deposit</a>\n\n"
             f"⚠️ <i>Your private key is locally encrypted with AES-256 for non-custodial ownership.</i>\n"
         )
         kb = [
+            [InlineKeyboardButton("📊 View Open Positions", callback_data="btn_positions")],
             [InlineKeyboardButton("💸 Withdraw SOL to External Wallet", callback_data="btn_withdraw_guide")],
             [InlineKeyboardButton("🔑 Export Private Key", callback_data="btn_export_key")],
             [InlineKeyboardButton("🔄 Refresh Balance", callback_data="btn_wallet")]

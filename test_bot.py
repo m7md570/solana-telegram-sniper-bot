@@ -730,6 +730,62 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertIn("Price", t("price_card_title", "en"))
         self.assertIn("سعر", t("price_card_title", "ar"))
 
+    def test_29_smart_withdrawal_and_wallet_holdings_preview(self):
+        """Test smart withdrawal (all/max support, swapped args) and wallet holdings preview."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock, patch
+        from telegram_bot import withdraw_command, wallet_command
+
+        test_uid = 99881155
+        pubkey, _ = get_or_create_wallet(test_uid, "WithdrawTester")
+
+        mock_update = MagicMock()
+        mock_update.effective_user.id = test_uid
+        mock_update.message.reply_text = AsyncMock()
+        mock_status = AsyncMock()
+        mock_update.message.reply_text.return_value = mock_status
+        mock_context = MagicMock()
+
+        dest_addr = "7kz1mcQcaZhYzFUHBFHH6s5tGrDHc7gNhN5WAUyXyq5r"
+
+        # 1. Test withdraw with 'all' keyword
+        mock_context.args = [dest_addr, "all"]
+        with patch("telegram_bot.get_sol_balance", return_value=0.5), \
+             patch("telegram_bot.withdraw_sol", return_value=(True, "mock_withdraw_sig")):
+            asyncio.run(withdraw_command(mock_update, mock_context))
+            self.assertTrue(mock_status.edit_text.called)
+            success_msg = mock_status.edit_text.call_args[0][0]
+            self.assertIn("Successfully Withdrawn", success_msg)
+            self.assertIn("0.4992 SOL", success_msg)
+
+        # 2. Test withdraw with swapped arguments: /withdraw all <dest_addr>
+        mock_status.reset_mock()
+        mock_context.args = ["all", dest_addr]
+        with patch("telegram_bot.get_sol_balance", return_value=1.0), \
+             patch("telegram_bot.withdraw_sol", return_value=(True, "mock_withdraw_sig_2")):
+            asyncio.run(withdraw_command(mock_update, mock_context))
+            self.assertTrue(mock_status.edit_text.called)
+            success_msg = mock_status.edit_text.call_args[0][0]
+            self.assertIn("Successfully Withdrawn", success_msg)
+            self.assertIn("0.9992 SOL", success_msg)
+
+        # 3. Test wallet_command shows open token holdings preview and positions button
+        mock_update.message.reply_text.reset_mock()
+        mock_tokens = [
+            {"mint": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", "amount": 10000.0, "decimals": 5}
+        ]
+        with patch("telegram_bot.get_token_accounts", return_value=mock_tokens), \
+             patch("telegram_bot.get_sol_balance", return_value=0.25):
+            asyncio.run(wallet_command(mock_update, mock_context))
+            self.assertTrue(mock_update.message.reply_text.called)
+            w_text = mock_update.message.reply_text.call_args[0][0]
+            w_kb = mock_update.message.reply_text.call_args[1]["reply_markup"]
+
+            self.assertIn("1 positions", w_text)
+            all_btns = [b for row in w_kb.inline_keyboard for b in row]
+            pos_btn = next((b for b in all_btns if b.callback_data == "btn_positions"), None)
+            self.assertIsNotNone(pos_btn, "btn_positions must be in wallet keyboard")
+
 
 if __name__ == "__main__":
     unittest.main()

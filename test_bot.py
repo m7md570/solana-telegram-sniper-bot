@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.48.0", card_text)
+        self.assertIn("v3.49.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.48.0")
+        self.assertEqual(BOT_VERSION, "v3.49.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -2741,6 +2741,105 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
             self.assertIn("toggle_autobuy", cb_datas)
             self.assertIn("set_auto_amt_1.0", cb_datas)
             self.assertIn("btn_autobuy", cb_datas)
+
+    def test_73_alerts_card_radar_parity_and_cli_args(self):
+        """Test render_alerts_card dynamic checkmarks across volatility tiers, /alerts CLI args, and callback routing."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock, patch
+        from telegram_bot import render_alerts_card, alerts_command, callback_router
+        from wallet_manager import (
+            get_or_create_wallet,
+            get_user_alert_settings,
+            set_price_alerts_status,
+            update_user_alert_threshold
+        )
+
+        test_uid = 55667788
+        get_or_create_wallet(test_uid, "AlertRadarTester", initial_language="en")
+
+        # 1. When enabled with 10% threshold, render_alerts_card has ±10% checked (✅)
+        update_user_alert_threshold(test_uid, 10.0)
+        set_price_alerts_status(test_uid, True)
+
+        mock_target = MagicMock()
+        mock_target.reply_text = AsyncMock()
+
+        asyncio.run(render_alerts_card(mock_target, test_uid, user_lang="en", is_edit=False))
+        self.assertTrue(mock_target.reply_text.called)
+        card_text, kwargs = mock_target.reply_text.call_args[0][0], mock_target.reply_text.call_args[1]
+        self.assertIn("Price Movement & Volatility Alert Radar", card_text)
+        self.assertIn("ENABLED 🟢", card_text)
+
+        kb = kwargs["reply_markup"]
+        all_btns = [b for row in kb.inline_keyboard for b in row]
+        p10 = next((b for b in all_btns if b.callback_data == "alert_pct_10"), None)
+        self.assertIsNotNone(p10)
+        self.assertIn("✅", p10.text)
+
+        p20 = next((b for b in all_btns if b.callback_data == "alert_pct_20"), None)
+        self.assertIsNotNone(p20)
+        self.assertNotIn("✅", p20.text)
+
+        # 2. When disabled, no threshold has checkmark and toggle button offers enabling
+        set_price_alerts_status(test_uid, False)
+        mock_target.reply_text.reset_mock()
+
+        asyncio.run(render_alerts_card(mock_target, test_uid, user_lang="en", is_edit=False))
+        self.assertTrue(mock_target.reply_text.called)
+        card_text_dis, kwargs_dis = mock_target.reply_text.call_args[0][0], mock_target.reply_text.call_args[1]
+        self.assertIn("DISABLED ⚪", card_text_dis)
+
+        kb_dis = kwargs_dis["reply_markup"]
+        all_btns_dis = [b for row in kb_dis.inline_keyboard for b in row]
+        p10_dis = next((b for b in all_btns_dis if b.callback_data == "alert_pct_10"), None)
+        self.assertIsNotNone(p10_dis)
+        self.assertNotIn("✅", p10_dis.text)
+
+        toggle_btn = next((b for b in all_btns_dis if b.callback_data == "toggle_alerts"), None)
+        self.assertIsNotNone(toggle_btn)
+        self.assertIn("Enable Alerts", toggle_btn.text)
+
+        # 3. Test alerts_command CLI arg "20" enables alerts, sets 20% threshold, and renders card with ±20% ✅
+        mock_update = MagicMock()
+        mock_update.effective_user.id = test_uid
+        mock_update.message.reply_text = AsyncMock()
+        mock_context = MagicMock()
+        mock_context.args = ["20"]
+
+        asyncio.run(alerts_command(mock_update, mock_context))
+        enabled, th = get_user_alert_settings(test_uid)
+        self.assertTrue(enabled)
+        self.assertEqual(th, 20.0)
+
+        kb_cmd = mock_update.message.reply_text.call_args[1]["reply_markup"]
+        all_cmd_btns = [b for row in kb_cmd.inline_keyboard for b in row]
+        p20_cmd = next((b for b in all_cmd_btns if b.callback_data == "alert_pct_20"), None)
+        self.assertIsNotNone(p20_cmd)
+        self.assertIn("✅", p20_cmd.text)
+
+        # 4. Test alerts_command CLI arg "off" disables alerts
+        mock_context.args = ["off"]
+        asyncio.run(alerts_command(mock_update, mock_context))
+        enabled_off, _ = get_user_alert_settings(test_uid)
+        self.assertFalse(enabled_off)
+
+        # 5. Test callback_router routing with btn_alerts and alert_pct_50
+        mock_query = MagicMock()
+        mock_query.from_user.id = test_uid
+        mock_query.data = "btn_alerts"
+        mock_query.answer = AsyncMock()
+        mock_query.edit_message_text = AsyncMock()
+        mock_update_cb = MagicMock(callback_query=mock_query)
+
+        mock_ctx = MagicMock()
+        with patch("telegram_bot.get_user_language", return_value="en"):
+            asyncio.run(callback_router(mock_update_cb, mock_ctx))
+            self.assertTrue(mock_query.edit_message_text.called)
+            kb_cb = mock_query.edit_message_text.call_args[1]["reply_markup"]
+            cb_datas = [b.callback_data for row in kb_cb.inline_keyboard for b in row if b.callback_data]
+            self.assertIn("toggle_alerts", cb_datas)
+            self.assertIn("alert_pct_50", cb_datas)
+            self.assertIn("btn_alerts", cb_datas)
 
 
 if __name__ == "__main__":

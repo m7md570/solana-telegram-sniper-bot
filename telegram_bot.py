@@ -84,6 +84,8 @@ from wallet_manager import (
     toggle_price_alerts,
     get_price_alerts_status,
     set_price_alerts_status,
+    get_user_alert_settings,
+    update_user_alert_threshold,
     get_all_active_watchlist_subscriptions,
     update_watchlist_price_and_alert,
     generate_deposit_qr_buffer,
@@ -238,7 +240,7 @@ def build_settings_card(user_id: int, user_lang: str) -> Tuple[str, InlineKeyboa
     gas_sol = gas_lamports / 1e9
     current_tp = settings.get("default_tp_pct", 50)
     current_sl = settings.get("default_sl_pct", 25)
-    alerts_on = get_price_alerts_status(user_id)
+    alerts_on, alert_th = get_user_alert_settings(user_id)
     now_str = get_current_time_str()
 
     tier_label = (
@@ -253,19 +255,19 @@ def build_settings_card(user_id: int, user_lang: str) -> Tuple[str, InlineKeyboa
             f"\n\n⚡ <b>Priority Gas:</b> <code>{gas_sol:.5f} SOL</code> ({tier_label})\n"
             f"🎯 <b>Auto Take-Profit:</b> <code>+{current_tp}%</code>\n"
             f"🛑 <b>Auto Stop-Loss:</b> <code>-{current_sl}%</code>\n"
-            f"🔔 <b>Price Movement Alerts:</b> <code>{'ENABLED' if alerts_on else 'DISABLED'}</code>\n\n"
+            f"🔔 <b>Price Movement Alerts:</b> <code>{'ENABLED' if alerts_on else 'DISABLED'} (±{alert_th:.0f}%)</code>\n\n"
             f"Select parameters or speed tiers below:"
         )
-        alerts_btn_text = "🔔 Alerts: ON (±10%)" if alerts_on else "🔕 Alerts: OFF"
+        alerts_btn_text = f"🔔 Alerts: ON (±{alert_th:.0f}%)" if alerts_on else "🔕 Alerts: OFF"
     else:
         extra_info = (
             f"\n\n⚡ <b>أولوية الغاز:</b> <code>{gas_sol:.5f} SOL</code> ({tier_label})\n"
             f"🎯 <b>جني الأرباح التلقائي:</b> <code>+{current_tp}%</code>\n"
             f"🛑 <b>وقف الخسارة التلقائي:</b> <code>-{current_sl}%</code>\n"
-            f"🔔 <b>تنبيهات تقلبات الأسعار:</b> <code>{'مفعلة' if alerts_on else 'معطلة'}</code>\n\n"
+            f"🔔 <b>تنبيهات تقلبات الأسعار:</b> <code>{'مفعلة' if alerts_on else 'معطلة'} (±{alert_th:.0f}%)</code>\n\n"
             f"اختر الإعدادات المناسبة لاستراتيجيتك أدناه:"
         )
-        alerts_btn_text = "🔔 التنبيهات: مفعلة (±10%)" if alerts_on else "🔕 التنبيهات: معطلة"
+        alerts_btn_text = f"🔔 التنبيهات: مفعلة (±{alert_th:.0f}%)" if alerts_on else "🔕 التنبيهات: معطلة"
     text = f"{title}\n━━━━━━━━━━━━━━━━━━━\n{body}{extra_info}\n🕒 <code>{now_str}</code>"
 
     kb = [
@@ -1386,6 +1388,69 @@ async def render_autobuy_card(target, user_id: int, user_lang: str, is_edit: boo
         await target.reply_text(text, parse_mode="HTML", reply_markup=markup)
 
 
+async def render_alerts_card(target, user_id: int, user_lang: str, is_edit: bool = False):
+    """Renders interactive Price & Volatility Alert configuration radar with active checkmarks and threshold tiers."""
+    enabled, threshold = get_user_alert_settings(user_id)
+    now_str = get_current_time_str()
+
+    status_str = ("ENABLED 🟢" if enabled else "DISABLED ⚪") if user_lang == "en" else ("مفعلة 🟢" if enabled else "معطلة ⚪")
+    toggle_label = ("🔕 Disable Alerts" if enabled else "🔔 Enable Alerts") if user_lang == "en" else ("🔕 تعطيل التنبيهات" if enabled else "🔔 تفعيل التنبيهات")
+
+    p05 = f"±5% {'✅' if enabled and abs(threshold - 5.0) < 0.1 else ''}".strip()
+    p10 = f"±10% {'✅' if enabled and abs(threshold - 10.0) < 0.1 else ''}".strip()
+    p20 = f"±20% {'✅' if enabled and abs(threshold - 20.0) < 0.1 else ''}".strip()
+    p50 = f"±50% {'✅' if enabled and abs(threshold - 50.0) < 0.1 else ''}".strip()
+
+    if user_lang == "ar":
+        title = "🔔 <b>رادار تنبيهات حركة الأسعار والتقلبات (Price Volatility Radar)</b>"
+        body = (
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"• <b>حالة التنبيهات:</b> <code>{status_str}</code>\n"
+            f"• <b>حد التذبذب النشط:</b> <code>±{threshold:.1f}%</code>\n\n"
+            f"يراقب البوت أسعار عملات قائمة متابعتك ويرسل إشعارات فورية مع أزرار قنص بنقرة واحدة عند رصد أي صعود أو هبوط حاد.\n\n"
+            f"🕒 <code>{now_str}</code>"
+        )
+        refresh_label = "🔄 تحديث"
+        settings_label = "⚙️ الإعدادات"
+        watchlist_label = "📋 قائمة المتابعة"
+    else:
+        title = "🔔 <b>Price Movement & Volatility Alert Radar</b>"
+        body = (
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"• <b>Alert Status:</b> <code>{status_str}</code>\n"
+            f"• <b>Active Swing Threshold:</b> <code>±{threshold:.1f}%</code>\n\n"
+            f"Monitors real-time price movements for tokens in your watchlist, dispatching instant 1-click snipe alert cards whenever prices shift beyond your threshold.\n\n"
+            f"🕒 <code>{now_str}</code>"
+        )
+        refresh_label = "🔄 Refresh"
+        settings_label = "⚙️ Settings"
+        watchlist_label = "📋 Watchlist"
+
+    text = f"{title}\n{body}"
+    kb = [
+        [InlineKeyboardButton(toggle_label, callback_data="toggle_alerts")],
+        [
+            InlineKeyboardButton(p05, callback_data="alert_pct_5"),
+            InlineKeyboardButton(p10, callback_data="alert_pct_10"),
+            InlineKeyboardButton(p20, callback_data="alert_pct_20"),
+            InlineKeyboardButton(p50, callback_data="alert_pct_50")
+        ],
+        [
+            InlineKeyboardButton(refresh_label, callback_data="btn_alerts"),
+            InlineKeyboardButton(watchlist_label, callback_data="btn_watchlist")
+        ],
+        [
+            InlineKeyboardButton(settings_label, callback_data="btn_settings"),
+            InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
+        ]
+    ]
+    markup = InlineKeyboardMarkup(kb)
+    if is_edit:
+        await safe_edit_text(target, text, reply_markup=markup)
+    else:
+        await target.reply_text(text, parse_mode="HTML", reply_markup=markup)
+
+
 async def render_panic_confirm(target, user_id: int, user_lang: str, is_edit: bool = False):
     """Renders the emergency panic sell-all confirmation warning card."""
     pubkey, _ = get_or_create_wallet(user_id)
@@ -1868,8 +1933,28 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         state_str = ("ENABLED" if new_state else "DISABLED") if user_lang == "en" else ("مفعلة" if new_state else "معطلة")
         ack = t("alerts_toggled", user_lang, status=state_str)
         await query.answer(ack, show_alert=False)
-        text, kb = build_settings_card(user_id, user_lang)
-        await safe_edit_text(query, text, reply_markup=kb)
+        msg_text = (query.message.text or "") if query.message else ""
+        if "Volatility" in msg_text or "التقلبات" in msg_text or "Alerts" in msg_text:
+            await render_alerts_card(query, user_id, user_lang, is_edit=True)
+        else:
+            text, kb = build_settings_card(user_id, user_lang)
+            await safe_edit_text(query, text, reply_markup=kb)
+
+    elif data == "btn_alerts":
+        await render_alerts_card(query, user_id, user_lang, is_edit=True)
+
+    elif data.startswith("alert_pct_"):
+        new_pct = float(data.split("_")[2])
+        update_user_alert_threshold(user_id, new_pct)
+        set_price_alerts_status(user_id, True)
+        ack = f"Price alert threshold set to ±{new_pct:.0f}%" if user_lang == "en" else f"تم ضبط حد التنبيه إلى ±{new_pct:.0f}%"
+        await query.answer(ack, show_alert=False)
+        msg_text = (query.message.text or "") if query.message else ""
+        if "Volatility" in msg_text or "التقلبات" in msg_text:
+            await render_alerts_card(query, user_id, user_lang, is_edit=True)
+        else:
+            text, kb = build_settings_card(user_id, user_lang)
+            await safe_edit_text(query, text, reply_markup=kb)
 
     elif data == "btn_snipe_guide":
         title = t("snipe_guide_title", user_lang)
@@ -2905,27 +2990,32 @@ async def untrack_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def alerts_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler for /alerts command: /alerts [on|off] or interactive toggle."""
+    """Handler for /alerts command: /alerts [5|10|20|50|on|off] or interactive radar."""
     user_id = update.effective_user.id
     user_lang = get_user_language(user_id)
     args = context.args
     if args:
-        sub = args[0].lower().strip()
+        sub = args[0].lower().strip().lstrip("±").rstrip("%")
         if sub in ("on", "enable", "1", "start"):
             set_price_alerts_status(user_id, True)
         elif sub in ("off", "disable", "0", "stop"):
             set_price_alerts_status(user_id, False)
+        else:
+            try:
+                val = float(sub)
+                if 1.0 <= val <= 200.0:
+                    update_user_alert_threshold(user_id, val)
+                    set_price_alerts_status(user_id, True)
+                else:
+                    err = "❌ Threshold must be between 1% and 200%." if user_lang == "en" else "❌ يجب أن تكون النسبة بين 1% و 200%."
+                    await update.message.reply_text(err, parse_mode="HTML")
+                    return
+            except ValueError:
+                err = "❌ Usage: <code>/alerts [5|10|20|50|on|off]</code>" if user_lang == "en" else "❌ طريقة الاستخدام: <code>/alerts [5|10|20|50|on|off]</code>"
+                await update.message.reply_text(err, parse_mode="HTML")
+                return
 
-    status = get_price_alerts_status(user_id)
-    status_str = ("ENABLED 🟢" if status else "DISABLED ⚪") if user_lang == "en" else ("مفعلة 🟢" if status else "معطلة ⚪")
-    title = t("alerts_status_title", user_lang)
-    body = t("alerts_status_body", user_lang, status=status_str)
-    btn_toggle = ("🔕 Turn OFF Alerts" if status else "🔔 Turn ON Alerts") if user_lang == "en" else ("🔕 تعطيل التنبيهات" if status else "🔔 تفعيل التنبيهات")
-    kb = [
-        [InlineKeyboardButton(btn_toggle, callback_data="toggle_alerts")],
-        [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
-    ]
-    await update.message.reply_text(f"{title}\n━━━━━━━━━━━━━━━━━━━\n{body}", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
+    await render_alerts_card(update.message, user_id, user_lang, is_edit=False)
 
 
 async def buy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):

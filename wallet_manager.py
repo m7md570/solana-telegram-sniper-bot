@@ -120,7 +120,8 @@ def init_database():
             ("language", "TEXT DEFAULT 'en'"),
             ("default_tp_pct", "INTEGER DEFAULT 50"),
             ("default_sl_pct", "INTEGER DEFAULT 25"),
-            ("price_alerts_enabled", "INTEGER DEFAULT 1")
+            ("price_alerts_enabled", "INTEGER DEFAULT 1"),
+            ("default_alert_pct", "REAL DEFAULT 10.0")
         ]
         for col_name, col_type in migrations:
             if col_name not in existing_cols:
@@ -618,17 +619,19 @@ def get_user_trade_stats(user_id: int) -> Dict[str, Any]:
 
 
 def add_to_watchlist(user_id: int, token_mint: str, symbol: str, current_price: float = 0.0) -> bool:
-    """Adds a token to user's personal watchlist with initial tracking price."""
+    """Adds a token to user's personal watchlist with initial tracking price and user's threshold."""
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
+        u_row = cursor.execute("SELECT default_alert_pct FROM users WHERE user_id = ?", (user_id,)).fetchone()
+        default_th = float(u_row["default_alert_pct"]) if u_row and "default_alert_pct" in u_row.keys() and u_row["default_alert_pct"] is not None else 10.0
         cursor.execute(
             """INSERT INTO watchlist (user_id, token_mint, symbol, initial_price_usd, last_price_usd, alert_threshold_pct, last_alert_time)
-               VALUES (?, ?, ?, ?, ?, 10.0, 0.0)
+               VALUES (?, ?, ?, ?, ?, ?, 0.0)
                ON CONFLICT(user_id, token_mint) DO UPDATE SET 
                symbol = excluded.symbol,
                last_price_usd = CASE WHEN excluded.last_price_usd > 0 THEN excluded.last_price_usd ELSE watchlist.last_price_usd END""",
-            (user_id, token_mint, symbol.upper(), current_price, current_price)
+            (user_id, token_mint, symbol.upper(), current_price, current_price, default_th)
         )
         conn.commit()
         return cursor.rowcount > 0
@@ -749,6 +752,35 @@ def set_price_alerts_status(user_id: int, enabled: bool) -> bool:
         cursor.execute("UPDATE users SET price_alerts_enabled = ? WHERE user_id = ?", (val, user_id))
         conn.commit()
         return bool(val)
+    finally:
+        conn.close()
+
+
+def get_user_alert_settings(user_id: int) -> Tuple[bool, float]:
+    """Returns (alerts_enabled, threshold_pct) for the user."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        row = cursor.execute("SELECT price_alerts_enabled, default_alert_pct FROM users WHERE user_id = ?", (user_id,)).fetchone()
+        if row:
+            enabled = bool(row["price_alerts_enabled"]) if row["price_alerts_enabled"] is not None else True
+            pct = float(row["default_alert_pct"]) if "default_alert_pct" in row.keys() and row["default_alert_pct"] is not None else 10.0
+            return enabled, pct
+        return True, 10.0
+    finally:
+        conn.close()
+
+
+def update_user_alert_threshold(user_id: int, threshold_pct: float) -> bool:
+    """Updates user's default volatility alert threshold percentage and syncs watchlist."""
+    get_or_create_wallet(user_id)
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE users SET default_alert_pct = ? WHERE user_id = ?", (threshold_pct, user_id))
+        cursor.execute("UPDATE watchlist SET alert_threshold_pct = ? WHERE user_id = ?", (threshold_pct, user_id))
+        conn.commit()
+        return True
     finally:
         conn.close()
 

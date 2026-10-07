@@ -901,6 +901,71 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
             self.assertIn("Buy Swap Executed", buy_msg)
             self.assertIn("0.05 SOL", buy_msg)
 
+    def test_32_custom_sell_and_cancel_command(self):
+        """Test custom sell percentage prompt, handle_text_message execution, and /cancel command."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock, patch
+        from telegram_bot import get_token_card_keyboard, callback_router, handle_text_message, cancel_command
+
+        test_uid = 99881188
+        get_or_create_wallet(test_uid, "CustomSeller")
+        test_mint = "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"
+
+        # 1. Test get_token_card_keyboard has custom_sell button
+        kb = get_token_card_keyboard(test_mint, user_lang="en", user_id=test_uid, symbol="BONK")
+        all_btns = [b for row in kb.inline_keyboard for b in row]
+        custom_sell_btn = next((b for b in all_btns if b.callback_data == f"custom_sell_{test_mint}"), None)
+        self.assertIsNotNone(custom_sell_btn, "Custom sell button must be present in token keyboard")
+
+        # 2. Test callback_router triggers custom_sell prompt
+        mock_query = MagicMock()
+        mock_query.data = f"custom_sell_{test_mint}"
+        mock_query.from_user.id = test_uid
+        mock_query.answer = AsyncMock()
+        mock_query.message.reply_text = AsyncMock()
+        mock_context = MagicMock()
+        mock_context.user_data = {}
+
+        mock_update = MagicMock()
+        mock_update.callback_query = mock_query
+
+        with patch("telegram_bot.scan_token_security", return_value={"symbol": "BONK"}):
+            asyncio.run(callback_router(mock_update, mock_context))
+            self.assertEqual(mock_context.user_data.get("awaiting_custom_sell"), test_mint)
+            self.assertTrue(mock_query.message.reply_text.called)
+            prompt_msg = mock_query.message.reply_text.call_args[0][0]
+            self.assertIn("percentage", prompt_msg.lower())
+
+        # 3. Test handle_text_message executes custom sell (e.g. 75%)
+        mock_msg = MagicMock()
+        mock_msg.text = "75%"
+        mock_status = AsyncMock()
+        mock_msg.reply_text = AsyncMock(return_value=mock_status)
+
+        mock_text_update = MagicMock()
+        mock_text_update.effective_user.id = test_uid
+        mock_text_update.message = mock_msg
+
+        with patch("telegram_bot.execute_sell_swap", return_value=(True, "mock_custom_sell_sig", 0.075)):
+            asyncio.run(handle_text_message(mock_text_update, mock_context))
+            self.assertNotIn("awaiting_custom_sell", mock_context.user_data)
+            self.assertTrue(mock_status.edit_text.called)
+            succ_msg = mock_status.edit_text.call_args[0][0]
+            self.assertIn("Custom Sell Swap Executed", succ_msg)
+            self.assertIn("0.0750 SOL", succ_msg)
+
+        # 4. Test cancel_command clears pending states
+        mock_context.user_data = {"awaiting_custom_buy": test_mint}
+        mock_cancel_update = MagicMock()
+        mock_cancel_update.effective_user.id = test_uid
+        mock_cancel_update.message.reply_text = AsyncMock()
+
+        asyncio.run(cancel_command(mock_cancel_update, mock_context))
+        self.assertNotIn("awaiting_custom_buy", mock_context.user_data)
+        self.assertTrue(mock_cancel_update.message.reply_text.called)
+        cancel_reply = mock_cancel_update.message.reply_text.call_args[0][0]
+        self.assertIn("cancelled", cancel_reply.lower())
+
 
 if __name__ == "__main__":
     unittest.main()

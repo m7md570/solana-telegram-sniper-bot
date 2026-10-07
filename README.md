@@ -140,6 +140,7 @@ python telegram_bot.py
 | `/wallet` | Non-custodial wallet management, deposit address, and key export |
 | `/withdraw [ADDR] [SOL/all/max]` | Withdraws SOL directly to Phantom or external wallet (supports 'all' / 'max') |
 | `/positions` | Lists all currently held SPL token balances with 1-click Sell buttons |
+| `/cancel` | Aborts any active custom buy amount or custom sell percentage prompt |
 | `/settings` | Dual-mode configuration for slippage, priority fee, and bilingual UI |
 
 ---
@@ -147,7 +148,7 @@ python telegram_bot.py
 ## 🧪 Benchmark & Quality Assurance
 
 * **RPC Broadcast Latency:** < 350ms via Jupiter V6
-* **Unit Test Coverage:** 31/31 comprehensive tests passing (`test_bot.py`)
+* **Unit Test Coverage:** 32/32 comprehensive tests passing (`test_bot.py`)
 * **Security Checks:** Zero plain-text private key logging. Local AES-256 database encryption.
 * **MEV Defense:** Dynamic price-impact slippage auto-scaling and anti-sandwich protection.
 

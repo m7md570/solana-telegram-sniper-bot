@@ -169,6 +169,7 @@ def get_token_card_keyboard(mint: str, user_lang: str, user_id: int = 0, symbol:
     sell_prefix = "بيع" if user_lang == "ar" else "Sell"
     track_btn_label = "⭐ " + t("btn_track", user_lang)
     custom_buy_label = "✏️ " + t("btn_custom_buy", user_lang)
+    custom_sell_label = t("btn_custom_sell", user_lang)
 
     # Pre-generate viral sharing link with user's referral parameter
     ref_param = f"?start=ref_{user_id}" if user_id else ""
@@ -196,7 +197,8 @@ def get_token_card_keyboard(mint: str, user_lang: str, user_id: int = 0, symbol:
         [
             InlineKeyboardButton(f"🔴 {sell_prefix} 25%", callback_data=f"sell_{mint}_25"),
             InlineKeyboardButton(f"🔴 {sell_prefix} 50%", callback_data=f"sell_{mint}_50"),
-            InlineKeyboardButton(f"🔴 {sell_prefix} 100%", callback_data=f"sell_{mint}_100")
+            InlineKeyboardButton(f"🔴 {sell_prefix} 100%", callback_data=f"sell_{mint}_100"),
+            InlineKeyboardButton(custom_sell_label, callback_data=f"custom_sell_{mint}")
         ],
         [
             InlineKeyboardButton(track_btn_label, callback_data=f"track_{mint}"),
@@ -486,6 +488,44 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                     return
         except ValueError:
             pass  # Not a numeric reply, proceed to normal analysis
+
+    # 2. Check if user is replying with custom sell percentage
+    custom_sell_mint = context.user_data.get("awaiting_custom_sell")
+    if custom_sell_mint:
+        try:
+            clean_pct = text.strip().rstrip("%").lower()
+            if clean_pct in ("all", "max"):
+                pct_val = 100
+            else:
+                pct_val = int(clean_pct)
+
+            if 1 <= pct_val <= 100:
+                context.user_data.pop("awaiting_custom_sell", None)
+                prep_sell = f"⚡ <b>Executing {pct_val}% Sell Swap via Jupiter...</b>" if user_lang == "en" else f"⚡ <b>جاري تنفيذ بيع {pct_val}% من العملة عبر Jupiter...</b>"
+                status_msg = await update.message.reply_text(prep_sell, parse_mode="HTML")
+                success, sig_or_err, sol_received = execute_sell_swap(user_id, custom_sell_mint, pct_val, lang=user_lang)
+                if success:
+                    if user_lang == "en":
+                        succ_text = (
+                            f"🎉 <b>Custom Sell Swap Executed Successfully!</b> 🔴\n"
+                            f"━━━━━━━━━━━━━━━━━━━\n"
+                            f"💰 Received: <code>{sol_received:.4f} SOL</code> in wallet\n\n"
+                            f"🔗 <a href='https://solscan.io/tx/{sig_or_err}'>View Transaction on Solscan</a>"
+                        )
+                    else:
+                        succ_text = (
+                            f"🎉 <b>تم تنفيذ صفقة البيع المخصصة بنجاح!</b> 🔴\n"
+                            f"━━━━━━━━━━━━━━━━━━━\n"
+                            f"💰 تم استلام: <code>{sol_received:.4f} SOL</code> في محفظتك\n\n"
+                            f"🔗 <a href='https://solscan.io/tx/{sig_or_err}'>عرض المعاملة على Solscan</a>"
+                        )
+                    await status_msg.edit_text(succ_text, parse_mode="HTML", disable_web_page_preview=True)
+                    return
+                else:
+                    await status_msg.edit_text(f"❌ <b>Sell failed</b>: <code>{html.escape(sig_or_err)}</code>", parse_mode="HTML")
+                    return
+        except ValueError:
+            pass
 
     mint = extract_token_mint(text)
 
@@ -1199,6 +1239,14 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         scan = scan_token_security(mint)
         sym = scan.get("symbol", "TOKEN")
         prompt_text = t("custom_buy_prompt", user_lang, symbol=html.escape(sym))
+        await query.message.reply_text(prompt_text, parse_mode="HTML")
+
+    elif data.startswith("custom_sell_"):
+        mint = data.replace("custom_sell_", "", 1)
+        context.user_data["awaiting_custom_sell"] = mint
+        scan = scan_token_security(mint)
+        sym = scan.get("symbol", "TOKEN")
+        prompt_text = t("custom_sell_prompt", user_lang, symbol=html.escape(sym))
         await query.message.reply_text(prompt_text, parse_mode="HTML")
 
     elif data == "btn_pnl":
@@ -1927,6 +1975,21 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text, parse_mode="HTML")
 
 
+async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for /cancel command to abort any pending custom input prompts."""
+    user_id = update.effective_user.id
+    user_lang = get_user_language(user_id)
+    had_pending = (
+        context.user_data.pop("awaiting_custom_buy", None) is not None or
+        context.user_data.pop("awaiting_custom_sell", None) is not None
+    )
+    if had_pending:
+        msg = "✅ <b>Input prompt cancelled.</b>" if user_lang == "en" else "✅ <b>تم إلغاء طلب الإدخال.</b>"
+    else:
+        msg = "ℹ️ <b>No active operation to cancel.</b>" if user_lang == "en" else "ℹ️ <b>لا توجد أي عملية معلقة لإلغائها.</b>"
+    await update.message.reply_text(msg, parse_mode="HTML")
+
+
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     """Global error handler to catch and log unexpected errors gracefully."""
     logger.error(f"Exception while handling an update: {context.error}")
@@ -2361,6 +2424,7 @@ def build_application(token: str) -> Application:
     app.add_handler(CommandHandler("trades", history_command))
     app.add_handler(CommandHandler("settings", settings_command))
     app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("cancel", cancel_command))
     app.add_handler(CallbackQueryHandler(callback_router))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
     app.add_error_handler(error_handler)

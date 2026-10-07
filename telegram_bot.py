@@ -96,6 +96,7 @@ from jupiter_engine import (
     build_and_sign_swap_tx,
     broadcast_transaction,
     record_trade_db,
+    execute_buy_swap,
     execute_sell_swap,
     calculate_optimal_slippage,
     get_network_gas_fees
@@ -463,37 +464,15 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                 prep_text = "⚡ <b>Routing best swap via Jupiter V6...</b>" if user_lang == "en" else "⚡ <b>جاري تحضير مسار الشراء عبر Jupiter...</b>"
                 status_msg = await update.message.reply_text(prep_text, parse_mode="HTML")
 
-                settings = get_user_settings(user_id)
-                slippage = settings["slippage_bps"]
-                amount_lamports = int(custom_amt * 1_000_000_000)
-
-                quote = get_jupiter_quote(WSOL_MINT, custom_buy_mint, amount_lamports, slippage, with_fee=True)
-                if not quote:
-                    fail_text = "❌ <b>No liquidity route discovered on Jupiter right now.</b>" if user_lang == "en" else "❌ <b>تعذر إيجاد مسار سيولة في Jupiter حالياً.</b>"
-                    await status_msg.edit_text(fail_text, parse_mode="HTML")
-                    return
-
-                keypair = get_user_keypair(user_id)
-                tx_bytes = build_and_sign_swap_tx(quote, keypair, settings["priority_fee"])
-                if not tx_bytes:
-                    sign_err = "❌ <b>Failed to build and sign transaction offline.</b>" if user_lang == "en" else "❌ <b>فشل في بناء وتوقيع المعاملة.</b>"
-                    await status_msg.edit_text(sign_err, parse_mode="HTML")
-                    return
-
-                bcast_text = "🚀 <b>Broadcasting to Solana cluster & confirming on-chain...</b>" if user_lang == "en" else "🚀 <b>جاري إرسال المعاملة إلى شبكة سولانا وتأكيد التنفيذ...</b>"
-                await status_msg.edit_text(bcast_text, parse_mode="HTML")
-                success, sig_or_err = broadcast_transaction(tx_bytes)
+                success, sig_or_err, out_amount, fee_sol = execute_buy_swap(user_id, custom_buy_mint, custom_amt, user_lang)
 
                 if success:
-                    out_amount = float(quote.get("outAmount", 0))
-                    fee_lamports = float(quote.get("platformFee", {}).get("amount", 0))
-                    record_trade_db(user_id, WSOL_MINT, custom_buy_mint, custom_amt, out_amount, fee_lamports/1e9, sig_or_err, "CONFIRMED")
                     if user_lang == "en":
                         success_text = (
                             f"🎉 <b>Custom Buy Swap Executed Successfully!</b> 🟢\n"
                             f"━━━━━━━━━━━━━━━━━━━\n"
                             f"💸 Amount: <code>{custom_amt} SOL</code>\n"
-                            f"🛡️ Platform Fee (1%): <code>{fee_lamports/1e9:.6f} SOL</code>\n\n"
+                            f"🛡️ Platform Fee (1%): <code>{fee_sol:.6f} SOL</code>\n\n"
                             f"🔗 <a href='https://solscan.io/tx/{sig_or_err}'>View Transaction on Solscan</a>"
                         )
                     else:
@@ -501,7 +480,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                             f"🎉 <b>تم تنفيذ صفقة الشراء المخصصة بنجاح!</b> 🟢\n"
                             f"━━━━━━━━━━━━━━━━━━━\n"
                             f"💸 القيمة: <code>{custom_amt} SOL</code>\n"
-                            f"🛡️ عمولة المنصة (1%): <code>{fee_lamports/1e9:.6f} SOL</code>\n\n"
+                            f"🛡️ عمولة المنصة (1%): <code>{fee_sol:.6f} SOL</code>\n\n"
                             f"🔗 <a href='https://solscan.io/tx/{sig_or_err}'>عرض المعاملة على Solscan</a>"
                         )
                     await status_msg.edit_text(success_text, parse_mode="HTML", disable_web_page_preview=True)
@@ -567,35 +546,32 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             if bal >= (auto_amt + 0.005):
                 auto_msg = f"⚡ <b>تم رصد العقد! جاري تنفيذ القنص التلقائي بمبلغ {auto_amt} SOL...</b>" if user_lang == "ar" else f"⚡ <b>Safe token detected! Executing instant auto-snipe for {auto_amt} SOL...</b>"
                 await status_msg.edit_text(auto_msg, parse_mode="HTML")
-                settings = get_user_settings(user_id)
-                quote = get_jupiter_quote(WSOL_MINT, mint, int(auto_amt * 1e9), settings["slippage_bps"], with_fee=True)
-                if quote:
-                    keypair = get_user_keypair(user_id)
-                    tx_bytes = build_and_sign_swap_tx(quote, keypair, settings["priority_fee"])
-                    if tx_bytes:
-                        success, sig_or_err = broadcast_transaction(tx_bytes)
-                        if success:
-                            out_amount = float(quote.get("outAmount", 0))
-                            fee_lamports = float(quote.get("platformFee", {}).get("amount", 0))
-                            record_trade_db(user_id, WSOL_MINT, mint, auto_amt, out_amount, fee_lamports/1e9, sig_or_err, "CONFIRMED")
-                            if user_lang == "ar":
-                                success_text = (
-                                    f"🎯 <b>تم القنص التلقائي (Auto-Buy) بنجاح!</b> 🟢\n"
-                                    f"━━━━━━━━━━━━━━━━━━━\n"
-                                    f"💸 القيمة: <code>{auto_amt} SOL</code>\n"
-                                    f"🪙 العملة: <b>${html.escape(scan['symbol'])}</b>\n\n"
-                                    f"🔗 <a href='https://solscan.io/tx/{sig_or_err}'>عرض المعاملة على Solscan</a>"
-                                )
-                            else:
-                                success_text = (
-                                    f"🎯 <b>Auto-Buy Swap Executed Successfully!</b> 🟢\n"
-                                    f"━━━━━━━━━━━━━━━━━━━\n"
-                                    f"💸 Amount: <code>{auto_amt} SOL</code>\n"
-                                    f"🪙 Token: <b>${html.escape(scan['symbol'])}</b>\n\n"
-                                    f"🔗 <a href='https://solscan.io/tx/{sig_or_err}'>View Transaction on Solscan</a>"
-                                )
-                            await status_msg.edit_text(success_text, parse_mode="HTML", disable_web_page_preview=True)
-                            return
+                success, sig_or_err, out_amount, fee_sol = execute_buy_swap(user_id, mint, auto_amt, user_lang)
+                if success:
+                    if user_lang == "ar":
+                        success_text = (
+                            f"🎯 <b>تم القنص التلقائي (Auto-Buy) بنجاح!</b> 🟢\n"
+                            f"━━━━━━━━━━━━━━━━━━━\n"
+                            f"💸 القيمة: <code>{auto_amt} SOL</code>\n"
+                            f"🪙 العملة: <b>${html.escape(scan['symbol'])}</b>\n"
+                            f"🛡️ عمولة المنصة (1%): <code>{fee_sol:.6f} SOL</code>\n\n"
+                            f"🔗 <a href='https://solscan.io/tx/{sig_or_err}'>عرض المعاملة على Solscan</a>"
+                        )
+                    else:
+                        success_text = (
+                            f"🎯 <b>Auto-Buy Swap Executed Successfully!</b> 🟢\n"
+                            f"━━━━━━━━━━━━━━━━━━━\n"
+                            f"💸 Amount: <code>{auto_amt} SOL</code>\n"
+                            f"🪙 Token: <b>${html.escape(scan['symbol'])}</b>\n"
+                            f"🛡️ Platform Fee (1%): <code>{fee_sol:.6f} SOL</code>\n\n"
+                            f"🔗 <a href='https://solscan.io/tx/{sig_or_err}'>View Transaction on Solscan</a>"
+                        )
+                    await status_msg.edit_text(success_text, parse_mode="HTML", disable_web_page_preview=True)
+                    return
+                else:
+                    err_msg = f"❌ <b>Auto-Buy failed:</b> <code>{html.escape(sig_or_err)}</code>" if user_lang == "en" else f"❌ <b>فشل القنص التلقائي:</b> <code>{html.escape(sig_or_err)}</code>"
+                    await status_msg.edit_text(err_msg, parse_mode="HTML")
+                    return
 
         await status_msg.edit_text(card_text, parse_mode="HTML", reply_markup=get_token_card_keyboard(mint, user_lang, user_id=user_id, symbol=scan.get("symbol", "TOKEN")), disable_web_page_preview=True)
     else:
@@ -1620,40 +1596,15 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         prep_text = "⚡ <b>Routing best swap via Jupiter V6...</b>" if user_lang == "en" else "⚡ <b>جاري تحضير مسار الشراء عبر Jupiter...</b>"
         status_msg = await query.message.reply_text(prep_text, parse_mode="HTML")
 
-        settings = get_user_settings(user_id)
-        slippage = settings["slippage_bps"]
-        amount_lamports = int(amount_sol * 1_000_000_000)
-
-        # 1. Fetch Quote
-        quote = get_jupiter_quote(WSOL_MINT, mint, amount_lamports, slippage, with_fee=True)
-        if not quote:
-            fail_text = "❌ <b>No liquidity route discovered on Jupiter right now.</b>" if user_lang == "en" else "❌ <b>تعذر إيجاد مسار سيولة في Jupiter حالياً.</b>"
-            await status_msg.edit_text(fail_text, parse_mode="HTML")
-            return
-
-        # 2. Build & Sign
-        keypair = get_user_keypair(user_id)
-        tx_bytes = build_and_sign_swap_tx(quote, keypair, settings["priority_fee"])
-        if not tx_bytes:
-            sign_err = "❌ <b>Failed to build and sign transaction offline.</b>" if user_lang == "en" else "❌ <b>فشل في بناء وتوقيع المعاملة.</b>"
-            await status_msg.edit_text(sign_err, parse_mode="HTML")
-            return
-
-        # 3. Broadcast
-        bcast_text = "🚀 <b>Broadcasting to Solana cluster & confirming on-chain...</b>" if user_lang == "en" else "🚀 <b>جاري إرسال المعاملة إلى شبكة سولانا وتأكيد التنفيذ...</b>"
-        await status_msg.edit_text(bcast_text, parse_mode="HTML")
-        success, sig_or_err = broadcast_transaction(tx_bytes)
+        success, sig_or_err, out_amount, fee_sol = execute_buy_swap(user_id, mint, amount_sol, user_lang)
 
         if success:
-            out_amount = float(quote.get("outAmount", 0))
-            fee_lamports = float(quote.get("platformFee", {}).get("amount", 0))
-            record_trade_db(user_id, WSOL_MINT, mint, amount_sol, out_amount, fee_lamports/1e9, sig_or_err, "CONFIRMED")
             if user_lang == "en":
                 success_text = (
                     f"🎉 <b>Buy Swap Executed Successfully!</b> 🟢\n"
                     f"━━━━━━━━━━━━━━━━━━━\n"
                     f"💸 Amount: <code>{amount_sol} SOL</code>\n"
-                    f"🛡️ Platform Fee (1%): <code>{fee_lamports/1e9:.6f} SOL</code>\n\n"
+                    f"🛡️ Platform Fee (1%): <code>{fee_sol:.6f} SOL</code>\n\n"
                     f"🔗 <a href='https://solscan.io/tx/{sig_or_err}'>View Transaction on Solscan</a>"
                 )
             else:
@@ -1661,7 +1612,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"🎉 <b>تم تنفيذ صفقة الشراء بنجاح!</b> 🟢\n"
                     f"━━━━━━━━━━━━━━━━━━━\n"
                     f"💸 القيمة: <code>{amount_sol} SOL</code>\n"
-                    f"🛡️ عمولة المنصة (1%): <code>{fee_lamports/1e9:.6f} SOL</code>\n\n"
+                    f"🛡️ عمولة المنصة (1%): <code>{fee_sol:.6f} SOL</code>\n\n"
                     f"🔗 <a href='https://solscan.io/tx/{sig_or_err}'>عرض المعاملة على Solscan</a>"
                 )
             await status_msg.edit_text(success_text, parse_mode="HTML", disable_web_page_preview=True)
@@ -2607,37 +2558,15 @@ async def buy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     prep_text = "⚡ <b>Routing best swap via Jupiter V6...</b>" if user_lang == "en" else "⚡ <b>جاري تحضير مسار الشراء عبر Jupiter...</b>"
     status_msg = await update.message.reply_text(prep_text, parse_mode="HTML")
 
-    settings = get_user_settings(user_id)
-    slippage = settings["slippage_bps"]
-    amount_lamports = int(amount_sol * 1_000_000_000)
-
-    quote = get_jupiter_quote(WSOL_MINT, mint, amount_lamports, slippage, with_fee=True)
-    if not quote:
-        fail_text = "❌ <b>No liquidity route discovered on Jupiter right now.</b>" if user_lang == "en" else "❌ <b>تعذر إيجاد مسار سيولة في Jupiter حالياً.</b>"
-        await status_msg.edit_text(fail_text, parse_mode="HTML")
-        return
-
-    keypair = get_user_keypair(user_id)
-    tx_bytes = build_and_sign_swap_tx(quote, keypair, settings["priority_fee"])
-    if not tx_bytes:
-        sign_err = "❌ <b>Failed to build and sign transaction offline.</b>" if user_lang == "en" else "❌ <b>فشل في بناء وتوقيع المعاملة.</b>"
-        await status_msg.edit_text(sign_err, parse_mode="HTML")
-        return
-
-    bcast_text = "🚀 <b>Broadcasting to Solana cluster & confirming on-chain...</b>" if user_lang == "en" else "🚀 <b>جاري إرسال المعاملة إلى شبكة سولانا وتأكيد التنفيذ...</b>"
-    await status_msg.edit_text(bcast_text, parse_mode="HTML")
-    success, sig_or_err = broadcast_transaction(tx_bytes)
+    success, sig_or_err, out_amount, fee_sol = execute_buy_swap(user_id, mint, amount_sol, user_lang)
 
     if success:
-        out_amount = float(quote.get("outAmount", 0))
-        fee_lamports = float(quote.get("platformFee", {}).get("amount", 0))
-        record_trade_db(user_id, WSOL_MINT, mint, amount_sol, out_amount, fee_lamports/1e9, sig_or_err, "CONFIRMED")
         if user_lang == "en":
             success_text = (
                 f"🎉 <b>Buy Swap Executed Successfully!</b> 🟢\n"
                 f"━━━━━━━━━━━━━━━━━━━\n"
                 f"💸 Amount: <code>{amount_sol} SOL</code>\n"
-                f"🛡️ Platform Fee (1%): <code>{fee_lamports/1e9:.6f} SOL</code>\n\n"
+                f"🛡️ Platform Fee (1%): <code>{fee_sol:.6f} SOL</code>\n\n"
                 f"🔗 <a href='https://solscan.io/tx/{sig_or_err}'>View Transaction on Solscan</a>"
             )
         else:
@@ -2645,7 +2574,7 @@ async def buy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"🎉 <b>تم تنفيذ صفقة الشراء بنجاح!</b> 🟢\n"
                 f"━━━━━━━━━━━━━━━━━━━\n"
                 f"💸 القيمة: <code>{amount_sol} SOL</code>\n"
-                f"🛡️ عمولة المنصة (1%): <code>{fee_lamports/1e9:.6f} SOL</code>\n\n"
+                f"🛡️ عمولة المنصة (1%): <code>{fee_sol:.6f} SOL</code>\n\n"
                 f"🔗 <a href='https://solscan.io/tx/{sig_or_err}'>عرض المعاملة على Solscan</a>"
             )
         await status_msg.edit_text(success_text, parse_mode="HTML", disable_web_page_preview=True)

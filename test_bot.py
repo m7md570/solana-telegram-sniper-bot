@@ -906,9 +906,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         mock_quote = {"outAmount": "1000000000", "platformFee": {"amount": "500000"}}
         with patch("telegram_bot.search_solana_token", return_value={"mint": test_mint, "symbol": "BONK"}), \
              patch("telegram_bot.get_sol_balance", return_value=1.0), \
-             patch("telegram_bot.get_jupiter_quote", return_value=mock_quote), \
-             patch("telegram_bot.build_and_sign_swap_tx", return_value=b"mock_tx"), \
-             patch("telegram_bot.broadcast_transaction", return_value=(True, "mock_buy_sig")):
+             patch("telegram_bot.execute_buy_swap", return_value=(True, "mock_buy_sig", 1000000000.0, 0.0005)):
             asyncio.run(buy_command(mock_update, mock_context))
             self.assertTrue(mock_status.edit_text.called)
             buy_msg = mock_status.edit_text.call_args[0][0]
@@ -1275,6 +1273,51 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
             success, err = broadcast_transaction(mock_tx)
             self.assertFalse(success)
             self.assertEqual(err, "Node desynced")
+
+    def test_46_execute_buy_swap_pipeline(self):
+        """Test jupiter_engine.execute_buy_swap validation, MEV routing, broadcast, and DB logging."""
+        from unittest.mock import patch, MagicMock
+        from jupiter_engine import execute_buy_swap
+        from wallet_manager import get_or_create_wallet
+
+        test_uid = 99881199
+        pubkey, _ = get_or_create_wallet(test_uid, "BuyTester")
+
+        # 1. Invalid amount <= 0
+        ok, err, out, fee = execute_buy_swap(test_uid, self.bonk_mint, 0.0, lang="en")
+        self.assertFalse(ok)
+        self.assertIn("greater than zero", err)
+
+        # 2. Insufficient balance
+        with patch("wallet_manager.get_sol_balance", return_value=0.01):
+            ok, err, out, fee = execute_buy_swap(test_uid, self.bonk_mint, 0.1, lang="en")
+            self.assertFalse(ok)
+            self.assertIn("Insufficient SOL balance", err)
+
+        # 3. Successful buy swap execution
+        mock_quote = {
+            "outAmount": "500000000",
+            "priceImpactPct": "0.1",
+            "platformFee": {"amount": "1000000"}  # 0.001 SOL
+        }
+        with patch("wallet_manager.get_sol_balance", return_value=1.5), \
+             patch("jupiter_engine.get_jupiter_quote", return_value=mock_quote), \
+             patch("jupiter_engine.build_and_sign_swap_tx", return_value=b"mock_signed_buy_tx"), \
+             patch("jupiter_engine.broadcast_transaction", return_value=(True, "5VERnSgBuySuccessTxSig12345")):
+            ok, sig, out_amt, fee_sol = execute_buy_swap(test_uid, self.bonk_mint, 0.1, lang="en")
+            self.assertTrue(ok)
+            self.assertEqual(sig, "5VERnSgBuySuccessTxSig12345")
+            self.assertEqual(out_amt, 500000000.0)
+            self.assertAlmostEqual(fee_sol, 0.001, places=5)
+
+        # 4. Broadcast failure propagation
+        with patch("wallet_manager.get_sol_balance", return_value=1.5), \
+             patch("jupiter_engine.get_jupiter_quote", return_value=mock_quote), \
+             patch("jupiter_engine.build_and_sign_swap_tx", return_value=b"mock_signed_buy_tx"), \
+             patch("jupiter_engine.broadcast_transaction", return_value=(False, "Simulation failed: slippage exceeded")):
+            ok, err, out_amt, fee_sol = execute_buy_swap(test_uid, self.bonk_mint, 0.1, lang="en")
+            self.assertFalse(ok)
+            self.assertIn("Simulation failed", err)
 
 
 if __name__ == "__main__":

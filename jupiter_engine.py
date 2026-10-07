@@ -215,6 +215,97 @@ def record_trade_db(
         conn.close()
 
 
+def execute_buy_swap(
+    user_id: int,
+    token_mint: str,
+    amount_sol: float,
+    lang: str = "en"
+) -> Tuple[bool, str, float, float]:
+    """
+    Executes an on-chain market swap of SOL into a specified token mint via Jupiter V6.
+    Includes dynamic MEV anti-sandwich protection, multi-RPC failover, and platform fee routing.
+    Returns: (is_success, tx_signature_or_error, tokens_received, fee_sol)
+    """
+    from wallet_manager import get_user_keypair, get_sol_balance, get_user_settings
+
+    if amount_sol <= 0:
+        err = "مبلغ الشراء يجب أن يكون أكبر من الصفر." if lang == "ar" else "Buy amount must be greater than zero."
+        return False, err, 0.0, 0.0
+
+    keypair = get_user_keypair(user_id)
+    if not keypair:
+        err = "تعذر العثور على محفظة المستخدم." if lang == "ar" else "User wallet not found."
+        return False, err, 0.0, 0.0
+
+    pubkey_str = str(keypair.pubkey())
+    balance = get_sol_balance(pubkey_str)
+    # Gas buffer: at least 0.005 SOL for network fees and rent
+    if balance < (amount_sol + 0.005):
+        err = (
+            f"رصيد SOL غير كافٍ! المتاح: {balance:.4f} SOL، المطلوب: {amount_sol + 0.005:.4f} SOL شامل رسوم الشبكة."
+            if lang == "ar" else
+            f"Insufficient SOL balance! Available: {balance:.4f} SOL, required: {amount_sol + 0.005:.4f} SOL (incl. gas buffer)."
+        )
+        return False, err, 0.0, 0.0
+
+    settings = get_user_settings(user_id)
+    slippage = settings.get("slippage_bps", DEFAULT_SLIPPAGE_BPS)
+    priority_fee = settings.get("priority_fee", DEFAULT_PRIORITY_FEE_LAMPORTS)
+    amount_lamports = int(amount_sol * 1_000_000_000)
+
+    # 1. Fetch Quote: WSOL -> token_mint
+    quote = get_jupiter_quote(
+        input_mint=WSOL_MINT,
+        output_mint=token_mint,
+        amount_lamports=amount_lamports,
+        slippage_bps=slippage,
+        with_fee=True
+    )
+    if not quote:
+        err = "تعذر العثور على مسار سيولة في Jupiter حالياً." if lang == "ar" else "No swap liquidity route discovered on Jupiter right now."
+        return False, err, 0.0, 0.0
+
+    # 2. Dynamic MEV anti-sandwich slippage optimization
+    price_impact = float(quote.get("priceImpactPct") or 0.0)
+    optimal_slip = calculate_optimal_slippage(price_impact, slippage)
+    if optimal_slip != slippage:
+        re_quote = get_jupiter_quote(
+            input_mint=WSOL_MINT,
+            output_mint=token_mint,
+            amount_lamports=amount_lamports,
+            slippage_bps=optimal_slip,
+            with_fee=True
+        )
+        if re_quote:
+            quote = re_quote
+
+    # 3. Build & Sign Transaction
+    tx_bytes = build_and_sign_swap_tx(quote, keypair, priority_fee)
+    if not tx_bytes:
+        err = "فشل في بناء وتوقيع معاملة الشراء الذكية." if lang == "ar" else "Failed to construct and sign buy transaction."
+        return False, err, 0.0, 0.0
+
+    # 4. Broadcast via multi-RPC failover
+    success, sig_or_err = broadcast_transaction(tx_bytes)
+    if success:
+        out_amount = float(quote.get("outAmount", 0))
+        fee_lamports = float(quote.get("platformFee", {}).get("amount", 0))
+        fee_sol = fee_lamports / 1e9
+        record_trade_db(
+            user_id=user_id,
+            input_mint=WSOL_MINT,
+            output_mint=token_mint,
+            amount_in=amount_sol,
+            amount_out=out_amount,
+            fee_sol=fee_sol,
+            tx_sig=sig_or_err,
+            status="CONFIRMED"
+        )
+        return True, sig_or_err, out_amount, fee_sol
+    else:
+        return False, sig_or_err, 0.0, 0.0
+
+
 def execute_sell_swap(
     user_id: int,
     token_mint: str,

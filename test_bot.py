@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.40.0", card_text)
+        self.assertIn("v3.41.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.40.0")
+        self.assertEqual(BOT_VERSION, "v3.41.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -2275,6 +2275,35 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
             self.assertIn("$BONK Trending", post_text)
             self.assertIn("RugCheck: 🟢 SAFE", post_text)
             self.assertLessEqual(len(post_text), 260)
+
+    def test_65_universal_english_social_previews(self):
+        """Test bot_post_init synchronizes English descriptions for both global and Arabic locales."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock
+        from telegram_bot import bot_post_init
+
+        mock_app = MagicMock()
+        mock_app.bot.set_my_description = AsyncMock()
+        mock_app.bot.set_my_short_description = AsyncMock()
+        mock_app.bot.set_my_commands = AsyncMock()
+
+        asyncio.run(bot_post_init(mock_app))
+
+        # Check set_my_description calls
+        desc_calls = mock_app.bot.set_my_description.call_args_list
+        desc_langs = [c.kwargs.get("language_code") for c in desc_calls]
+        self.assertIn("", desc_langs, "Default global description must be set")
+        self.assertIn("ar", desc_langs, "Arabic locale must be synced with English description")
+        for c in desc_calls:
+            self.assertIn("Ultra-fast Solana Sniper", c.args[0])
+
+        # Check set_my_short_description calls
+        short_calls = mock_app.bot.set_my_short_description.call_args_list
+        short_langs = [c.kwargs.get("language_code") for c in short_calls]
+        self.assertIn("", short_langs, "Default global short description must be set")
+        self.assertIn("ar", short_langs, "Arabic locale must be synced with English short description")
+        for c in short_calls:
+            self.assertIn("Ultra-fast Solana Sniper", c.args[0])
 
 
 if __name__ == "__main__":

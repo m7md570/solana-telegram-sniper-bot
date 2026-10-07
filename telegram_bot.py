@@ -2975,6 +2975,8 @@ async def bot_post_init(app: Application):
         short_en = "⚡ Ultra-fast Solana Sniper & Trading Bot via Jupiter V6 & RugCheck. Sub-400ms 1-click swaps & auto-audit."
         await app.bot.set_my_description(desc_en, language_code="")
         await app.bot.set_my_short_description(short_en, language_code="")
+        await app.bot.set_my_description(desc_en, language_code="ar")
+        await app.bot.set_my_short_description(short_en, language_code="ar")
 
         commands = [
             BotCommand("start", "Launch Popcorn trading cockpit"),

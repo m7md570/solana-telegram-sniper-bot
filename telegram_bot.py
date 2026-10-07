@@ -428,7 +428,11 @@ async def trending_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard.append([
             InlineKeyboardButton(btn_label, callback_data=f"inspect_{mint}")
         ])
-    keyboard.append([InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")])
+    refresh_btn_text = "🔄 Refresh Trending" if user_lang == "en" else "🔄 تحديث القائمة"
+    keyboard.append([
+        InlineKeyboardButton(refresh_btn_text, callback_data="btn_trending"),
+        InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
+    ])
 
     await status_msg.edit_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard), disable_web_page_preview=True)
 
@@ -1208,7 +1212,11 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             keyboard.append([
                 InlineKeyboardButton(btn_label, callback_data=f"inspect_{mint}")
             ])
-        keyboard.append([InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")])
+        refresh_btn_text = "🔄 Refresh Trending" if user_lang == "en" else "🔄 تحديث القائمة"
+        keyboard.append([
+            InlineKeyboardButton(refresh_btn_text, callback_data="btn_trending"),
+            InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
+        ])
         await safe_edit_text(query, text, reply_markup=InlineKeyboardMarkup(keyboard))
 
     elif data == "btn_surge":

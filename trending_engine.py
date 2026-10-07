@@ -24,10 +24,20 @@ _SESSION.headers.update({
 })
 
 
+FALLBACK_TRENDING_MINTS = [
+    "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",  # BONK
+    "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm",  # WIF
+    "7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr",  # POPCAT
+    "ukHH6c7mMyiWCf1b9pnWe25TSpkDDt3H5pQZgZ74J82",  # BOME
+    "MEW1gQWJ3nEXg2qgERiKu7FAFj79PHvQVREQUzScPP5",  # MEW
+]
+
+
 def get_trending_tokens(limit: int = 5) -> List[Dict[str, Any]]:
     """
     Fetches top trending and boosted Solana tokens from DexScreener.
-    Caches results for 30 seconds to ensure ultra-low latency.
+    Caches results for 30 seconds to ensure ultra-low latency, with
+    high-resilience fallback to top established tokens if boosts API fails.
     """
     global _TRENDING_CACHE
     now = time.time()
@@ -59,7 +69,6 @@ def get_trending_tokens(limit: int = 5) -> List[Dict[str, Any]]:
                     resp = _SESSION.get(batch_url, timeout=7)
                     if resp.status_code == 200:
                         pairs = resp.json().get("pairs", [])
-                        # Group by mint address, picking the pair with highest liquidity
                         pairs_by_mint = {}
                         for p in pairs:
                             m = p.get("baseToken", {}).get("address")
@@ -94,6 +103,37 @@ def get_trending_tokens(limit: int = 5) -> List[Dict[str, Any]]:
                                 })
                 except Exception as e:
                     print(f"Error fetching batch pairs: {e}")
+
+        # Resilient fallback if boosts API returns empty or times out
+        if not trending:
+            try:
+                batch_url = f"https://api.dexscreener.com/latest/dex/tokens/{','.join(FALLBACK_TRENDING_MINTS[:limit])}"
+                resp = _SESSION.get(batch_url, timeout=7)
+                if resp.status_code == 200:
+                    pairs = resp.json().get("pairs", [])
+                    pairs_by_mint = {}
+                    for p in pairs:
+                        m = p.get("baseToken", {}).get("address")
+                        if m:
+                            cur_liq = float(p.get("liquidity", {}).get("usd") or 0.0)
+                            if m not in pairs_by_mint or cur_liq > pairs_by_mint[m]["_liq"]:
+                                pairs_by_mint[m] = {"pair": p, "_liq": cur_liq}
+                    for mint in FALLBACK_TRENDING_MINTS[:limit]:
+                        if mint in pairs_by_mint:
+                            p = pairs_by_mint[mint]["pair"]
+                            trending.append({
+                                "mint": mint,
+                                "symbol": p.get("baseToken", {}).get("symbol", "UNKNOWN"),
+                                "name": p.get("baseToken", {}).get("name", "Unknown Token"),
+                                "price_usd": float(p.get("priceUsd") or 0.0),
+                                "change_1h": float(p.get("priceChange", {}).get("h1") or 0.0),
+                                "change_24h": float(p.get("priceChange", {}).get("h24") or 0.0),
+                                "volume_24h": float(p.get("volume", {}).get("h24") or 0.0),
+                                "liquidity": float(p.get("liquidity", {}).get("usd") or 0.0),
+                                "fdv": float(p.get("fdv") or p.get("marketCap") or 0.0)
+                            })
+            except Exception as fb_err:
+                print(f"Error fetching trending fallback pairs: {fb_err}")
 
         if trending:
             _TRENDING_CACHE["timestamp"] = now

@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.31.0", card_text)
+        self.assertIn("v3.32.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.31.0")
+        self.assertEqual(BOT_VERSION, "v3.32.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -1801,6 +1801,68 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         help_ar = t("help_body", "ar")
         self.assertIn("/version", help_en)
         self.assertIn("/version", help_ar)
+
+    def test_56_trending_resilient_fallback_and_refresh_button(self):
+        """Test get_trending_tokens resilient fallback to top memecoins when boosts fail, and trending inline refresh keyboard."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock, patch
+        from trending_engine import get_trending_tokens, _TRENDING_CACHE, FALLBACK_TRENDING_MINTS
+        from telegram_bot import trending_command
+        from wallet_manager import get_or_create_wallet, set_user_language
+
+        test_uid = 44556677
+        get_or_create_wallet(test_uid, "TrendingTester", initial_language="en")
+        set_user_language(test_uid, "en")
+
+        # 1. Clear cache to force live fetch
+        _TRENDING_CACHE["timestamp"] = 0
+        _TRENDING_CACHE["data"] = []
+
+        # Mock boosts endpoint returning 500 error, but batch tokens endpoint returning BONK pair
+        mock_fail_resp = MagicMock(status_code=500)
+        mock_batch_resp = MagicMock(status_code=200)
+        mock_batch_resp.json.return_value = {
+            "pairs": [
+                {
+                    "baseToken": {"address": self.bonk_mint, "symbol": "BONK", "name": "Bonk"},
+                    "priceUsd": "0.000025",
+                    "priceChange": {"h24": 15.0, "h1": 2.0},
+                    "volume": {"h24": 50000000.0},
+                    "liquidity": {"usd": 12000000.0},
+                    "fdv": 1500000000.0
+                }
+            ]
+        }
+
+        def mock_get(url, timeout=None):
+            if "token-boosts" in url:
+                return mock_fail_resp
+            return mock_batch_resp
+
+        with patch("trending_engine._SESSION.get", side_effect=mock_get):
+            tokens = get_trending_tokens(limit=1)
+            self.assertEqual(len(tokens), 1)
+            self.assertEqual(tokens[0]["mint"], self.bonk_mint)
+            self.assertEqual(tokens[0]["symbol"], "BONK")
+
+        # 2. Test trending_command attaches both 'btn_trending' and 'btn_refresh' buttons
+        mock_update = MagicMock()
+        mock_update.effective_user.id = test_uid
+        mock_status_msg = MagicMock()
+        mock_status_msg.edit_text = AsyncMock()
+        mock_update.message.reply_text = AsyncMock(return_value=mock_status_msg)
+        mock_context = MagicMock()
+
+        with patch("telegram_bot.get_trending_tokens", return_value=tokens):
+            asyncio.run(trending_command(mock_update, mock_context))
+            self.assertTrue(mock_status_msg.edit_text.called)
+            kwargs = mock_status_msg.edit_text.call_args[1]
+            self.assertIn("reply_markup", kwargs)
+            kb = kwargs["reply_markup"]
+            all_buttons = [b for row in kb.inline_keyboard for b in row]
+            callback_datas = [b.callback_data for b in all_buttons]
+            self.assertIn("btn_trending", callback_datas)
+            self.assertIn("btn_refresh", callback_datas)
 
 
 if __name__ == "__main__":

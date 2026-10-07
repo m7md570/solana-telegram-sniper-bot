@@ -1020,8 +1020,35 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertIn("+2.30% (1h)", card_ar)
         self.assertIn("+14.50% (24h)", card_ar)
 
+    def test_34_deposit_qr_code_generator(self):
+        """Test in-memory Solana deposit QR code generation with solana:<pubkey> standard."""
+        from wallet_manager import generate_deposit_qr_buffer
+        pubkey = "7kz1mcQcaZhYzFUHBFHH6s5tGrDHc7gNhN5WAUyXyq5r"
+        buf = generate_deposit_qr_buffer(pubkey)
+        self.assertIsNotNone(buf)
+        data = buf.getvalue()
+        self.assertGreater(len(data), 300)
+        # Check standard PNG magic bytes: \x89PNG\r\n\x1a\n
+        self.assertTrue(data.startswith(b"\x89PNG\r\n\x1a\n"))
+
+    def test_35_solana_network_gas_radar(self):
+        """Test real-time Solana network priority fee and gas radar logic."""
+        from jupiter_engine import get_network_gas_fees
+        gas_data = get_network_gas_fees()
+        self.assertIn("median_micro_lamports", gas_data)
+        self.assertIn("p95_micro_lamports", gas_data)
+        self.assertIn("congestion", gas_data)
+        self.assertIn("recommended_normal", gas_data)
+        self.assertIn("recommended_turbo", gas_data)
+        self.assertIn("recommended_ultra", gas_data)
+        self.assertGreaterEqual(gas_data["median_micro_lamports"], 0)
+        self.assertGreaterEqual(gas_data["p95_micro_lamports"], 0)
+        self.assertGreaterEqual(gas_data["recommended_ultra"], gas_data["recommended_turbo"])
+        self.assertGreaterEqual(gas_data["recommended_turbo"], gas_data["recommended_normal"])
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
 

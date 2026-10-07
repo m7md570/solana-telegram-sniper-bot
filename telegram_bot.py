@@ -82,7 +82,8 @@ from wallet_manager import (
     get_price_alerts_status,
     set_price_alerts_status,
     get_all_active_watchlist_subscriptions,
-    update_watchlist_price_and_alert
+    update_watchlist_price_and_alert,
+    generate_deposit_qr_buffer
 )
 from rugcheck_scanner import (
     scan_token_security,
@@ -96,8 +97,10 @@ from jupiter_engine import (
     broadcast_transaction,
     record_trade_db,
     execute_sell_swap,
-    calculate_optimal_slippage
+    calculate_optimal_slippage,
+    get_network_gas_fees
 )
+
 from trending_engine import (
     get_trending_tokens,
     format_trending_list,
@@ -273,13 +276,15 @@ def build_settings_card(user_id: int, user_lang: str) -> Tuple[str, InlineKeyboa
             InlineKeyboardButton("🛑 SL -50%", callback_data="sl_50")
         ],
         [
-            InlineKeyboardButton(alerts_btn_text, callback_data="toggle_alerts")
+            InlineKeyboardButton(alerts_btn_text, callback_data="toggle_alerts"),
+            InlineKeyboardButton(t("btn_gas_radar", user_lang), callback_data="btn_gas_fees")
         ],
         [
             InlineKeyboardButton(t("btn_lang_toggle", user_lang), callback_data="btn_toggle_lang")
         ],
         [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
     ]
+
     return text, InlineKeyboardMarkup(kb)
 
 
@@ -1106,6 +1111,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"⚠️ <i>مفتاحك الخاص مشفر محلياً بنظام AES-256 لحمايتك الكاملة.</i>\n"
             )
             kb = [
+                [InlineKeyboardButton("📲 إظهار رمز QR للإيداع", callback_data="btn_show_qr")],
                 [InlineKeyboardButton("📊 عرض الصفقات المفتوحة", callback_data="btn_positions")],
                 [InlineKeyboardButton("💸 سحب SOL إلى محفظتك الخارجية", callback_data="btn_withdraw_guide")],
                 [InlineKeyboardButton("🔑 إظهار المفتاح الخاص (Private Key)", callback_data="btn_export_key")],
@@ -1124,11 +1130,52 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"⚠️ <i>Your private key is encrypted locally with AES-256 for non-custodial ownership.</i>\n"
             )
             kb = [
+                [InlineKeyboardButton("📲 Instant Deposit QR", callback_data="btn_show_qr")],
                 [InlineKeyboardButton("📊 View Open Positions", callback_data="btn_positions")],
                 [InlineKeyboardButton("💸 Withdraw SOL to External Wallet", callback_data="btn_withdraw_guide")],
                 [InlineKeyboardButton("🔑 Export Private Key", callback_data="btn_export_key")],
                 [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
             ]
+        await safe_edit_text(query, text, reply_markup=InlineKeyboardMarkup(kb))
+
+    elif data == "btn_show_qr":
+        pubkey, _ = get_or_create_wallet(user_id)
+        bal = get_sol_balance(pubkey)
+        qr_buf = generate_deposit_qr_buffer(pubkey)
+        caption = (
+            f"{t('qr_card_title', user_lang)}\n"
+            f"{t('qr_card_body', user_lang, pubkey=pubkey, balance=bal)}"
+        )
+        kb = [[InlineKeyboardButton(t("btn_wallet", user_lang), callback_data="btn_wallet")]]
+        await query.message.reply_photo(photo=qr_buf, caption=caption, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
+
+    elif data == "btn_gas_fees":
+        await query.message.reply_chat_action("typing")
+        gas_data = get_network_gas_fees()
+        badge = gas_data["congestion_badge_ar"] if user_lang == "ar" else gas_data["congestion_badge_en"]
+        card_title = t("gas_card_title", user_lang)
+        card_body = t(
+            "gas_card_body",
+            user_lang,
+            congestion_badge=badge,
+            median_fee=gas_data["median_micro_lamports"],
+            median_sol=gas_data["median_sol"],
+            p95_fee=gas_data["p95_micro_lamports"],
+            p95_sol=gas_data["p95_sol"],
+            rec_normal=gas_data["recommended_normal"],
+            rec_turbo=gas_data["recommended_turbo"],
+            rec_ultra=gas_data["recommended_ultra"],
+        )
+        text = f"{card_title}\n{card_body}"
+        kb = [
+            [
+                InlineKeyboardButton("⚡ Normal (50k)", callback_data="gas_50000"),
+                InlineKeyboardButton("🚀 Turbo (250k)", callback_data="gas_250000"),
+                InlineKeyboardButton("🏎️ Ultra (1M)", callback_data="gas_1000000")
+            ],
+            [InlineKeyboardButton(t("btn_refresh", user_lang), callback_data="btn_gas_fees")],
+            [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_settings")]
+        ]
         await safe_edit_text(query, text, reply_markup=InlineKeyboardMarkup(kb))
 
     elif data == "btn_withdraw_guide":
@@ -1158,6 +1205,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         kb = [[InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_wallet")]]
         await safe_edit_text(query, text, reply_markup=InlineKeyboardMarkup(kb))
+
 
     elif data == "btn_positions":
         await render_positions(query, user_id, user_lang, is_edit=True)
@@ -1530,6 +1578,7 @@ async def wallet_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"⚠️ <i>مفتاحك الخاص مشفر محلياً بنظام AES-256 لحمايتك الكاملة.</i>\n"
         )
         kb = [
+            [InlineKeyboardButton("📲 إظهار رمز QR للإيداع", callback_data="btn_show_qr")],
             [InlineKeyboardButton("📊 عرض الصفقات المفتوحة", callback_data="btn_positions")],
             [InlineKeyboardButton("💸 سحب SOL للخارج", callback_data="btn_withdraw_guide")],
             [InlineKeyboardButton("🔑 إظهار المفتاح الخاص", callback_data="btn_export_key")],
@@ -1548,12 +1597,65 @@ async def wallet_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"⚠️ <i>Your private key is locally encrypted with AES-256 for non-custodial ownership.</i>\n"
         )
         kb = [
+            [InlineKeyboardButton("📲 Instant Deposit QR", callback_data="btn_show_qr")],
             [InlineKeyboardButton("📊 View Open Positions", callback_data="btn_positions")],
             [InlineKeyboardButton("💸 Withdraw SOL to External Wallet", callback_data="btn_withdraw_guide")],
             [InlineKeyboardButton("🔑 Export Private Key", callback_data="btn_export_key")],
             [InlineKeyboardButton("🔄 Refresh Balance", callback_data="btn_wallet")]
         ]
     await update.message.reply_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb), disable_web_page_preview=True)
+
+
+async def qr_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for /qr and /deposit command: generates and sends native Solana deposit QR code."""
+    user_id = update.effective_user.id
+    user_lang = get_user_language(user_id)
+    pubkey, _ = get_or_create_wallet(user_id)
+    balance = get_sol_balance(pubkey)
+    buf = generate_deposit_qr_buffer(pubkey)
+    caption = (
+        f"{t('qr_card_title', user_lang)}\n"
+        f"{t('qr_card_body', user_lang, pubkey=pubkey, balance=balance)}"
+    )
+    kb = [
+        [InlineKeyboardButton(t("btn_wallet", user_lang), callback_data="btn_wallet")],
+        [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
+    ]
+    await update.message.reply_photo(photo=buf, caption=caption, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
+
+
+async def gas_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for /gas command: queries Solana on-chain priority fees and displays live congestion radar."""
+    user_id = update.effective_user.id
+    user_lang = get_user_language(user_id)
+    await update.message.reply_chat_action("typing")
+    gas_data = get_network_gas_fees()
+    badge = gas_data["congestion_badge_ar"] if user_lang == "ar" else gas_data["congestion_badge_en"]
+    card_title = t("gas_card_title", user_lang)
+    card_body = t(
+        "gas_card_body",
+        user_lang,
+        congestion_badge=badge,
+        median_fee=gas_data["median_micro_lamports"],
+        median_sol=gas_data["median_sol"],
+        p95_fee=gas_data["p95_micro_lamports"],
+        p95_sol=gas_data["p95_sol"],
+        rec_normal=gas_data["recommended_normal"],
+        rec_turbo=gas_data["recommended_turbo"],
+        rec_ultra=gas_data["recommended_ultra"],
+    )
+    text = f"{card_title}\n{card_body}"
+    kb = [
+        [
+            InlineKeyboardButton("⚡ Normal (50k)", callback_data="gas_50000"),
+            InlineKeyboardButton("🚀 Turbo (250k)", callback_data="gas_250000"),
+            InlineKeyboardButton("🏎️ Ultra (1M)", callback_data="gas_1000000")
+        ],
+        [InlineKeyboardButton(t("btn_refresh", user_lang), callback_data="btn_gas_fees")],
+        [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
+    ]
+    await update.message.reply_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
+
 
 
 async def positions_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2422,7 +2524,10 @@ def build_application(token: str) -> Application:
     app.add_handler(CommandHandler("check", audit_command))
     app.add_handler(CommandHandler("referral", referral_command))
     app.add_handler(CommandHandler("wallet", wallet_command))
+    app.add_handler(CommandHandler("qr", qr_command))
+    app.add_handler(CommandHandler("deposit", qr_command))
     app.add_handler(CommandHandler("withdraw", withdraw_command))
+
     app.add_handler(CommandHandler("watchlist", watchlist_command))
     app.add_handler(CommandHandler("track", track_command))
     app.add_handler(CommandHandler("untrack", untrack_command))

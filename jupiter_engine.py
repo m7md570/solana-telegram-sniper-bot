@@ -301,3 +301,71 @@ def execute_sell_swap(
         return True, sig_or_err, sol_received
     else:
         return False, sig_or_err, 0.0
+
+
+def get_network_gas_fees(rpc_url: str = PRIMARY_RPC) -> Dict[str, Any]:
+    """
+    Queries Solana mainnet RPC for recent prioritization fees (getRecentPrioritizationFees).
+    Computes real-time median, 95th percentile, and recommended priority fee tiers in micro-lamports.
+    """
+    endpoints = [rpc_url] + [r for r in FALLBACK_RPCS if r != rpc_url]
+    raw_fees = []
+
+    for ep in endpoints:
+        try:
+            payload = {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "getRecentPrioritizationFees",
+                "params": [[WSOL_MINT]]
+            }
+            res = _SESSION.post(ep, json=payload, timeout=6)
+            if res.status_code == 200:
+                data = res.json()
+                results = data.get("result", [])
+                fees = [int(x["prioritizationFee"]) for x in results if x.get("prioritizationFee", 0) > 0]
+                if fees:
+                    raw_fees = fees
+                    break
+        except Exception:
+            continue
+
+    if not raw_fees:
+        median_fee = 50000
+        p95_fee = 250000
+    else:
+        raw_fees.sort()
+        n = len(raw_fees)
+        median_fee = raw_fees[n // 2]
+        p95_fee = raw_fees[int(n * 0.95)] if n >= 20 else raw_fees[-1]
+
+    if median_fee < 50000:
+        congestion = "LOW"
+        congestion_badge_en = "🟢 Low Congestion (Fast)"
+        congestion_badge_ar = "🟢 شبكة سريعة (ازدحام منخفض)"
+    elif median_fee < 300000:
+        congestion = "NORMAL"
+        congestion_badge_en = "🟡 Moderate Activity"
+        congestion_badge_ar = "🟡 نشاط معتدل"
+    else:
+        congestion = "HIGH"
+        congestion_badge_en = "🔴 High Congestion (Volatile)"
+        congestion_badge_ar = "🔴 ازدحام مرتفع (تقلب سريع)"
+
+    rec_normal = max(50000, median_fee)
+    rec_turbo = max(250000, int(p95_fee * 1.1))
+    rec_ultra = max(1000000, int(p95_fee * 2.0))
+
+    return {
+        "median_micro_lamports": median_fee,
+        "p95_micro_lamports": p95_fee,
+        "median_sol": median_fee / 1e9,
+        "p95_sol": p95_fee / 1e9,
+        "congestion": congestion,
+        "congestion_badge_en": congestion_badge_en,
+        "congestion_badge_ar": congestion_badge_ar,
+        "recommended_normal": rec_normal,
+        "recommended_turbo": rec_turbo,
+        "recommended_ultra": rec_ultra,
+    }
+

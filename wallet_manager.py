@@ -686,3 +686,26 @@ def set_price_alerts_status(user_id: int, enabled: bool) -> bool:
         conn.close()
 
 
+def generate_deposit_qr_buffer(pubkey: str):
+    """
+    Generates an in-memory PNG QR code buffer for the specified Solana public key.
+    Uses standard solana:<pubkey> URI scheme compatible with Phantom, Solflare, OKX, and Binance.
+    """
+    import io
+    import qrcode
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=8,
+        border=2,
+    )
+    qr.add_data(f"solana:{pubkey}")
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return buf
+
+
+

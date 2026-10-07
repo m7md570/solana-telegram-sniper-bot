@@ -178,6 +178,31 @@ MESSAGES = {
         ),
         "panic_no_positions": "ℹ️ <b>No open token holdings found to liquidate.</b>",
         "slippage_updated": "🎯 Slippage tolerance set to <b>{pct:.2f}%</b> (<code>{bps} BPS</code>)!",
+        "btn_show_qr": "📲 Deposit QR Code",
+        "btn_gas_radar": "⛽ Solana Network Gas",
+        "gas_card_title": "⛽ <b>Solana Mainnet Gas & Priority Fee Radar</b> ⚡",
+        "gas_card_body": (
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🌐 <b>Network Congestion:</b> {congestion_badge}\n"
+            "⚡ <b>Median Priority Fee:</b> <code>{median_fee:,} µLamports</code> (<code>{median_sol:.6f} SOL</code>)\n"
+            "🚀 <b>Turbo Priority Fee (P95):</b> <code>{p95_fee:,} µLamports</code> (<code>{p95_sol:.6f} SOL</code>)\n"
+            "🕒 <b>Sampled Blocks:</b> Recent 150 Slots on Mainnet\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🎯 <b>Recommended Bot Settings:</b>\n"
+            "• 🟢 Normal Speed: <code>{rec_normal:,} µLamports</code>\n"
+            "• 🟡 Turbo Snipe: <code>{rec_turbo:,} µLamports</code>\n"
+            "• 🔴 Ultra Alpha: <code>{rec_ultra:,} µLamports</code>\n\n"
+            "💡 <i>Adjust priority gas in <code>/settings</code> or via <code>/gas [AMOUNT]</code>.</i>"
+        ),
+        "qr_card_title": "📲 <b>Solana Instant Deposit QR Code</b> 🏦",
+        "qr_card_body": (
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "📍 <b>SOL Deposit Address (Tap to copy):</b>\n<code>{pubkey}</code>\n\n"
+            "💰 <b>Current Balance:</b> <code>{balance:.4f} SOL</code>\n\n"
+            "💡 <b>Scan with Mobile Wallet:</b>\n"
+            "Open Phantom, Solflare, OKX, or Binance app on your phone, choose Send, and scan this QR code to deposit instantly!"
+        ),
+
         "slippage_syntax_help": "ℹ️ <b>Slippage Syntax</b>: <code>/slippage [PERCENT]</code>\nExample: <code>/slippage 1.5</code> (or <code>/slip 2.0</code>)",
         "slippage_invalid": "❌ Please specify a slippage between 0.1% and 50.0% (e.g. <code>1.5</code>).",
         "autobuy_status_title": "🤖 <b>Auto-Buy Sniper Engine</b>",
@@ -390,6 +415,31 @@ MESSAGES = {
         ),
         "panic_no_positions": "ℹ️ <b>لا توجد أي صفقات أو أرصدة عملات مفتوحة لتصفيتها.</b>",
         "slippage_updated": "🎯 تم ضبط نسبة الانزلاق المسموح إلى <b>{pct:.2f}%</b> (<code>{bps} BPS</code>)!",
+        "btn_show_qr": "📲 رمز QR للإيداع",
+        "btn_gas_radar": "⛽ رادار غاز سولانا",
+        "gas_card_title": "⛽ <b>رادار رسوم الغاز وأولوية المعاملات على سولانا</b> ⚡",
+        "gas_card_body": (
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🌐 <b>حالة ازدحام الشبكة:</b> {congestion_badge}\n"
+            "⚡ <b>متوسط رسوم الأولوية (Median):</b> <code>{median_fee:,} ميكرو-لامبورت</code> (<code>{median_sol:.6f} SOL</code>)\n"
+            "🚀 <b>رسوم القنص التوربو (P95):</b> <code>{p95_fee:,} ميكرو-لامبورت</code> (<code>{p95_sol:.6f} SOL</code>)\n"
+            "🕒 <b>عينة القياس:</b> آخر 150 كتلة حية على Mainnet\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🎯 <b>الإعدادات الموصى بها للبوت:</b>\n"
+            "• 🟢 السرعة العادية: <code>{rec_normal:,} ميكرو-لامبورت</code>\n"
+            "• 🟡 قنص توربو: <code>{rec_turbo:,} ميكرو-لامبورت</code>\n"
+            "• 🔴 قنص فائق (Ultra): <code>{rec_ultra:,} ميكرو-لامبورت</code>\n\n"
+            "💡 <i>اضبط رسوم الغاز عبر <code>/settings</code> أو استخدم <code>/gas [المبلغ]</code>.</i>"
+        ),
+        "qr_card_title": "📲 <b>رمز QR للإيداع السريع</b> 🏦",
+        "qr_card_body": (
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "📍 <b>عنوان إيداع SOL (اضغط للنسخ):</b>\n<code>{pubkey}</code>\n\n"
+            "💰 <b>الرصيد المتاح:</b> <code>{balance:.4f} SOL</code>\n\n"
+            "💡 <b>المسح عبر كاميرا الجوال:</b>\n"
+            "افتح تطبيق Phantom أو Solflare أو منصات التداول، اختر إرسال (Send)، وامسح هذا الرمز لإيداع SOL فوراً!"
+        ),
+
         "slippage_syntax_help": "ℹ️ <b>صيغة الانزلاق</b>: <code>/slippage [النسبة]</code>\nمثال: <code>/slippage 1.5</code> (أو <code>/slip 2.0</code>)",
         "slippage_invalid": "❌ يرجى تحديد نسبة انزلاق صالحة بين 0.1% و 50.0% (مثل <code>1.5</code>).",
         "autobuy_status_title": "🤖 <b>رادار القنص والشراء التلقائي (Auto-Buy)</b>",

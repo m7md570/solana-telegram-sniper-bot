@@ -2566,15 +2566,24 @@ async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="HTML"
     )
 
-    matched = search_solana_token(query)
-    if not matched:
+    mint = extract_token_mint(query)
+    if not mint:
+        matched = search_solana_token(query)
+        if matched:
+            mint = matched["mint"]
+
+    if not mint:
+        not_found_kb = [
+            [InlineKeyboardButton("🔥 Explore Trending" if user_lang == "en" else "🔥 استكشاف العملات الرائجة", callback_data="btn_trending")],
+            [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
+        ]
         await status_msg.edit_text(
             t("search_not_found", user_lang, query=html.escape(query)),
-            parse_mode="HTML"
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(not_found_kb)
         )
         return
 
-    mint = matched["mint"]
     scan = scan_token_security(mint)
     card_text = format_token_card(scan, lang=user_lang)
     await status_msg.edit_text(card_text, parse_mode="HTML", reply_markup=get_token_card_keyboard(mint, user_lang, user_id=user_id, symbol=scan.get("symbol", "TOKEN")), disable_web_page_preview=True)

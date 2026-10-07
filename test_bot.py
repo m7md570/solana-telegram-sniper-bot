@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.34.0", card_text)
+        self.assertIn("v3.35.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.34.0")
+        self.assertEqual(BOT_VERSION, "v3.35.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -1949,6 +1949,65 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         cb_ar = [b.callback_data for b in all_buttons_ar]
         self.assertIn("btn_wallet", cb_ar)
         self.assertIn("btn_refresh", cb_ar)
+
+    def test_59_search_direct_ca_and_not_found_keyboard(self):
+        """Test search_command direct CA detection and not-found fallback action keyboard."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock, patch
+        from telegram_bot import search_command
+        from wallet_manager import get_or_create_wallet, set_user_language
+
+        test_uid = 55667788
+        get_or_create_wallet(test_uid, "SearchTester", initial_language="en")
+        set_user_language(test_uid, "en")
+
+        # 1. Test search with direct CA
+        mock_update = MagicMock()
+        mock_update.effective_user.id = test_uid
+        mock_status = MagicMock()
+        mock_status.edit_text = AsyncMock()
+        mock_update.message.reply_text = AsyncMock(return_value=mock_status)
+        mock_context = MagicMock()
+        mock_context.args = [self.bonk_mint]
+
+        fake_scan = {
+            "mint": self.bonk_mint,
+            "symbol": "BONK",
+            "name": "Bonk",
+            "price_usd": 0.000025,
+            "price_change_24h": 10.0,
+            "liquidity_usd": 15000000.0,
+            "mcap": 1500000000.0,
+            "status": "SAFE",
+            "rug_score": 100,
+            "risks": []
+        }
+
+        with patch("telegram_bot.scan_token_security", return_value=fake_scan):
+            asyncio.run(search_command(mock_update, mock_context))
+            self.assertTrue(mock_status.edit_text.called)
+            card_call = mock_status.edit_text.call_args[0][0]
+            self.assertIn("BONK", card_call)
+
+        # 2. Test search when token not found attaches action keyboard
+        mock_update_fail = MagicMock()
+        mock_update_fail.effective_user.id = test_uid
+        mock_status_fail = MagicMock()
+        mock_status_fail.edit_text = AsyncMock()
+        mock_update_fail.message.reply_text = AsyncMock(return_value=mock_status_fail)
+        mock_context_fail = MagicMock()
+        mock_context_fail.args = ["nonexistent_coin_xyz_123"]
+
+        with patch("telegram_bot.search_solana_token", return_value=None):
+            asyncio.run(search_command(mock_update_fail, mock_context_fail))
+            self.assertTrue(mock_status_fail.edit_text.called)
+            fail_kwargs = mock_status_fail.edit_text.call_args[1]
+            self.assertIn("reply_markup", fail_kwargs)
+            kb = fail_kwargs["reply_markup"]
+            buttons = [b for row in kb.inline_keyboard for b in row]
+            cb_data = [b.callback_data for b in buttons]
+            self.assertIn("btn_trending", cb_data)
+            self.assertIn("btn_refresh", cb_data)
 
 
 if __name__ == "__main__":

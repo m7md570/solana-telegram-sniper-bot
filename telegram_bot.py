@@ -795,7 +795,19 @@ async def render_positions(target, user_id: int, user_lang: str, is_edit: bool =
             f"{t('no_positions', user_lang)}\n\n"
             f"🕒 <code>{now_str}</code>"
         )
-        kb = [[InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]]
+        trending_btn = "🔥 Explore Trending" if user_lang == "en" else "🔥 استكشاف العملات الرائجة"
+        deposit_btn = "💳 Deposit SOL" if user_lang == "en" else "💳 إيداع SOL"
+        refresh_btn = "🔄 Refresh" if user_lang == "en" else "🔄 تحديث"
+        kb = [
+            [
+                InlineKeyboardButton(trending_btn, callback_data="btn_trending"),
+                InlineKeyboardButton(deposit_btn, callback_data="btn_show_qr")
+            ],
+            [
+                InlineKeyboardButton(refresh_btn, callback_data="btn_positions"),
+                InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
+            ]
+        ]
         if is_edit:
             await safe_edit_text(target, empty_text, reply_markup=InlineKeyboardMarkup(kb))
         else:

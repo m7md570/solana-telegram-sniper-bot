@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.32.0", card_text)
+        self.assertIn("v3.33.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.32.0")
+        self.assertEqual(BOT_VERSION, "v3.33.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -1863,6 +1863,50 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
             callback_datas = [b.callback_data for b in all_buttons]
             self.assertIn("btn_trending", callback_datas)
             self.assertIn("btn_refresh", callback_datas)
+
+    def test_57_empty_positions_conversion_keyboard(self):
+        """Test render_positions with 0 tokens attaches high-conversion action keyboard (trending, deposit QR, refresh)."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock, patch
+        from telegram_bot import render_positions
+        from wallet_manager import get_or_create_wallet, set_user_language
+
+        test_uid = 88776655
+        get_or_create_wallet(test_uid, "EmptyHoldingsUser", initial_language="en")
+        set_user_language(test_uid, "en")
+
+        # 1. Test non-edit mode
+        mock_msg = MagicMock()
+        mock_msg.reply_text = AsyncMock()
+
+        with patch("telegram_bot.get_token_accounts", return_value=[]):
+            asyncio.run(render_positions(mock_msg, test_uid, "en", is_edit=False))
+            self.assertTrue(mock_msg.reply_text.called)
+            kwargs = mock_msg.reply_text.call_args[1]
+            self.assertIn("reply_markup", kwargs)
+            kb = kwargs["reply_markup"]
+            buttons = [b for row in kb.inline_keyboard for b in row]
+            callback_datas = [b.callback_data for b in buttons]
+            self.assertIn("btn_trending", callback_datas)
+            self.assertIn("btn_show_qr", callback_datas)
+            self.assertIn("btn_positions", callback_datas)
+            self.assertIn("btn_refresh", callback_datas)
+
+        # 2. Test edit mode
+        mock_query = MagicMock()
+        with patch("telegram_bot.get_token_accounts", return_value=[]), \
+             patch("telegram_bot.safe_edit_text", new_callable=AsyncMock) as mock_edit:
+            asyncio.run(render_positions(mock_query, test_uid, "ar", is_edit=True))
+            mock_edit.assert_called_once()
+            call_kwargs = mock_edit.call_args[1]
+            self.assertIn("reply_markup", call_kwargs)
+            kb_ar = call_kwargs["reply_markup"]
+            buttons_ar = [b for row in kb_ar.inline_keyboard for b in row]
+            cb_ar = [b.callback_data for b in buttons_ar]
+            self.assertIn("btn_trending", cb_ar)
+            self.assertIn("btn_show_qr", cb_ar)
+            self.assertIn("btn_positions", cb_ar)
+            self.assertIn("btn_refresh", cb_ar)
 
 
 if __name__ == "__main__":

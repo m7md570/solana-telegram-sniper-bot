@@ -15,6 +15,13 @@ _TRENDING_CACHE = {
 }
 CACHE_TTL_SECONDS = 30
 
+_SESSION = requests.Session()
+_SESSION.headers.update({
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9"
+})
+
 
 def get_trending_tokens(limit: int = 5) -> List[Dict[str, Any]]:
     """
@@ -30,7 +37,7 @@ def get_trending_tokens(limit: int = 5) -> List[Dict[str, Any]]:
     trending = []
     try:
         boost_url = "https://api.dexscreener.com/token-boosts/top/v1"
-        r = requests.get(boost_url, timeout=6)
+        r = _SESSION.get(boost_url, timeout=7)
         if r.status_code == 200:
             boosts = r.json()
             sol_mints = [x.get("tokenAddress") for x in boosts if x.get("chainId") == "solana"]
@@ -46,7 +53,7 @@ def get_trending_tokens(limit: int = 5) -> List[Dict[str, Any]]:
             for mint in unique_mints[:limit]:
                 try:
                     pair_url = f"https://api.dexscreener.com/latest/dex/tokens/{mint}"
-                    resp = requests.get(pair_url, timeout=5)
+                    resp = _SESSION.get(pair_url, timeout=6)
                     if resp.status_code == 200:
                         pairs = resp.json().get("pairs", [])
                         if pairs:

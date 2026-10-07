@@ -35,8 +35,11 @@ _cipher = Fernet(_derived_key)
 
 
 def get_db_connection() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=15.0)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode = WAL;")
+    conn.execute("PRAGMA busy_timeout = 10000;")
+    conn.execute("PRAGMA synchronous = NORMAL;")
     return conn
 
 
@@ -435,3 +438,34 @@ def set_auto_buy_amount(user_id: int, amount_sol: float):
         conn.commit()
     finally:
         conn.close()
+
+
+def get_user_trade_stats(user_id: int) -> Dict[str, Any]:
+    """Retrieves aggregated trade statistics and recent history for a user."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        trades = cursor.execute(
+            "SELECT id, input_mint, output_mint, amount_in, amount_out, platform_fee_sol, tx_signature, status, created_at "
+            "FROM trades WHERE user_id = ? ORDER BY id DESC LIMIT 10",
+            (user_id,)
+        ).fetchall()
+        
+        total_volume = cursor.execute(
+            "SELECT COALESCE(SUM(amount_in), 0.0) FROM trades WHERE user_id = ? AND status = 'CONFIRMED'",
+            (user_id,)
+        ).fetchone()[0]
+        
+        trade_count = cursor.execute(
+            "SELECT COUNT(*) FROM trades WHERE user_id = ?",
+            (user_id,)
+        ).fetchone()[0]
+        
+        return {
+            "total_trades": trade_count,
+            "total_volume_sol": float(total_volume or 0.0),
+            "recent_trades": [dict(r) for r in trades]
+        }
+    finally:
+        conn.close()
+

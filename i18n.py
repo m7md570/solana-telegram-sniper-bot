@@ -84,6 +84,17 @@ MESSAGES = {
             "• Solscan / Photon / Birdeye URL\n\n"
             "The bot will automatically extract the mint, run a full security scan, and open instant trading controls."
         ),
+        "btn_pnl": "📈 PnL & Performance",
+        "pnl_title": "📈 <b>Your Trading PnL & Performance</b> ⚡",
+        "pnl_body": (
+            "━━━━━━━━━━━━━━━━━━━\n"
+            "👤 <b>Trader</b>: @{username}\n"
+            "📊 <b>Total Trades Executed</b>: <code>{total_trades}</code>\n"
+            "💸 <b>Total Volume Traded</b>: <code>{total_vol:.3f} SOL</code>\n"
+            "⚡ <b>Routing Latency</b>: Sub-400ms via Jupiter V6\n"
+            "━━━━━━━━━━━━━━━━━━━\n"
+            "💡 <i>Keep sniping high-velocity memecoins with Popcorn!</i>"
+        ),
         "refresh_toast": "✅ Balance updated to latest state!",
         "lang_switched_toast": "Language switched to English 🇬🇧",
         "help_title": "❓ <b>Popcorn Solana Sniper & Trading Bot Guide</b> ⚡",
@@ -91,6 +102,7 @@ MESSAGES = {
             "━━━━━━━━━━━━━━━━━━━\n"
             "• <code>/start</code> - Open Main Dashboard\n"
             "• <code>/trending</code> - View Trending Solana Tokens\n"
+            "• <code>/pnl</code> - View Your Trading PnL & Performance\n"
             "• <code>/referral</code> - Affiliate Link & Rewards (25%)\n"
             "• <code>/wallet</code> - View Wallet, Deposit & Export Keys\n"
             "• <code>/withdraw [ADDRESS] [AMOUNT]</code> - Withdraw SOL\n"
@@ -175,6 +187,17 @@ MESSAGES = {
             "• رابط Solscan / Photon / Birdeye\n\n"
             "سيقوم البوت باستخراج العقد وفحصه أمنياً وعرض أزرار التنفيذ الفوري."
         ),
+        "btn_pnl": "📈 بطاقة الأرباح (PnL)",
+        "pnl_title": "📈 <b>بطاقة أداء وأرباح التداول (PnL)</b> ⚡",
+        "pnl_body": (
+            "━━━━━━━━━━━━━━━━━━━\n"
+            "👤 <b>المتداول</b>: @{username}\n"
+            "📊 <b>إجمالي الصفقات المنفذة</b>: <code>{total_trades}</code>\n"
+            "💸 <b>حجم التداول الكلي</b>: <code>{total_vol:.3f} SOL</code>\n"
+            "⚡ <b>سرعة التنفيذ</b>: أقل من 400ms عبر Jupiter V6\n"
+            "━━━━━━━━━━━━━━━━━━━\n"
+            "💡 <i>واصل اقتناص العملات الرائجة مع بوت Popcorn Sniper!</i>"
+        ),
         "refresh_toast": "✅ الرصيد محدّث لأحدث قيمة!",
         "lang_switched_toast": "تم تحويل اللغة إلى العربية 🇸🇦",
         "help_title": "❓ <b>دليل استخدام بوت قنص وتداول سولانا</b> ⚡",
@@ -182,6 +205,7 @@ MESSAGES = {
             "━━━━━━━━━━━━━━━━━━━\n"
             "• <code>/start</code> - فتح لوحة التحكم الرئيسية\n"
             "• <code>/trending</code> - عرض أكثر عملات سولانا رواجاً\n"
+            "• <code>/pnl</code> - عرض بطاقة الأرباح وإحصائيات التداول\n"
             "• <code>/referral</code> - رابط الإحالة ومكافآت دعوة الأصدقاء (25%)\n"
             "• <code>/wallet</code> - عرض المحفظة والإيداع وتصدير المفاتيح\n"
             "• <code>/withdraw [العنوان] [المبلغ]</code> - سحب رصيد SOL\n"

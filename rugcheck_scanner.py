@@ -9,6 +9,13 @@ from typing import Dict, Any, Optional
 
 from config import RUGCHECK_API, DEXSCREENER_API
 
+_SESSION = requests.Session()
+_SESSION.headers.update({
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9"
+})
+
 
 def scan_token_security(mint: str) -> Dict[str, Any]:
     """
@@ -37,7 +44,7 @@ def scan_token_security(mint: str) -> Dict[str, Any]:
     # 1. Fetch Market & Financial Data from DexScreener
     try:
         url = f"{DEXSCREENER_API}/{mint}"
-        r = requests.get(url, timeout=6)
+        r = _SESSION.get(url, timeout=7)
         if r.status_code == 200:
             data = r.json()
             pairs = data.get("pairs") or []
@@ -57,7 +64,7 @@ def scan_token_security(mint: str) -> Dict[str, Any]:
     # 2. Fetch Security & Audit from RugCheck
     try:
         rc_url = f"{RUGCHECK_API}/{mint}/report/summary"
-        rc_resp = requests.get(rc_url, timeout=6)
+        rc_resp = _SESSION.get(rc_url, timeout=7)
         if rc_resp.status_code == 200:
             rc_data = rc_resp.json()
             score = rc_data.get("score", 0)

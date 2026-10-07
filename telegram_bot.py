@@ -69,7 +69,8 @@ from wallet_manager import (
     toggle_auto_buy,
     set_auto_buy_amount,
     get_user_language,
-    set_user_language
+    set_user_language,
+    get_user_trade_stats
 )
 from rugcheck_scanner import scan_token_security, format_token_card, extract_token_mint
 from jupiter_engine import (
@@ -107,11 +108,14 @@ def get_main_menu_keyboard(user_id: int, lang: str = "en") -> InlineKeyboardMark
         ],
         [
             InlineKeyboardButton(t("btn_trending", lang), callback_data="btn_trending"),
-            InlineKeyboardButton(t("btn_wallet", lang), callback_data="btn_wallet")
+            InlineKeyboardButton(t("btn_pnl", lang), callback_data="btn_pnl")
         ],
         [
-            InlineKeyboardButton(t("btn_referral", lang), callback_data="btn_referral"),
+            InlineKeyboardButton(t("btn_wallet", lang), callback_data="btn_wallet"),
             InlineKeyboardButton(t("btn_positions", lang), callback_data="btn_positions")
+        ],
+        [
+            InlineKeyboardButton(t("btn_referral", lang), callback_data="btn_referral")
         ],
         [
             InlineKeyboardButton(f"{t('btn_autobuy', lang)} ({auto_badge})", callback_data="btn_autobuy_settings"),
@@ -539,6 +543,26 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         kb = [[InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]]
         await safe_edit_text(query, text, reply_markup=InlineKeyboardMarkup(kb))
 
+    elif data == "btn_pnl":
+        stats = get_user_trade_stats(user_id)
+        username = user.username or user.first_name or ("Trader" if user_lang == "en" else "المتداول")
+        pnl_body_text = t(
+            "pnl_body",
+            user_lang,
+            username=html.escape(username),
+            total_trades=stats["total_trades"],
+            total_vol=stats["total_volume_sol"]
+        )
+        text = f"{t('pnl_title', user_lang)}\n{pnl_body_text}\n🕒 <code>{now_str}</code>"
+        kb = [
+            [
+                InlineKeyboardButton(t("btn_trending", user_lang), callback_data="btn_trending"),
+                InlineKeyboardButton(t("btn_positions", user_lang), callback_data="btn_positions")
+            ],
+            [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
+        ]
+        await safe_edit_text(query, text, reply_markup=InlineKeyboardMarkup(kb))
+
     elif data == "btn_settings":
         settings = get_user_settings(user_id)
         current_slip = settings["slippage_bps"] / 100.0
@@ -818,6 +842,33 @@ async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
 
 
+async def pnl_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for /pnl command displaying user's trading performance card."""
+    user = update.effective_user
+    user_id = user.id
+    user_lang = get_user_language(user_id)
+    username = user.username or user.first_name or ("Trader" if user_lang == "en" else "المتداول")
+    now_str = get_current_time_str()
+
+    stats = get_user_trade_stats(user_id)
+    pnl_body_text = t(
+        "pnl_body",
+        user_lang,
+        username=html.escape(username),
+        total_trades=stats["total_trades"],
+        total_vol=stats["total_volume_sol"]
+    )
+    text = f"{t('pnl_title', user_lang)}\n{pnl_body_text}\n🕒 <code>{now_str}</code>"
+    kb = [
+        [
+            InlineKeyboardButton(t("btn_trending", user_lang), callback_data="btn_trending"),
+            InlineKeyboardButton(t("btn_positions", user_lang), callback_data="btn_positions")
+        ],
+        [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
+    ]
+    await update.message.reply_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
+
+
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler for /help command."""
     user_id = update.effective_user.id
@@ -838,6 +889,7 @@ def build_application(token: str) -> Application:
     app = Application.builder().token(token).build()
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("trending", trending_command))
+    app.add_handler(CommandHandler("pnl", pnl_command))
     app.add_handler(CommandHandler("referral", referral_command))
     app.add_handler(CommandHandler("wallet", wallet_command))
     app.add_handler(CommandHandler("withdraw", withdraw_command))

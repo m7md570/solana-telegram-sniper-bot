@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.38.0", card_text)
+        self.assertIn("v3.39.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.38.0")
+        self.assertEqual(BOT_VERSION, "v3.39.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -2156,6 +2156,53 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
             high_cbs = [b.callback_data for row in kb_high.inline_keyboard for b in row if b.callback_data]
             self.assertIn("btn_withdraw_guide", high_cbs)
             self.assertIn("btn_wallet", high_cbs)
+
+    def test_63_referral_parity_and_refresh_action(self):
+        """Test referral_command and btn_referral feature parity with live refresh and viral X/Telegram links."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock
+        from telegram_bot import referral_command, callback_router
+
+        test_uid = 99881144
+
+        # 1. Test /referral command keyboard has both share links, refresh button, and back button
+        mock_update_cmd = MagicMock()
+        mock_update_cmd.effective_user.id = test_uid
+        mock_update_cmd.message.reply_text = AsyncMock()
+        mock_context = MagicMock()
+        mock_context.bot.username = "PopcornSniperBot"
+
+        asyncio.run(referral_command(mock_update_cmd, mock_context))
+        self.assertTrue(mock_update_cmd.message.reply_text.called)
+        kb_cmd = mock_update_cmd.message.reply_text.call_args[1]["reply_markup"]
+        all_btns_cmd = [b for row in kb_cmd.inline_keyboard for b in row]
+        urls_cmd = [b.url for b in all_btns_cmd if b.url]
+        cbs_cmd = [b.callback_data for b in all_btns_cmd if b.callback_data]
+
+        self.assertTrue(any("t.me/share/url" in u for u in urls_cmd))
+        self.assertTrue(any("twitter.com/intent/tweet" in u for u in urls_cmd))
+        self.assertIn("btn_referral", cbs_cmd)
+        self.assertIn("btn_refresh", cbs_cmd)
+
+        # 2. Test btn_referral inline callback handler has matching keyboard
+        mock_query = MagicMock()
+        mock_query.from_user.id = test_uid
+        mock_query.data = "btn_referral"
+        mock_query.edit_message_text = AsyncMock()
+        mock_query.answer = AsyncMock()
+        mock_update_cb = MagicMock(callback_query=mock_query)
+
+        asyncio.run(callback_router(mock_update_cb, mock_context))
+        self.assertTrue(mock_query.edit_message_text.called)
+        kb_cb = mock_query.edit_message_text.call_args[1]["reply_markup"]
+        all_btns_cb = [b for row in kb_cb.inline_keyboard for b in row]
+        urls_cb = [b.url for b in all_btns_cb if b.url]
+        cbs_cb = [b.callback_data for b in all_btns_cb if b.callback_data]
+
+        self.assertTrue(any("t.me/share/url" in u for u in urls_cb))
+        self.assertTrue(any("twitter.com/intent/tweet" in u for u in urls_cb))
+        self.assertIn("btn_referral", cbs_cb)
+        self.assertIn("btn_refresh", cbs_cb)
 
 
 if __name__ == "__main__":

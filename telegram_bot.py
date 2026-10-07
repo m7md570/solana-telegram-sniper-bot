@@ -466,12 +466,17 @@ async def referral_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     x_share_url = f"https://twitter.com/intent/tweet?text={urllib.parse.quote(x_intent_text)}"
 
+    refresh_label = "🔄 تحديث الإحصائيات" if user_lang == "ar" else "🔄 Refresh Stats"
+
     kb = [
         [
             InlineKeyboardButton(share_btn_text, url=f"https://t.me/share/url?url={urllib.parse.quote(ref_link)}&text={urllib.parse.quote(share_text)}"),
             InlineKeyboardButton("📢 Share on X", url=x_share_url)
         ],
-        [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
+        [
+            InlineKeyboardButton(refresh_label, callback_data="btn_referral"),
+            InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
+        ]
     ]
     await update.message.reply_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb), disable_web_page_preview=True)
 
@@ -1265,11 +1270,25 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = f"{title}\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n{body}"
 
         share_text = "⚡ Fastest Solana Sniper & Trading Bot on Jupiter V6!" if user_lang == "en" else "⚡ أقوى بوت قنص وتداول على سولانا مع فحص RugCheck!"
-        share_btn_text = "📤 Share Link with Friends" if user_lang == "en" else "📤 مشاركة الرابط مع الأصدقاء"
+        share_btn_text = "📤 Share on Telegram" if user_lang == "en" else "📤 مشاركة عبر تيليجرام"
+        refresh_label = "🔄 تحديث الإحصائيات" if user_lang == "ar" else "🔄 Refresh Stats"
+
+        x_intent_text = (
+            f"Trade Solana memecoins with sub-400ms execution on Popcorn Sniper Bot! 🍿⚡\n\n"
+            f"Built-in RugCheck auditor, auto-buy, and non-custodial wallets.\n\n"
+            f"Start trading: {ref_link}"
+        )
+        x_share_url = f"https://twitter.com/intent/tweet?text={urllib.parse.quote(x_intent_text)}"
 
         kb = [
-            [InlineKeyboardButton(share_btn_text, url=f"https://t.me/share/url?url={ref_link}&text={share_text}")],
-            [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
+            [
+                InlineKeyboardButton(share_btn_text, url=f"https://t.me/share/url?url={urllib.parse.quote(ref_link)}&text={urllib.parse.quote(share_text)}"),
+                InlineKeyboardButton("📢 Share on X", url=x_share_url)
+            ],
+            [
+                InlineKeyboardButton(refresh_label, callback_data="btn_referral"),
+                InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
+            ]
         ]
         await safe_edit_text(query, text, reply_markup=InlineKeyboardMarkup(kb))
 

@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.47.0", card_text)
+        self.assertIn("v3.48.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.47.0")
+        self.assertEqual(BOT_VERSION, "v3.48.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -2648,6 +2648,99 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
             tp_cbs = [b.callback_data for row in kb_cb_tp.inline_keyboard for b in row if b.callback_data]
             self.assertIn("tp_50", tp_cbs)
             self.assertIn("btn_tp", tp_cbs)
+
+    def test_72_autobuy_card_radar_parity_and_cli_args(self):
+        """Test render_autobuy_card dynamic checkmarks across presets, /autobuy CLI args, and callback routing."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock, patch
+        from telegram_bot import render_autobuy_card, autobuy_command, callback_router
+        from wallet_manager import (
+            get_or_create_wallet,
+            get_auto_buy_settings,
+            set_auto_buy_amount,
+            set_auto_buy_status,
+        )
+
+        test_uid = 44556677
+        get_or_create_wallet(test_uid, "AutoBuyRadarTester", initial_language="en")
+
+        # 1. When enabled with 0.1 SOL, render_autobuy_card has 0.1 SOL checked (✅)
+        set_auto_buy_amount(test_uid, 0.1)
+        set_auto_buy_status(test_uid, True)
+
+        mock_target = MagicMock()
+        mock_target.reply_text = AsyncMock()
+
+        asyncio.run(render_autobuy_card(mock_target, test_uid, user_lang="en", is_edit=False))
+        self.assertTrue(mock_target.reply_text.called)
+        card_text, kwargs = mock_target.reply_text.call_args[0][0], mock_target.reply_text.call_args[1]
+        self.assertIn("Auto-Buy", card_text)
+        self.assertIn("ENABLED 🟢", card_text)
+
+        kb = kwargs["reply_markup"]
+        all_btns = [b for row in kb.inline_keyboard for b in row]
+        b01 = next((b for b in all_btns if b.callback_data == "set_auto_amt_0.1"), None)
+        self.assertIsNotNone(b01)
+        self.assertIn("✅", b01.text)
+
+        b05 = next((b for b in all_btns if b.callback_data == "set_auto_amt_0.5"), None)
+        self.assertIsNotNone(b05)
+        self.assertNotIn("✅", b05.text)
+
+        # 2. When disabled, no amount has checkmark and toggle button offers enabling
+        set_auto_buy_status(test_uid, False)
+        mock_target.reply_text.reset_mock()
+
+        asyncio.run(render_autobuy_card(mock_target, test_uid, user_lang="en", is_edit=False))
+        self.assertTrue(mock_target.reply_text.called)
+        card_text_dis, kwargs_dis = mock_target.reply_text.call_args[0][0], mock_target.reply_text.call_args[1]
+        self.assertIn("DISABLED ⚪", card_text_dis)
+
+        kb_dis = kwargs_dis["reply_markup"]
+        all_btns_dis = [b for row in kb_dis.inline_keyboard for b in row]
+        b01_dis = next((b for b in all_btns_dis if b.callback_data == "set_auto_amt_0.1"), None)
+        self.assertIsNotNone(b01_dis)
+        self.assertNotIn("✅", b01_dis.text)
+
+        toggle_btn = next((b for b in all_btns_dis if b.callback_data == "toggle_autobuy"), None)
+        self.assertIsNotNone(toggle_btn)
+        self.assertIn("Enable Auto-Buy", toggle_btn.text)
+
+        # 3. Test autobuy_command CLI arg "0.5" enables auto-buy, sets 0.5 SOL, and renders card with 0.5 SOL ✅
+        mock_update = MagicMock()
+        mock_update.effective_user.id = test_uid
+        mock_update.message.reply_text = AsyncMock()
+        mock_context = MagicMock()
+        mock_context.args = ["0.5"]
+
+        asyncio.run(autobuy_command(mock_update, mock_context))
+        enabled, amt = get_auto_buy_settings(test_uid)
+        self.assertTrue(enabled)
+        self.assertEqual(amt, 0.5)
+
+        kb_cmd = mock_update.message.reply_text.call_args[1]["reply_markup"]
+        all_cmd_btns = [b for row in kb_cmd.inline_keyboard for b in row]
+        b05_cmd = next((b for b in all_cmd_btns if b.callback_data == "set_auto_amt_0.5"), None)
+        self.assertIsNotNone(b05_cmd)
+        self.assertIn("✅", b05_cmd.text)
+
+        # 4. Test callback_router routing with btn_autobuy and set_auto_amt_1.0
+        mock_query = MagicMock()
+        mock_query.from_user.id = test_uid
+        mock_query.data = "btn_autobuy"
+        mock_query.answer = AsyncMock()
+        mock_query.edit_message_text = AsyncMock()
+        mock_update_cb = MagicMock(callback_query=mock_query)
+
+        mock_ctx = MagicMock()
+        with patch("telegram_bot.get_user_language", return_value="en"):
+            asyncio.run(callback_router(mock_update_cb, mock_ctx))
+            self.assertTrue(mock_query.edit_message_text.called)
+            kb_cb = mock_query.edit_message_text.call_args[1]["reply_markup"]
+            cb_datas = [b.callback_data for row in kb_cb.inline_keyboard for b in row if b.callback_data]
+            self.assertIn("toggle_autobuy", cb_datas)
+            self.assertIn("set_auto_amt_1.0", cb_datas)
+            self.assertIn("btn_autobuy", cb_datas)
 
 
 if __name__ == "__main__":

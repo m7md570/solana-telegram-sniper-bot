@@ -1348,6 +1348,44 @@ async def render_sl_card(target, user_id: int, user_lang: str, is_edit: bool = F
         await target.reply_text(text, parse_mode="HTML", reply_markup=markup)
 
 
+async def render_autobuy_card(target, user_id: int, user_lang: str, is_edit: bool = False):
+    """Renders interactive Auto-Buy sniper configuration card with active checkmarks and amount tiers."""
+    enabled, amt = get_auto_buy_settings(user_id)
+    status_str = ("ENABLED 🟢" if enabled else "DISABLED ⚪") if user_lang == "en" else ("مفعل 🟢" if enabled else "معطل ⚪")
+    title = t("autobuy_status_title", user_lang)
+    body = t("autobuy_status_body", user_lang, status=status_str, amt=amt)
+    toggle_label = ("🔕 Disable Auto-Buy" if enabled else "🔔 Enable Auto-Buy") if user_lang == "en" else ("🔕 تعطيل الشراء التلقائي" if enabled else "🔔 تفعيل الشراء التلقائي")
+
+    b005 = f"0.05 SOL {'✅' if enabled and abs(amt - 0.05) < 0.001 else ''}".strip()
+    b01 = f"0.1 SOL {'✅' if enabled and abs(amt - 0.1) < 0.001 else ''}".strip()
+    b05 = f"0.5 SOL {'✅' if enabled and abs(amt - 0.5) < 0.001 else ''}".strip()
+    b10 = f"1.0 SOL {'✅' if enabled and abs(amt - 1.0) < 0.001 else ''}".strip()
+
+    refresh_label = "🔄 Refresh" if user_lang == "en" else "🔄 تحديث"
+    settings_label = "⚙️ Settings" if user_lang == "en" else "⚙️ الإعدادات"
+
+    text = f"{title}\n━━━━━━━━━━━━━━━━━━━\n{body}"
+    kb = [
+        [InlineKeyboardButton(toggle_label, callback_data="toggle_autobuy")],
+        [
+            InlineKeyboardButton(b005, callback_data="set_auto_amt_0.05"),
+            InlineKeyboardButton(b01, callback_data="set_auto_amt_0.1"),
+            InlineKeyboardButton(b05, callback_data="set_auto_amt_0.5"),
+            InlineKeyboardButton(b10, callback_data="set_auto_amt_1.0")
+        ],
+        [
+            InlineKeyboardButton(refresh_label, callback_data="btn_autobuy"),
+            InlineKeyboardButton(settings_label, callback_data="btn_settings")
+        ],
+        [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
+    ]
+    markup = InlineKeyboardMarkup(kb)
+    if is_edit:
+        await safe_edit_text(target, text, reply_markup=markup)
+    else:
+        await target.reply_text(text, parse_mode="HTML", reply_markup=markup)
+
+
 async def render_panic_confirm(target, user_id: int, user_lang: str, is_edit: bool = False):
     """Renders the emergency panic sell-all confirmation warning card."""
     pubkey, _ = get_or_create_wallet(user_id)
@@ -1551,49 +1589,28 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         await safe_edit_text(query, text, reply_markup=InlineKeyboardMarkup(kb))
 
-    elif data == "btn_autobuy_settings":
-        auto_enabled, auto_amt = get_auto_buy_settings(user_id)
-        status_label = t("enabled", user_lang) if auto_enabled else t("disabled", user_lang)
-        title = t("autobuy_title", user_lang)
-        body = t("autobuy_body", user_lang, status=status_label, amount=auto_amt)
-        text = f"{title}\n━━━━━━━━━━━━━━━━━━━\n{body}"
+    elif data in ("btn_autobuy", "btn_autobuy_settings"):
+        await render_autobuy_card(query, user_id, user_lang, is_edit=True)
 
-        toggle_label = ("🔴 Disable Auto-Buy" if auto_enabled else "🟢 Enable Auto-Buy") if user_lang == "en" else ("🔴 تعطيل القنص التلقائي" if auto_enabled else "🟢 تفعيل القنص التلقائي")
-        kb = [
-            [InlineKeyboardButton(toggle_label, callback_data="btn_toggle_autobuy")],
-            [
-                InlineKeyboardButton("0.05 SOL", callback_data="set_auto_0.05"),
-                InlineKeyboardButton("0.1 SOL", callback_data="set_auto_0.1"),
-                InlineKeyboardButton("0.25 SOL", callback_data="set_auto_0.25"),
-                InlineKeyboardButton("0.5 SOL", callback_data="set_auto_0.5")
-            ],
-            [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
-        ]
-        await safe_edit_text(query, text, reply_markup=InlineKeyboardMarkup(kb))
-
-    elif data == "btn_toggle_autobuy":
+    elif data in ("btn_toggle_autobuy", "toggle_autobuy"):
         new_state = toggle_auto_buy(user_id)
-        state_str = ("🟢 Auto-Buy Enabled!" if new_state else "🔴 Auto-Buy Disabled!") if user_lang == "en" else ("🟢 تم تفعيل القنص التلقائي!" if new_state else "🔴 تم تعطيل القنص التلقائي!")
-        await query.answer(state_str, show_alert=True)
-        # Refresh autobuy menu
-        auto_enabled, auto_amt = get_auto_buy_settings(user_id)
-        status_label = t("enabled", user_lang) if auto_enabled else t("disabled", user_lang)
-        title = t("autobuy_title", user_lang)
-        body = t("autobuy_body", user_lang, status=status_label, amount=auto_amt)
-        text = f"{title}\n━━━━━━━━━━━━━━━━━━━\n{body}"
-        toggle_label = ("🔴 Disable Auto-Buy" if auto_enabled else "🟢 Enable Auto-Buy") if user_lang == "en" else ("🔴 تعطيل القنص التلقائي" if auto_enabled else "🟢 تفعيل القنص التلقائي")
-        kb = [
-            [InlineKeyboardButton(toggle_label, callback_data="btn_toggle_autobuy")],
-            [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
-        ]
-        await safe_edit_text(query, text, reply_markup=InlineKeyboardMarkup(kb))
+        _, current_amt = get_auto_buy_settings(user_id)
+        state_str = ("ENABLED 🟢" if new_state else "DISABLED ⚪") if user_lang == "en" else ("مفعل 🟢" if new_state else "معطل ⚪")
+        ack = t("autobuy_updated", user_lang, status=state_str, amt=current_amt)
+        await query.answer(ack, show_alert=False)
+        await render_autobuy_card(query, user_id, user_lang, is_edit=True)
 
-    elif data.startswith("set_auto_"):
-        amt = float(data.split("_")[2])
-        set_auto_buy_amount(user_id, amt)
-        ack = f"✅ Auto-buy amount set to {amt} SOL!" if user_lang == "en" else f"✅ تم ضبط مبلغ الشراء التلقائي إلى {amt} SOL!"
-        await query.answer(ack, show_alert=True)
-        await safe_edit_text(query, f"✅ <b>{ack}</b>", reply_markup=get_main_menu_keyboard(user_id, user_lang))
+    elif data.startswith("set_auto_amt_") or data.startswith("set_auto_"):
+        if data.startswith("set_auto_amt_"):
+            new_amt = float(data.replace("set_auto_amt_", ""))
+        else:
+            new_amt = float(data.replace("set_auto_", ""))
+        set_auto_buy_amount(user_id, new_amt)
+        set_auto_buy_status(user_id, True)
+        state_str = "ENABLED 🟢" if user_lang == "en" else "مفعل 🟢"
+        ack = t("autobuy_updated", user_lang, status=state_str, amt=new_amt)
+        await query.answer(ack, show_alert=False)
+        await render_autobuy_card(query, user_id, user_lang, is_edit=True)
 
     elif data == "btn_wallet":
         pubkey, _ = get_or_create_wallet(user_id)
@@ -1704,47 +1721,6 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif data == "btn_panic_execute":
         await execute_panic_sell_all(query, user_id, user_lang)
-
-    elif data == "toggle_autobuy":
-        new_state = toggle_auto_buy(user_id)
-        _, current_amt = get_auto_buy_settings(user_id)
-        state_str = ("ENABLED 🟢" if new_state else "DISABLED ⚪") if user_lang == "en" else ("مفعل 🟢" if new_state else "معطل ⚪")
-        ack = t("autobuy_updated", user_lang, status=state_str, amt=current_amt)
-        await query.answer(ack, show_alert=False)
-        title = t("autobuy_status_title", user_lang)
-        body = t("autobuy_status_body", user_lang, status=state_str, amt=current_amt)
-        toggle_label = ("🔕 Disable Auto-Buy" if new_state else "🔔 Enable Auto-Buy") if user_lang == "en" else ("🔕 تعطيل الشراء التلقائي" if new_state else "🔔 تفعيل الشراء التلقائي")
-        kb = [
-            [InlineKeyboardButton(toggle_label, callback_data="toggle_autobuy")],
-            [
-                InlineKeyboardButton("0.05 SOL", callback_data="set_auto_amt_0.05"),
-                InlineKeyboardButton("0.1 SOL", callback_data="set_auto_amt_0.1"),
-                InlineKeyboardButton("0.5 SOL", callback_data="set_auto_amt_0.5")
-            ],
-            [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
-        ]
-        await safe_edit_text(query, f"{title}\n━━━━━━━━━━━━━━━━━━━\n{body}", reply_markup=InlineKeyboardMarkup(kb))
-
-    elif data.startswith("set_auto_amt_"):
-        new_amt = float(data.replace("set_auto_amt_", ""))
-        set_auto_buy_amount(user_id, new_amt)
-        set_auto_buy_status(user_id, True)
-        state_str = "ENABLED 🟢" if user_lang == "en" else "مفعل 🟢"
-        ack = t("autobuy_updated", user_lang, status=state_str, amt=new_amt)
-        await query.answer(ack, show_alert=False)
-        title = t("autobuy_status_title", user_lang)
-        body = t("autobuy_status_body", user_lang, status=state_str, amt=new_amt)
-        toggle_label = "🔕 Disable Auto-Buy" if user_lang == "en" else "🔕 تعطيل الشراء التلقائي"
-        kb = [
-            [InlineKeyboardButton(toggle_label, callback_data="toggle_autobuy")],
-            [
-                InlineKeyboardButton("0.05 SOL", callback_data="set_auto_amt_0.05"),
-                InlineKeyboardButton("0.1 SOL", callback_data="set_auto_amt_0.1"),
-                InlineKeyboardButton("0.5 SOL", callback_data="set_auto_amt_0.5")
-            ],
-            [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
-        ]
-        await safe_edit_text(query, f"{title}\n━━━━━━━━━━━━━━━━━━━\n{body}", reply_markup=InlineKeyboardMarkup(kb))
 
     elif data == "btn_watchlist":
         await render_watchlist(query, user_id, user_lang, is_edit=True)
@@ -2372,16 +2348,8 @@ async def autobuy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         sub = args[0].strip().lower()
         if sub in ("off", "disable", "stop", "0"):
             set_auto_buy_status(user_id, False)
-            _, current_amt = get_auto_buy_settings(user_id)
-            status_label = "DISABLED ⚪" if user_lang == "en" else "معطل ⚪"
-            await update.message.reply_text(t("autobuy_updated", user_lang, status=status_label, amt=current_amt), parse_mode="HTML")
-            return
         elif sub in ("on", "enable", "start", "1"):
             set_auto_buy_status(user_id, True)
-            _, current_amt = get_auto_buy_settings(user_id)
-            status_label = "ENABLED 🟢" if user_lang == "en" else "مفعل 🟢"
-            await update.message.reply_text(t("autobuy_updated", user_lang, status=status_label, amt=current_amt), parse_mode="HTML")
-            return
         else:
             try:
                 amt = float(sub)
@@ -2391,27 +2359,12 @@ async def autobuy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     return
                 set_auto_buy_amount(user_id, amt)
                 set_auto_buy_status(user_id, True)
-                status_label = "ENABLED 🟢" if user_lang == "en" else "مفعل 🟢"
-                await update.message.reply_text(t("autobuy_updated", user_lang, status=status_label, amt=amt), parse_mode="HTML")
-                return
             except ValueError:
-                pass
+                err = "❌ Usage: <code>/autobuy [0.05|0.1|0.5|1.0|on|off]</code>" if user_lang == "en" else "❌ طريقة الاستخدام: <code>/autobuy [0.05|0.1|0.5|1.0|on|off]</code>"
+                await update.message.reply_text(err, parse_mode="HTML")
+                return
 
-    enabled, amt = get_auto_buy_settings(user_id)
-    status_str = ("ENABLED 🟢" if enabled else "DISABLED ⚪") if user_lang == "en" else ("مفعل 🟢" if enabled else "معطل ⚪")
-    title = t("autobuy_status_title", user_lang)
-    body = t("autobuy_status_body", user_lang, status=status_str, amt=amt)
-    toggle_label = ("🔕 Disable Auto-Buy" if enabled else "🔔 Enable Auto-Buy") if user_lang == "en" else ("🔕 تعطيل الشراء التلقائي" if enabled else "🔔 تفعيل الشراء التلقائي")
-    kb = [
-        [InlineKeyboardButton(toggle_label, callback_data="toggle_autobuy")],
-        [
-            InlineKeyboardButton("0.05 SOL", callback_data="set_auto_amt_0.05"),
-            InlineKeyboardButton("0.1 SOL", callback_data="set_auto_amt_0.1"),
-            InlineKeyboardButton("0.5 SOL", callback_data="set_auto_amt_0.5")
-        ],
-        [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
-    ]
-    await update.message.reply_text(f"{title}\n━━━━━━━━━━━━━━━━━━━\n{body}", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
+    await render_autobuy_card(update.message, user_id, user_lang, is_edit=False)
 
 
 async def price_command(update: Update, context: ContextTypes.DEFAULT_TYPE):

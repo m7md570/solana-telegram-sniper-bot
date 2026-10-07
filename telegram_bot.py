@@ -30,6 +30,7 @@ import asyncio
 import logging
 import datetime
 import html
+import urllib.parse
 from typing import Optional, Dict, Any, List, Tuple
 
 from telegram import (
@@ -83,7 +84,8 @@ from wallet_manager import (
     set_price_alerts_status,
     get_all_active_watchlist_subscriptions,
     update_watchlist_price_and_alert,
-    generate_deposit_qr_buffer
+    generate_deposit_qr_buffer,
+    reset_user_settings_to_defaults
 )
 from rugcheck_scanner import (
     scan_token_security,
@@ -1878,6 +1880,45 @@ async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text, parse_mode="HTML", reply_markup=kb)
 
 
+async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for /reset and /defaults command: Restores trading settings to recommended defaults."""
+    user = update.effective_user
+    user_id = user.id
+    user_lang = get_user_language(user_id)
+    reset_user_settings_to_defaults(user_id)
+    now_str = get_current_time_str()
+
+    if user_lang == "ar":
+        text = (
+            "⚙️ <b>تمت استعادة إعدادات التداول الافتراضية بنجاح!</b> 🔄\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "• 🎯 <b>الانزلاق السعري (Slippage):</b> <code>1.0%</code> (100 BPS)\n"
+            "• ⛽ <b>أولوية الغاز (Priority Fee):</b> <code>عادي (0.00005 SOL)</code>\n"
+            "• 🤖 <b>القنص التلقائي (Auto-Buy):</b> <code>معطل</code> (0.1 SOL)\n"
+            "• 🎯 <b>هدف جني الأرباح (Take-Profit):</b> <code>+50%</code>\n"
+            "• 🛑 <b>حد وقف الخسارة (Stop-Loss):</b> <code>-25%</code>\n\n"
+            f"🕒 <code>{now_str}</code>"
+        )
+    else:
+        text = (
+            "⚙️ <b>Trading Settings Reset to Recommended Defaults!</b> 🔄\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "• 🎯 <b>Slippage Tolerance:</b> <code>1.0%</code> (100 BPS)\n"
+            "• ⛽ <b>Priority Fee:</b> <code>Normal (0.00005 SOL)</code>\n"
+            "• 🤖 <b>Auto-Buy Sniper:</b> <code>Disabled</code> (0.1 SOL)\n"
+            "• 🎯 <b>Take-Profit Target:</b> <code>+50%</code>\n"
+            "• 🛑 <b>Stop-Loss Limit:</b> <code>-25%</code>\n\n"
+            f"🕒 <code>{now_str}</code>"
+        )
+    kb = [
+        [
+            InlineKeyboardButton(t("btn_settings", user_lang), callback_data="btn_settings"),
+            InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
+        ]
+    ]
+    await update.message.reply_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
+
+
 async def tour_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler for /tour command: interactive step-by-step onboarding guide."""
     user_id = update.effective_user.id
@@ -2241,8 +2282,17 @@ async def pnl_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         total_vol=stats["total_volume_sol"],
         total_fees=stats.get("total_fees_sol", 0.0)
     )
+    bot_username = (context.bot.username if context and context.bot and context.bot.username else "PopcornSniperBot")
+    ref_link = f"https://t.me/{bot_username}?start=ref_{user_id}"
+    tweet_msg = f"Sniping Solana memecoins with sub-400ms speed on @PopcornSniperBot! Traded {stats['total_volume_sol']:.3f} SOL. Start sniping: {ref_link}"
+    share_url = f"https://twitter.com/intent/tweet?text={urllib.parse.quote(tweet_msg)}"
+
     text = f"{t('pnl_title', user_lang)}\n{pnl_body_text}\n🕒 <code>{now_str}</code>"
+    share_btn_text = "📢 " + ("Share PnL on X / Twitter" if user_lang == "en" else "مشاركة الأرباح على X")
     kb = [
+        [
+            InlineKeyboardButton(share_btn_text, url=share_url)
+        ],
         [
             InlineKeyboardButton(t("btn_history", user_lang), callback_data="btn_history"),
             InlineKeyboardButton(t("btn_positions", user_lang), callback_data="btn_positions")
@@ -2781,6 +2831,8 @@ def build_application(token: str) -> Application:
     app.add_handler(CommandHandler("history", history_command))
     app.add_handler(CommandHandler("trades", history_command))
     app.add_handler(CommandHandler("settings", settings_command))
+    app.add_handler(CommandHandler("reset", reset_command))
+    app.add_handler(CommandHandler("defaults", reset_command))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("cancel", cancel_command))
     app.add_handler(CallbackQueryHandler(callback_router))

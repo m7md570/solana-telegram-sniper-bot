@@ -1428,6 +1428,75 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertIn("0.00550 SOL", card_text)
         self.assertIn("2", card_text)
 
+    def test_49_reset_command_and_viral_pnl_share(self):
+        """Test reset_user_settings_to_defaults, /reset command, viral X intent share, and i18n sync."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock
+        from wallet_manager import (
+            get_or_create_wallet,
+            get_user_settings,
+            update_user_slippage,
+            update_user_priority_fee,
+            set_auto_buy_status,
+            get_auto_buy_settings,
+            reset_user_settings_to_defaults
+        )
+        from telegram_bot import reset_command, pnl_command
+        from i18n import t
+
+        test_uid = 99881222
+        get_or_create_wallet(test_uid, "ResetTester")
+
+        # 1. Modify settings away from defaults
+        update_user_slippage(test_uid, 500)
+        update_user_priority_fee(test_uid, 250_000)
+        set_auto_buy_status(test_uid, True)
+
+        st = get_user_settings(test_uid)
+        self.assertEqual(st["slippage_bps"], 500)
+        self.assertEqual(st["priority_fee"], 250_000)
+        auto_en, _ = get_auto_buy_settings(test_uid)
+        self.assertTrue(auto_en)
+
+        # 2. Reset settings to factory defaults
+        ok = reset_user_settings_to_defaults(test_uid)
+        self.assertTrue(ok)
+        st_reset = get_user_settings(test_uid)
+        self.assertEqual(st_reset["slippage_bps"], 100)
+        self.assertEqual(st_reset["priority_fee"], 50_000)
+        auto_en_reset, auto_amt_reset = get_auto_buy_settings(test_uid)
+        self.assertFalse(auto_en_reset)
+        self.assertEqual(auto_amt_reset, 0.1)
+
+        # 3. Test reset_command message output
+        mock_update = MagicMock()
+        mock_update.effective_user.id = test_uid
+        mock_update.message.reply_text = AsyncMock()
+        mock_context = MagicMock()
+
+        asyncio.run(reset_command(mock_update, mock_context))
+        self.assertTrue(mock_update.message.reply_text.called)
+        reset_text = mock_update.message.reply_text.call_args[0][0]
+        self.assertIn("Trading Settings Reset", reset_text)
+        self.assertIn("1.0%", reset_text)
+
+        # 4. Test viral PnL share URL in keyboard
+        mock_update.message.reply_text.reset_mock()
+        mock_context.bot = MagicMock()
+        mock_context.bot.username = "PopcornSniperBot"
+
+        asyncio.run(pnl_command(mock_update, mock_context))
+        self.assertTrue(mock_update.message.reply_text.called)
+        kb = mock_update.message.reply_text.call_args[1]["reply_markup"]
+        all_btns = [b for row in kb.inline_keyboard for b in row]
+        share_btn = next((b for b in all_btns if b.url and "twitter.com/intent/tweet" in b.url), None)
+        self.assertIsNotNone(share_btn, "Share on X / Twitter button must be in PnL keyboard")
+        self.assertIn("PopcornSniperBot", share_btn.url)
+
+        # 5. Verify /reset in help guides
+        self.assertIn("/reset", t("help_body", "en"))
+        self.assertIn("/reset", t("help_body", "ar"))
+
 
 if __name__ == "__main__":
     unittest.main()

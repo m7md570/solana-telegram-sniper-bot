@@ -301,6 +301,29 @@ def update_user_priority_fee(user_id: int, priority_fee_lamports: int):
         conn.close()
 
 
+def reset_user_settings_to_defaults(user_id: int) -> bool:
+    """Resets user trading parameters (slippage, priority fee, TP/SL, auto-buy) to recommended factory defaults."""
+    conn = get_db_connection()
+    try:
+        conn.execute("""
+            UPDATE users SET 
+                slippage_bps = ?,
+                priority_fee = ?,
+                default_tp_pct = 50,
+                default_sl_pct = 25,
+                auto_buy_enabled = 0,
+                auto_buy_amount = 0.1
+            WHERE user_id = ?
+        """, (DEFAULT_SLIPPAGE_BPS, DEFAULT_PRIORITY_FEE_LAMPORTS, user_id))
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"Error resetting user settings: {e}")
+        return False
+    finally:
+        conn.close()
+
+
 def update_user_tp(user_id: int, tp_pct: int):
     """Updates user default Take-Profit target percentage."""
     conn = get_db_connection()

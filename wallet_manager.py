@@ -14,6 +14,8 @@ import sqlite3
 import hashlib
 from typing import Optional, Dict, Any, List, Tuple
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from cryptography.fernet import Fernet
 from solders.keypair import Keypair
 from solders.pubkey import Pubkey
@@ -33,6 +35,18 @@ from config import (
 # Derive 32-byte URL-safe base64 key for Fernet from MASTER_KEY
 _derived_key = base64.urlsafe_b64encode(hashlib.sha256(MASTER_KEY.encode()).digest())
 _cipher = Fernet(_derived_key)
+
+# High-velocity connection pool session for Solana RPC (reusing TLS handshakes across calls)
+_RPC_SESSION = requests.Session()
+_retry_strategy = Retry(
+    total=2,
+    backoff_factor=0.2,
+    status_forcelist=[429, 500, 502, 503, 504],
+)
+_adapter = HTTPAdapter(pool_connections=15, pool_maxsize=30, max_retries=_retry_strategy)
+_RPC_SESSION.mount("https://", _adapter)
+_RPC_SESSION.mount("http://", _adapter)
+_RPC_SESSION.headers.update({"User-Agent": "PopcornSniperBot/3.24 (Solana Engine)"})
 
 
 def get_db_connection() -> sqlite3.Connection:
@@ -233,7 +247,7 @@ def get_sol_balance(public_key_str: str) -> float:
 
     for rpc in endpoints:
         try:
-            resp = requests.post(rpc, json=payload, timeout=5)
+            resp = _RPC_SESSION.post(rpc, json=payload, timeout=5)
             if resp.status_code == 200:
                 data = resp.json()
                 lamports = data.get("result", {}).get("value", 0)
@@ -323,7 +337,7 @@ def get_token_accounts(public_key_str: str) -> List[Dict[str, Any]]:
 
     for rpc in endpoints:
         try:
-            resp = requests.post(rpc, json=payload, timeout=8)
+            resp = _RPC_SESSION.post(rpc, json=payload, timeout=8)
             if resp.status_code == 200:
                 data = resp.json()
                 tokens = []
@@ -356,7 +370,7 @@ def get_recent_blockhash() -> Optional[Any]:
 
     for rpc in endpoints:
         try:
-            resp = requests.post(rpc, json=payload, timeout=6)
+            resp = _RPC_SESSION.post(rpc, json=payload, timeout=6)
             if resp.status_code == 200:
                 bh_str = resp.json().get("result", {}).get("value", {}).get("blockhash")
                 if bh_str:

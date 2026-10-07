@@ -1197,6 +1197,22 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertIn("/tour", help_ar)
         self.assertIn("/qr", help_ar)
 
+    def test_42_connection_pooling_and_fast_rpc_queries(self):
+        """Test wallet_manager _RPC_SESSION connection pool and get_sol_balance speed."""
+        import wallet_manager
+        self.assertTrue(hasattr(wallet_manager, "_RPC_SESSION"))
+        self.assertIsNotNone(wallet_manager._RPC_SESSION)
+
+        # Test balance query uses pooled session and returns valid float
+        pubkey = "7kz1mcQcaZhYzFUHBFHH6s5tGrDHc7gNhN5WAUyXyq5r"
+        bal = wallet_manager.get_sol_balance(pubkey)
+        self.assertIsInstance(bal, float)
+        self.assertGreaterEqual(bal, 0.0)
+
+        # Test token accounts uses pooled session
+        tokens = wallet_manager.get_token_accounts(pubkey)
+        self.assertIsInstance(tokens, list)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.46.0", card_text)
+        self.assertIn("v3.47.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.46.0")
+        self.assertEqual(BOT_VERSION, "v3.47.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -2563,6 +2563,91 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
             slip_cbs = [b.callback_data for row in kb_slip.inline_keyboard for b in row if b.callback_data]
             self.assertIn("slip_50", slip_cbs)
             self.assertIn("btn_slippage", slip_cbs)
+
+    def test_71_tp_sl_card_radar_parity_and_cli_args(self):
+        """Test render_tp_card and render_sl_card checkmarks, CLI args parsing, and callback router parity."""
+        import asyncio
+        from unittest.mock import MagicMock, AsyncMock, patch
+        from telegram_bot import render_tp_card, render_sl_card, tp_command, sl_command, callback_router
+        from wallet_manager import get_or_create_wallet, get_user_settings, update_user_tp, update_user_sl
+
+        test_uid = 99884433
+        get_or_create_wallet(test_uid)
+        update_user_tp(test_uid, 50)
+        update_user_sl(test_uid, 25)
+
+        # 1. Test render_tp_card has +50% checked (✅)
+        mock_target = MagicMock()
+        mock_target.reply_text = AsyncMock()
+
+        asyncio.run(render_tp_card(mock_target, test_uid, user_lang="en", is_edit=False))
+        self.assertTrue(mock_target.reply_text.called)
+        kb_tp = mock_target.reply_text.call_args[1]["reply_markup"]
+        all_tp_btns = [b for row in kb_tp.inline_keyboard for b in row]
+        tp50_btn = next((b for b in all_tp_btns if b.callback_data == "tp_50"), None)
+        self.assertIsNotNone(tp50_btn)
+        self.assertIn("✅", tp50_btn.text)
+
+        # 2. Test tp_command with CLI arg "100" updates TP setting to 100%
+        mock_update_tp = MagicMock()
+        mock_update_tp.effective_user.id = test_uid
+        mock_update_tp.message.reply_text = AsyncMock()
+        mock_context_tp = MagicMock()
+        mock_context_tp.args = ["100"]
+
+        asyncio.run(tp_command(mock_update_tp, mock_context_tp))
+        settings_tp = get_user_settings(test_uid)
+        self.assertEqual(settings_tp["default_tp_pct"], 100)
+        kb_tp_cmd = mock_update_tp.message.reply_text.call_args[1]["reply_markup"]
+        all_tp_cmd_btns = [b for row in kb_tp_cmd.inline_keyboard for b in row]
+        tp100_btn = next((b for b in all_tp_cmd_btns if b.callback_data == "tp_100"), None)
+        self.assertIsNotNone(tp100_btn)
+        self.assertIn("✅", tp100_btn.text)
+
+        # 3. Test render_sl_card has -25% checked (✅)
+        mock_target_sl = MagicMock()
+        mock_target_sl.reply_text = AsyncMock()
+
+        asyncio.run(render_sl_card(mock_target_sl, test_uid, user_lang="en", is_edit=False))
+        self.assertTrue(mock_target_sl.reply_text.called)
+        kb_sl = mock_target_sl.reply_text.call_args[1]["reply_markup"]
+        all_sl_btns = [b for row in kb_sl.inline_keyboard for b in row]
+        sl25_btn = next((b for b in all_sl_btns if b.callback_data == "sl_25"), None)
+        self.assertIsNotNone(sl25_btn)
+        self.assertIn("✅", sl25_btn.text)
+
+        # 4. Test sl_command with CLI arg "50" updates SL setting to 50%
+        mock_update_sl = MagicMock()
+        mock_update_sl.effective_user.id = test_uid
+        mock_update_sl.message.reply_text = AsyncMock()
+        mock_context_sl = MagicMock()
+        mock_context_sl.args = ["50"]
+
+        asyncio.run(sl_command(mock_update_sl, mock_context_sl))
+        settings_sl = get_user_settings(test_uid)
+        self.assertEqual(settings_sl["default_sl_pct"], 50)
+        kb_sl_cmd = mock_update_sl.message.reply_text.call_args[1]["reply_markup"]
+        all_sl_cmd_btns = [b for row in kb_sl_cmd.inline_keyboard for b in row]
+        sl50_btn = next((b for b in all_sl_cmd_btns if b.callback_data == "sl_50"), None)
+        self.assertIsNotNone(sl50_btn)
+        self.assertIn("✅", sl50_btn.text)
+
+        # 5. Test callback_router routing with btn_tp and btn_sl
+        mock_query_tp = MagicMock()
+        mock_query_tp.from_user.id = test_uid
+        mock_query_tp.data = "btn_tp"
+        mock_query_tp.answer = AsyncMock()
+        mock_query_tp.edit_message_text = AsyncMock()
+        mock_update_cb_tp = MagicMock(callback_query=mock_query_tp)
+
+        mock_context = MagicMock()
+        with patch("telegram_bot.get_user_language", return_value="en"):
+            asyncio.run(callback_router(mock_update_cb_tp, mock_context))
+            self.assertTrue(mock_query_tp.edit_message_text.called)
+            kb_cb_tp = mock_query_tp.edit_message_text.call_args[1]["reply_markup"]
+            tp_cbs = [b.callback_data for row in kb_cb_tp.inline_keyboard for b in row if b.callback_data]
+            self.assertIn("tp_50", tp_cbs)
+            self.assertIn("btn_tp", tp_cbs)
 
 
 if __name__ == "__main__":

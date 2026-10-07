@@ -1238,6 +1238,116 @@ async def render_slippage_card(target, user_id: int, user_lang: str, is_edit: bo
         await target.reply_text(text, parse_mode="HTML", reply_markup=markup)
 
 
+async def render_tp_card(target, user_id: int, user_lang: str, is_edit: bool = False):
+    """Renders interactive Take-Profit target configuration card with active checkmarks."""
+    settings = get_user_settings(user_id)
+    current_tp = settings.get("default_tp_pct", 50)
+    now_str = get_current_time_str()
+
+    tp25 = f"+25% {'✅' if current_tp == 25 else ''}".strip()
+    tp50 = f"+50% {'✅' if current_tp == 50 else ''}".strip()
+    tp100 = f"+100% {'✅' if current_tp == 100 else ''}".strip()
+    tp200 = f"+200% {'✅' if current_tp == 200 else ''}".strip()
+
+    if user_lang == "ar":
+        title = "🎯 <b>إعدادات جني الأرباح التلقائي (Auto Take-Profit)</b>"
+        body = (
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"• <b>الهدف النشط حالياً:</b> <code>+{current_tp}%</code>\n\n"
+            f"{t('tp_syntax_help', user_lang)}\n\n"
+            f"🕒 <code>{now_str}</code>"
+        )
+        refresh_label = "🔄 تحديث"
+        settings_label = "⚙️ الإعدادات"
+    else:
+        title = "🎯 <b>Auto Take-Profit Configuration</b>"
+        body = (
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"• <b>Active Target:</b> <code>+{current_tp}%</code>\n\n"
+            f"{t('tp_syntax_help', user_lang)}\n\n"
+            f"🕒 <code>{now_str}</code>"
+        )
+        refresh_label = "🔄 Refresh"
+        settings_label = "⚙️ Settings"
+
+    text = f"{title}\n{body}"
+    kb = [
+        [
+            InlineKeyboardButton(tp25, callback_data="tp_25"),
+            InlineKeyboardButton(tp50, callback_data="tp_50"),
+            InlineKeyboardButton(tp100, callback_data="tp_100"),
+            InlineKeyboardButton(tp200, callback_data="tp_200")
+        ],
+        [
+            InlineKeyboardButton(refresh_label, callback_data="btn_tp"),
+            InlineKeyboardButton(settings_label, callback_data="btn_settings")
+        ],
+        [
+            InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
+        ]
+    ]
+    markup = InlineKeyboardMarkup(kb)
+    if is_edit:
+        await safe_edit_text(target, text, reply_markup=markup)
+    else:
+        await target.reply_text(text, parse_mode="HTML", reply_markup=markup)
+
+
+async def render_sl_card(target, user_id: int, user_lang: str, is_edit: bool = False):
+    """Renders interactive Stop-Loss protection configuration card with active checkmarks."""
+    settings = get_user_settings(user_id)
+    current_sl = settings.get("default_sl_pct", 25)
+    now_str = get_current_time_str()
+
+    sl15 = f"-15% {'✅' if current_sl == 15 else ''}".strip()
+    sl25 = f"-25% {'✅' if current_sl == 25 else ''}".strip()
+    sl50 = f"-50% {'✅' if current_sl == 50 else ''}".strip()
+    sl75 = f"-75% {'✅' if current_sl == 75 else ''}".strip()
+
+    if user_lang == "ar":
+        title = "🛑 <b>إعدادات وقف الخسارة التلقائي (Auto Stop-Loss)</b>"
+        body = (
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"• <b>الحد النشط حالياً:</b> <code>-{current_sl}%</code>\n\n"
+            f"{t('sl_syntax_help', user_lang)}\n\n"
+            f"🕒 <code>{now_str}</code>"
+        )
+        refresh_label = "🔄 تحديث"
+        settings_label = "⚙️ الإعدادات"
+    else:
+        title = "🛑 <b>Auto Stop-Loss Configuration</b>"
+        body = (
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"• <b>Active Limit:</b> <code>-{current_sl}%</code>\n\n"
+            f"{t('sl_syntax_help', user_lang)}\n\n"
+            f"🕒 <code>{now_str}</code>"
+        )
+        refresh_label = "🔄 Refresh"
+        settings_label = "⚙️ Settings"
+
+    text = f"{title}\n{body}"
+    kb = [
+        [
+            InlineKeyboardButton(sl15, callback_data="sl_15"),
+            InlineKeyboardButton(sl25, callback_data="sl_25"),
+            InlineKeyboardButton(sl50, callback_data="sl_50"),
+            InlineKeyboardButton(sl75, callback_data="sl_75")
+        ],
+        [
+            InlineKeyboardButton(refresh_label, callback_data="btn_sl"),
+            InlineKeyboardButton(settings_label, callback_data="btn_settings")
+        ],
+        [
+            InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
+        ]
+    ]
+    markup = InlineKeyboardMarkup(kb)
+    if is_edit:
+        await safe_edit_text(target, text, reply_markup=markup)
+    else:
+        await target.reply_text(text, parse_mode="HTML", reply_markup=markup)
+
+
 async def render_panic_confirm(target, user_id: int, user_lang: str, is_edit: bool = False):
     """Renders the emergency panic sell-all confirmation warning card."""
     pubkey, _ = get_or_create_wallet(user_id)
@@ -1747,21 +1857,35 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text, kb = build_settings_card(user_id, user_lang)
             await safe_edit_text(query, text, reply_markup=kb)
 
+    elif data == "btn_tp":
+        await render_tp_card(query, user_id, user_lang, is_edit=True)
+
+    elif data == "btn_sl":
+        await render_sl_card(query, user_id, user_lang, is_edit=True)
+
     elif data.startswith("tp_"):
         new_tp = int(data.split("_")[1])
         update_user_tp(user_id, new_tp)
         ack = t("tp_updated", user_lang, pct=new_tp)
         await query.answer(ack, show_alert=False)
-        text, kb = build_settings_card(user_id, user_lang)
-        await safe_edit_text(query, text, reply_markup=kb)
+        msg_text = (query.message.text or "") if query.message else ""
+        if "Take-Profit" in msg_text or "الأرباح" in msg_text:
+            await render_tp_card(query, user_id, user_lang, is_edit=True)
+        else:
+            text, kb = build_settings_card(user_id, user_lang)
+            await safe_edit_text(query, text, reply_markup=kb)
 
     elif data.startswith("sl_"):
         new_sl = int(data.split("_")[1])
         update_user_sl(user_id, new_sl)
         ack = t("sl_updated", user_lang, pct=new_sl)
         await query.answer(ack, show_alert=False)
-        text, kb = build_settings_card(user_id, user_lang)
-        await safe_edit_text(query, text, reply_markup=kb)
+        msg_text = (query.message.text or "") if query.message else ""
+        if "Stop-Loss" in msg_text or "الخسارة" in msg_text:
+            await render_sl_card(query, user_id, user_lang, is_edit=True)
+        else:
+            text, kb = build_settings_card(user_id, user_lang)
+            await safe_edit_text(query, text, reply_markup=kb)
 
     elif data == "toggle_alerts":
         new_state = toggle_price_alerts(user_id)
@@ -2366,19 +2490,19 @@ async def tp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user_lang = get_user_language(user_id)
     args = context.args
-    if not args:
-        await update.message.reply_text(t("tp_syntax_help", user_lang), parse_mode="HTML")
-        return
-    try:
-        val = int(args[0].strip().rstrip("%"))
-        if val < 5 or val > 1000:
-            err = "❌ Please specify between 5% and 1000%." if user_lang == "en" else "❌ يرجى تحديد نسبة بين 5% و 1000%."
-            await update.message.reply_text(err, parse_mode="HTML")
+    if args:
+        try:
+            val = int(args[0].strip().rstrip("%"))
+            if 5 <= val <= 1000:
+                update_user_tp(user_id, val)
+            else:
+                err = "❌ Please specify between 5% and 1000%." if user_lang == "en" else "❌ يرجى تحديد نسبة بين 5% و 1000%."
+                await update.message.reply_text(err, parse_mode="HTML")
+                return
+        except ValueError:
+            await update.message.reply_text(t("tp_syntax_help", user_lang), parse_mode="HTML")
             return
-        update_user_tp(user_id, val)
-        await update.message.reply_text(t("tp_updated", user_lang, pct=val), parse_mode="HTML")
-    except ValueError:
-        await update.message.reply_text(t("tp_syntax_help", user_lang), parse_mode="HTML")
+    await render_tp_card(update.message, user_id, user_lang, is_edit=False)
 
 
 async def sl_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2386,19 +2510,19 @@ async def sl_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user_lang = get_user_language(user_id)
     args = context.args
-    if not args:
-        await update.message.reply_text(t("sl_syntax_help", user_lang), parse_mode="HTML")
-        return
-    try:
-        val = int(args[0].strip().rstrip("%"))
-        if val < 5 or val > 95:
-            err = "❌ Please specify between 5% and 95%." if user_lang == "en" else "❌ يرجى تحديد نسبة بين 5% و 95%."
-            await update.message.reply_text(err, parse_mode="HTML")
+    if args:
+        try:
+            val = int(args[0].strip().rstrip("%"))
+            if 5 <= val <= 95:
+                update_user_sl(user_id, val)
+            else:
+                err = "❌ Please specify between 5% and 95%." if user_lang == "en" else "❌ يرجى تحديد نسبة بين 5% و 95%."
+                await update.message.reply_text(err, parse_mode="HTML")
+                return
+        except ValueError:
+            await update.message.reply_text(t("sl_syntax_help", user_lang), parse_mode="HTML")
             return
-        update_user_sl(user_id, val)
-        await update.message.reply_text(t("sl_updated", user_lang, pct=val), parse_mode="HTML")
-    except ValueError:
-        await update.message.reply_text(t("sl_syntax_help", user_lang), parse_mode="HTML")
+    await render_sl_card(update.message, user_id, user_lang, is_edit=False)
 
 
 async def sell_command(update: Update, context: ContextTypes.DEFAULT_TYPE):

@@ -1372,6 +1372,62 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
             self.assertEqual(prices[self.bonk_mint]["price_usd"], 0.000028)
             self.assertEqual(prices[self.bonk_mint]["liquidity"], 15000000.0)
 
+    def test_48_exact_pnl_volume_and_fee_accounting(self):
+        """Test exact SOL volume calculation on both buy and sell trades, fee tracking, and /pnl display."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock
+        from jupiter_engine import record_trade_db
+        from wallet_manager import get_user_trade_stats, get_or_create_wallet
+        from telegram_bot import pnl_command
+
+        test_uid = 99881211
+        get_or_create_wallet(test_uid, "PnLTester")
+
+        # Record a BUY trade: 0.20 SOL in -> 5,000,000 BONK out (fee: 0.002 SOL)
+        record_trade_db(
+            user_id=test_uid,
+            input_mint=WSOL_MINT,
+            output_mint=self.bonk_mint,
+            amount_in=0.20,
+            amount_out=5000000.0,
+            fee_sol=0.002,
+            tx_sig="5UfvXzTestSignatureBuyTrade11111111111111111111",
+            status="CONFIRMED"
+        )
+
+        # Record a SELL trade: 5,000,000 BONK in -> 0.35 SOL out (fee: 0.0035 SOL)
+        record_trade_db(
+            user_id=test_uid,
+            input_mint=self.bonk_mint,
+            output_mint=WSOL_MINT,
+            amount_in=5000000.0,
+            amount_out=0.35,
+            fee_sol=0.0035,
+            tx_sig="5UfvXzTestSignatureSellTrade2222222222222222222",
+            status="CONFIRMED"
+        )
+
+        stats = get_user_trade_stats(test_uid)
+        self.assertEqual(stats["total_trades"], 2)
+        # Volume must strictly be 0.20 + 0.35 = 0.55 SOL (NOT 5,000,000.20 SOL!)
+        self.assertAlmostEqual(stats["total_volume_sol"], 0.55, places=4)
+        # Total platform fees must be 0.002 + 0.0035 = 0.0055 SOL
+        self.assertAlmostEqual(stats["total_fees_sol"], 0.0055, places=5)
+
+        # Test pnl_command renders properly
+        mock_update = MagicMock()
+        mock_update.effective_user.id = test_uid
+        mock_update.effective_user.username = "PnLKing"
+        mock_update.message.reply_text = AsyncMock()
+        mock_context = MagicMock()
+
+        asyncio.run(pnl_command(mock_update, mock_context))
+        self.assertTrue(mock_update.message.reply_text.called)
+        card_text = mock_update.message.reply_text.call_args[0][0]
+        self.assertIn("0.550 SOL", card_text)
+        self.assertIn("0.00550 SOL", card_text)
+        self.assertIn("2", card_text)
+
 
 if __name__ == "__main__":
     unittest.main()

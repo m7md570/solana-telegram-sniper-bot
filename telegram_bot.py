@@ -2238,7 +2238,8 @@ async def pnl_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_lang,
         username=html.escape(username),
         total_trades=stats["total_trades"],
-        total_vol=stats["total_volume_sol"]
+        total_vol=stats["total_volume_sol"],
+        total_fees=stats.get("total_fees_sol", 0.0)
     )
     text = f"{t('pnl_title', user_lang)}\n{pnl_body_text}\n🕒 <code>{now_str}</code>"
     kb = [

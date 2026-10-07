@@ -784,6 +784,18 @@ def remove_from_watchlist(user_id: int, token_mint: str) -> bool:
         conn.close()
 
 
+def clear_user_watchlist(user_id: int) -> int:
+    """Removes all tracked tokens from a user's watchlist and returns count of removed items."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM watchlist WHERE user_id = ?", (user_id,))
+        conn.commit()
+        return cursor.rowcount or 0
+    finally:
+        conn.close()
+
+
 def is_token_in_watchlist(user_id: int, token_mint: str) -> bool:
     """Returns True if the token is currently saved in user's watchlist."""
     conn = get_db_connection()

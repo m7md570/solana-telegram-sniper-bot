@@ -82,6 +82,7 @@ from wallet_manager import (
     generate_trades_csv_bytes,
     add_to_watchlist,
     remove_from_watchlist,
+    clear_user_watchlist,
     get_user_watchlist,
     is_token_in_watchlist,
     toggle_price_alerts,
@@ -753,14 +754,24 @@ async def render_watchlist(target, user_id: int, user_lang: str, is_edit: bool =
             InlineKeyboardButton(f"🚀 Snipe ${sym}", callback_data=f"inspect_{mint}"),
             InlineKeyboardButton("🗑️ Untrack", callback_data=f"untrack_{mint}")
         ])
+    tip_text = (
+        "💡 <b>Commands:</b> <code>/track [CA]</code> • <code>/untrack [CA]</code> • <code>/untrack all</code>\n"
+        if user_lang == "en" else
+        "💡 <b>الأوامر المتاحة:</b> <code>/track [العقد]</code> • <code>/untrack [العقد]</code> • <code>/untrack all</code>\n"
+    )
+    text_lines.append(tip_text)
     text_lines.append(f"🕒 <code>{now_str}</code>")
     refresh_btn_text = "🔄 " + ("Refresh Prices" if user_lang == "en" else "تحديث الأسعار")
     alerts_btn_text = "🔔 " + ("Alert Radar" if user_lang == "en" else "رادار التنبيهات")
+    clear_btn_text = "🗑️ " + ("Clear All" if user_lang == "en" else "مسح الكل")
     kb.append([
         InlineKeyboardButton(refresh_btn_text, callback_data="btn_watchlist"),
-        InlineKeyboardButton(alerts_btn_text, callback_data="btn_alerts")
+        InlineKeyboardButton(clear_btn_text, callback_data="btn_clear_watchlist")
     ])
-    kb.append([InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")])
+    kb.append([
+        InlineKeyboardButton(alerts_btn_text, callback_data="btn_alerts"),
+        InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
+    ])
 
     full_text = "\n".join(text_lines)
     if is_edit:
@@ -2097,6 +2108,12 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer(t("watchlist_removed", user_lang), show_alert=False)
         await render_watchlist(query, user_id, user_lang, is_edit=True)
 
+    elif data == "btn_clear_watchlist":
+        cleared_count = clear_user_watchlist(user_id)
+        ack = f"Cleared {cleared_count} tokens from watchlist! 🗑️" if user_lang == "en" else f"تم مسح {cleared_count} عملات من قائمة المتابعة! 🗑️"
+        await query.answer(ack, show_alert=False)
+        await render_watchlist(query, user_id, user_lang, is_edit=True)
+
     elif data.startswith("custom_buy_"):
         mint = data.replace("custom_buy_", "", 1)
         context.user_data["awaiting_custom_buy"] = mint
@@ -3200,6 +3217,12 @@ async def untrack_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     raw = args[0].strip()
+    if raw.lower() in ("all", "clear", "purge", "reset"):
+        cleared = clear_user_watchlist(user_id)
+        ack = f"🗑️ <b>Cleared all {cleared} tokens from your Watchlist!</b>" if user_lang == "en" else f"🗑️ <b>تم مسح جميع العملات ({cleared}) من قائمة المتابعة بنجاح!</b>"
+        await update.message.reply_text(ack, parse_mode="HTML")
+        return
+
     mint = extract_token_mint(raw)
     sym = raw.upper().lstrip("$")
 
@@ -3235,6 +3258,15 @@ async def untrack_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ack = f"🗑️ <b>Removed ${html.escape(matched_sym)} from your Watchlist!</b>" if user_lang == "en" else f"🗑️ <b>تمت إزالة ${html.escape(matched_sym)} من قائمة المتابعة!</b>"
     else:
         ack = f"ℹ️ Token ${html.escape(matched_sym)} is not in your watchlist." if user_lang == "en" else f"ℹ️ العملة ${html.escape(matched_sym)} ليست موجودة في قائمة المتابعة."
+    await update.message.reply_text(ack, parse_mode="HTML")
+
+
+async def clear_watchlist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for /clearwatchlist and /purge command: purges all tracked tokens from user watchlist."""
+    user_id = update.effective_user.id
+    user_lang = get_user_language(user_id)
+    cleared = clear_user_watchlist(user_id)
+    ack = f"🗑️ <b>Cleared all {cleared} tokens from your Watchlist!</b>" if user_lang == "en" else f"🗑️ <b>تم مسح جميع العملات ({cleared}) من قائمة المتابعة بنجاح!</b>"
     await update.message.reply_text(ack, parse_mode="HTML")
 
 
@@ -3576,6 +3608,8 @@ def build_application(token: str) -> Application:
     app.add_handler(CommandHandler("track", track_command))
     app.add_handler(CommandHandler("untrack", untrack_command))
     app.add_handler(CommandHandler("remove", untrack_command))
+    app.add_handler(CommandHandler("clearwatchlist", clear_watchlist_command))
+    app.add_handler(CommandHandler("purge", clear_watchlist_command))
     app.add_handler(CommandHandler("positions", positions_command))
     app.add_handler(CommandHandler("portfolio", positions_command))
     app.add_handler(CommandHandler("holdings", positions_command))

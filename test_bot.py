@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.55.0", card_text)
+        self.assertIn("v3.56.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.55.0")
+        self.assertEqual(BOT_VERSION, "v3.56.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -3313,6 +3313,107 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         csv_btn_ar = next((b for b in all_btns_ar if b.callback_data == "btn_history_csv"), None)
         self.assertIsNotNone(csv_btn_ar)
         self.assertIn("تصدير", csv_btn_ar.text)
+
+    def test_80_watchlist_clear_all_and_untrack_all_cli(self):
+        """Test clear_user_watchlist persistence, render_watchlist clear button, /untrack all CLI, and /clearwatchlist."""
+        from telegram_bot import (
+            render_watchlist,
+            untrack_command,
+            clear_watchlist_command,
+            callback_router,
+            build_application
+        )
+        from wallet_manager import (
+            get_or_create_wallet,
+            add_to_watchlist,
+            get_user_watchlist,
+            clear_user_watchlist
+        )
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock
+        from telegram.ext import CommandHandler
+
+        test_uid = 99334455
+        get_or_create_wallet(test_uid, "WatchlistClearTester", initial_language="en")
+        clear_user_watchlist(test_uid)
+
+        # 1. Test clear_user_watchlist DB persistence
+        add_to_watchlist(test_uid, "mint_1", "AAA", 1.0)
+        add_to_watchlist(test_uid, "mint_2", "BBB", 2.0)
+        add_to_watchlist(test_uid, "mint_3", "CCC", 3.0)
+        self.assertEqual(len(get_user_watchlist(test_uid)), 3)
+
+        cleared_count = clear_user_watchlist(test_uid)
+        self.assertEqual(cleared_count, 3)
+        self.assertEqual(len(get_user_watchlist(test_uid)), 0)
+
+        # 2. Test render_watchlist has Clear All button and commands hint when populated
+        add_to_watchlist(test_uid, "mint_1", "AAA", 1.0)
+        mock_target = MagicMock()
+        mock_target.reply_text = AsyncMock()
+
+        asyncio.run(render_watchlist(mock_target, test_uid, "en", is_edit=False))
+        self.assertTrue(mock_target.reply_text.called)
+
+        wl_text = mock_target.reply_text.call_args[0][0]
+        self.assertIn("/untrack all", wl_text)
+
+        kb = mock_target.reply_text.call_args[1]["reply_markup"]
+        all_btns = [b for row in kb.inline_keyboard for b in row]
+        clear_btn = next((b for b in all_btns if b.callback_data == "btn_clear_watchlist"), None)
+        self.assertIsNotNone(clear_btn, "Clear All button must be present in watchlist keyboard")
+        self.assertIn("Clear All", clear_btn.text)
+
+        # 3. Test untrack_command with 'all' argument
+        mock_cmd_update = MagicMock()
+        mock_cmd_update.effective_user.id = test_uid
+        mock_cmd_update.message.reply_text = AsyncMock()
+        mock_cmd_ctx = MagicMock()
+        mock_cmd_ctx.args = ["all"]
+
+        asyncio.run(untrack_command(mock_cmd_update, mock_cmd_ctx))
+        self.assertTrue(mock_cmd_update.message.reply_text.called)
+        reply_all = mock_cmd_update.message.reply_text.call_args[0][0]
+        self.assertIn("Cleared all 1 tokens", reply_all)
+        self.assertEqual(len(get_user_watchlist(test_uid)), 0)
+
+        # 4. Test clear_watchlist_command directly
+        add_to_watchlist(test_uid, "mint_1", "AAA", 1.0)
+        add_to_watchlist(test_uid, "mint_2", "BBB", 2.0)
+        mock_cmd_update.message.reply_text.reset_mock()
+
+        asyncio.run(clear_watchlist_command(mock_cmd_update, mock_cmd_ctx))
+        self.assertTrue(mock_cmd_update.message.reply_text.called)
+        reply_cmd = mock_cmd_update.message.reply_text.call_args[0][0]
+        self.assertIn("Cleared all 2 tokens", reply_cmd)
+        self.assertEqual(len(get_user_watchlist(test_uid)), 0)
+
+        # 5. Test callback_router btn_clear_watchlist
+        add_to_watchlist(test_uid, "mint_1", "AAA", 1.0)
+        mock_query = MagicMock()
+        mock_query.from_user.id = test_uid
+        mock_query.data = "btn_clear_watchlist"
+        mock_query.answer = AsyncMock()
+        mock_query.edit_message_text = AsyncMock()
+        mock_query.message.edit_text = AsyncMock()
+
+        mock_update = MagicMock()
+        mock_update.callback_query = mock_query
+        mock_update.effective_user.id = test_uid
+
+        asyncio.run(callback_router(mock_update, mock_cmd_ctx))
+        self.assertTrue(mock_query.answer.called)
+        self.assertEqual(len(get_user_watchlist(test_uid)), 0)
+
+        # 6. Test CommandHandler registration for clearwatchlist and purge
+        app = build_application("8935718262:AAGZc-RLQplBfx6cWzTtk2zyorXo5o74NqE")
+        command_handlers = [h for h in app.handlers[0] if isinstance(h, CommandHandler)]
+        registered_commands = set()
+        for h in command_handlers:
+            registered_commands.update(h.commands)
+
+        self.assertIn("clearwatchlist", registered_commands)
+        self.assertIn("purge", registered_commands)
 
 
 if __name__ == "__main__":

@@ -1110,6 +1110,77 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertIn("0.5000 SOL", card_funded)
         self.assertIn("Ready to snipe!", card_funded)
 
+    def test_39_status_and_telemetry_commands(self):
+        """Test /status and /fees command generation and menu keyboard links."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock
+        from telegram_bot import (
+            get_cluster_telemetry,
+            status_command,
+            fees_command,
+            get_main_menu_keyboard,
+            BOT_VERSION
+        )
+
+        # 1. Telemetry verification
+        telem = get_cluster_telemetry()
+        self.assertEqual(telem["bot_version"], "v3.24.0")
+        self.assertIn("Mainnet", telem["cluster"])
+        self.assertEqual(telem["developer_wallet"], "7kz1mcQcaZhYzFUHBFHH6s5tGrDHc7gNhN5WAUyXyq5r")
+        self.assertEqual(telem["fee_pct"], 1.0)
+
+        # 2. Status command reply test
+        mock_update = MagicMock()
+        mock_user = MagicMock()
+        mock_user.id = 88812345
+        mock_update.effective_user = mock_user
+        mock_update.message.reply_text = AsyncMock()
+        mock_context = MagicMock()
+
+        asyncio.run(status_command(mock_update, mock_context))
+        mock_update.message.reply_text.assert_called_once()
+        text_status = mock_update.message.reply_text.call_args[0][0]
+        self.assertIn("Cluster Status", text_status)
+        self.assertIn("v3.24.0", text_status)
+
+        # 3. Fees command reply test
+        mock_update.message.reply_text.reset_mock()
+        asyncio.run(fees_command(mock_update, mock_context))
+        mock_update.message.reply_text.assert_called_once()
+        text_fees = mock_update.message.reply_text.call_args[0][0]
+        self.assertIn("Fee Schedule", text_fees)
+        self.assertIn("1.0%", text_fees)
+        self.assertIn("25%", text_fees)
+
+        # 4. Keyboard presence check
+        kb = get_main_menu_keyboard(88812345, lang="en")
+        callbacks = [btn.callback_data for row in kb.inline_keyboard for btn in row if btn.callback_data]
+        self.assertIn("btn_status", callbacks)
+        self.assertIn("btn_fee_info", callbacks)
+
+    def test_40_polished_bounty_deliverables(self):
+        """Test GibWork bounty deliverable synthesis formats raw CAs with professional context."""
+        import sys
+        sys.path.append(r"F:\قناص\06_وكيل_حُر\hurr_tools")
+        import gibwork_executor
+
+        # Task with raw CA in requirements
+        task_rekees = {
+            "title": "Follow, Quote Post & Join the Rekees ($RKS) Telegram",
+            "requirements_snippet": "Quote post this post with the CA as your caption: 9ZrGHKCdX2Bf5GWiGb9wSGGdBTMoZQqdEyzChapwE2Cx"
+        }
+        tweet_rekees = gibwork_executor.synthesize_task_tweet(task_rekees)
+        self.assertIn("9ZrGHKCdX2Bf5GWiGb9wSGGdBTMoZQqdEyzChapwE2Cx", tweet_rekees)
+        self.assertIn("$RKS (Rekees)", tweet_rekees)
+        self.assertIn("#Solana", tweet_rekees)
+        # Verify it's never naked CA alone
+        self.assertNotEqual(tweet_rekees.strip(), "9ZrGHKCdX2Bf5GWiGb9wSGGdBTMoZQqdEyzChapwE2Cx")
+
+        # Test execute_best_task helper exists and is callable
+        self.assertTrue(hasattr(gibwork_executor, "execute_best_task"))
+        res = gibwork_executor.execute_best_task(dry_run=True)
+        self.assertIn("success", res)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1252,6 +1252,30 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertIn("بطاقة العملة", card_ar)
         self.assertIn("BONK", card_ar.upper())
 
+    def test_45_broadcast_transaction_failover_resilience(self):
+        """Test broadcast_transaction fails over to secondary RPCs if primary node errors."""
+        from unittest.mock import patch, MagicMock
+        from jupiter_engine import broadcast_transaction
+
+        mock_tx = b"mock_serialized_signed_tx_bytes_12345"
+
+        # Scenario 1: Primary fails with node error, secondary succeeds
+        resp_err = MagicMock(status_code=200)
+        resp_err.json.return_value = {"jsonrpc": "2.0", "error": {"code": -32002, "message": "Node desynced"}}
+        resp_ok = MagicMock(status_code=200)
+        resp_ok.json.return_value = {"jsonrpc": "2.0", "result": "5VERnSgToi6MockSignatureOk123456789"}
+
+        with patch("jupiter_engine._SESSION.post", side_effect=[resp_err, resp_ok]):
+            success, sig = broadcast_transaction(mock_tx)
+            self.assertTrue(success)
+            self.assertEqual(sig, "5VERnSgToi6MockSignatureOk123456789")
+
+        # Scenario 2: All nodes fail
+        with patch("jupiter_engine._SESSION.post", return_value=resp_err):
+            success, err = broadcast_transaction(mock_tx)
+            self.assertFalse(success)
+            self.assertEqual(err, "Node desynced")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -168,6 +168,7 @@ def broadcast_transaction(tx_bytes: bytes) -> Tuple[bool, str]:
     }
 
     endpoints = [PRIMARY_RPC] + FALLBACK_RPCS
+    last_err = "All RPC endpoints failed to broadcast"
     for rpc in endpoints:
         try:
             r = _SESSION.post(rpc, json=payload, timeout=6)
@@ -176,11 +177,16 @@ def broadcast_transaction(tx_bytes: bytes) -> Tuple[bool, str]:
                 if "result" in res:
                     return True, res["result"]
                 elif "error" in res:
-                    return False, res["error"].get("message", "RPC Error")
-        except Exception:
+                    last_err = res["error"].get("message", "RPC Error")
+                    continue
+            else:
+                last_err = f"HTTP {r.status_code}"
+                continue
+        except Exception as e:
+            last_err = str(e) or type(e).__name__
             continue
 
-    return False, "All RPC endpoints failed to broadcast"
+    return False, last_err
 
 
 def record_trade_db(

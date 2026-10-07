@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.42.0", card_text)
+        self.assertIn("v3.43.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.42.0")
+        self.assertEqual(BOT_VERSION, "v3.43.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -2350,6 +2350,63 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
             self.assertIn("btn_trending", empty_cbs)
             self.assertIn("btn_surge", empty_cbs)
             self.assertIn("btn_refresh", empty_cbs)
+
+    def test_67_pnl_live_refresh_action_and_parity(self):
+        """Test PnL card includes live refresh button with bilingual labels and callback routing parity."""
+        import asyncio
+        from unittest.mock import MagicMock, AsyncMock, patch
+        from telegram_bot import pnl_command, callback_router
+
+        # 1. Test /pnl command in English
+        mock_update_en = MagicMock()
+        mock_update_en.effective_user.id = 9998881
+        mock_update_en.effective_chat.id = 9998881
+        mock_update_en.effective_user.username = "TraderJoe"
+        mock_update_en.message.reply_text = AsyncMock()
+        mock_context = MagicMock()
+
+        with patch("telegram_bot.get_user_language", return_value="en"):
+            asyncio.run(pnl_command(mock_update_en, mock_context))
+            self.assertTrue(mock_update_en.message.reply_text.called)
+            kb = mock_update_en.message.reply_text.call_args[1]["reply_markup"]
+            all_btns = [b for row in kb.inline_keyboard for b in row]
+            refresh_btn = next((b for b in all_btns if b.callback_data == "btn_pnl"), None)
+            self.assertIsNotNone(refresh_btn, "btn_pnl refresh button must be present in /pnl keyboard")
+            self.assertIn("Refresh PnL", refresh_btn.text)
+
+        # 2. Test /pnl command in Arabic
+        mock_update_ar = MagicMock()
+        mock_update_ar.effective_user.id = 9998882
+        mock_update_ar.effective_chat.id = 9998882
+        mock_update_ar.effective_user.username = "TraderAli"
+        mock_update_ar.message.reply_text = AsyncMock()
+
+        with patch("telegram_bot.get_user_language", return_value="ar"):
+            asyncio.run(pnl_command(mock_update_ar, mock_context))
+            self.assertTrue(mock_update_ar.message.reply_text.called)
+            kb_ar = mock_update_ar.message.reply_text.call_args[1]["reply_markup"]
+            all_btns_ar = [b for row in kb_ar.inline_keyboard for b in row]
+            refresh_btn_ar = next((b for b in all_btns_ar if b.callback_data == "btn_pnl"), None)
+            self.assertIsNotNone(refresh_btn_ar, "btn_pnl refresh button must be present in Arabic /pnl keyboard")
+            self.assertIn("تحديث الأرباح", refresh_btn_ar.text)
+
+        # 3. Test callback_router btn_pnl action
+        mock_query_cb = MagicMock()
+        mock_query_cb.from_user.id = 9998883
+        mock_query_cb.from_user.username = "TraderCb"
+        mock_query_cb.data = "btn_pnl"
+        mock_query_cb.answer = AsyncMock()
+        mock_query_cb.edit_message_text = AsyncMock()
+        mock_update_cb = MagicMock(callback_query=mock_query_cb)
+
+        with patch("telegram_bot.get_user_language", return_value="en"):
+            asyncio.run(callback_router(mock_update_cb, mock_context))
+            self.assertTrue(mock_query_cb.answer.called)
+            self.assertTrue(mock_query_cb.edit_message_text.called)
+            kb_cb = mock_query_cb.edit_message_text.call_args[1]["reply_markup"]
+            cb_btns = [b for row in kb_cb.inline_keyboard for b in row]
+            refresh_cb_btn = next((b for b in cb_btns if b.callback_data == "btn_pnl"), None)
+            self.assertIsNotNone(refresh_cb_btn, "btn_pnl callback must provide live refresh button")
 
 
 if __name__ == "__main__":

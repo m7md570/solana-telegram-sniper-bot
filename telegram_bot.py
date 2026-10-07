@@ -1577,6 +1577,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         text = f"{t('pnl_title', user_lang)}\n{pnl_body_text}\n🕒 <code>{now_str}</code>"
         share_btn_text = "📢 " + ("Share PnL on X / Twitter" if user_lang == "en" else "مشاركة الأرباح على X")
+        refresh_pnl_label = "🔄 تحديث الأرباح" if user_lang == "ar" else "🔄 Refresh PnL"
         kb = [
             [
                 InlineKeyboardButton(share_btn_text, url=share_url)
@@ -1586,7 +1587,10 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 InlineKeyboardButton(t("btn_positions", user_lang), callback_data="btn_positions")
             ],
             [
-                InlineKeyboardButton(t("btn_trending", user_lang), callback_data="btn_trending"),
+                InlineKeyboardButton(refresh_pnl_label, callback_data="btn_pnl"),
+                InlineKeyboardButton(t("btn_trending", user_lang), callback_data="btn_trending")
+            ],
+            [
                 InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
             ]
         ]
@@ -2421,6 +2425,7 @@ async def pnl_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = f"{t('pnl_title', user_lang)}\n{pnl_body_text}\n🕒 <code>{now_str}</code>"
     share_btn_text = "📢 " + ("Share PnL on X / Twitter" if user_lang == "en" else "مشاركة الأرباح على X")
+    refresh_pnl_label = "🔄 تحديث الأرباح" if user_lang == "ar" else "🔄 Refresh PnL"
     kb = [
         [
             InlineKeyboardButton(share_btn_text, url=share_url)
@@ -2430,7 +2435,10 @@ async def pnl_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton(t("btn_positions", user_lang), callback_data="btn_positions")
         ],
         [
-            InlineKeyboardButton(t("btn_trending", user_lang), callback_data="btn_trending"),
+            InlineKeyboardButton(refresh_pnl_label, callback_data="btn_pnl"),
+            InlineKeyboardButton(t("btn_trending", user_lang), callback_data="btn_trending")
+        ],
+        [
             InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
         ]
     ]

@@ -55,6 +55,8 @@ def scan_token_security(mint: str) -> Dict[str, Any]:
                 data = r.json()
                 pairs = data.get("pairs") or []
                 if pairs:
+                    # Sort pairs by USD liquidity to reliably audit the primary liquidity pool
+                    pairs.sort(key=lambda x: float(x.get("liquidity", {}).get("usd") or 0.0), reverse=True)
                     p = pairs[0]
                     result["symbol"] = p.get("baseToken", {}).get("symbol", "UNKNOWN")
                     result["name"] = p.get("baseToken", {}).get("name", "Unknown Token")

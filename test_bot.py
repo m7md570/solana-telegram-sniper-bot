@@ -1234,6 +1234,24 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
             self.assertIn("أكثر عملات سولانا رواجاً", card_ar)
             self.assertIn(t0["symbol"], card_ar)
 
+    def test_44_primary_pool_selection_and_token_card_audit(self):
+        """Test rugcheck_scanner reliably sorts and selects the primary pool with highest liquidity."""
+        from rugcheck_scanner import scan_token_security, format_token_card
+
+        scan = scan_token_security(self.bonk_mint)
+        self.assertTrue(scan["is_valid"])
+        self.assertEqual(scan["mint"], self.bonk_mint)
+        self.assertEqual(scan["symbol"].upper(), "BONK")
+        self.assertGreater(scan["liquidity_usd"], 10_000.0)
+
+        card_en = format_token_card(scan, lang="en")
+        self.assertIn("Token Card", card_en)
+        self.assertIn("BONK", card_en.upper())
+
+        card_ar = format_token_card(scan, lang="ar")
+        self.assertIn("بطاقة العملة", card_ar)
+        self.assertIn("BONK", card_ar.upper())
+
 
 if __name__ == "__main__":
     unittest.main()

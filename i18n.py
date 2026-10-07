@@ -251,7 +251,8 @@ MESSAGES = {
             "• <code>/positions</code> - View Open Holdings with 1-Click Sell\n"
             "• <code>/panic</code> - Emergency Market Sell All Open Positions (100%)\n"
             "• <code>/settings</code> - Configure Slippage, Gas & Language\n"
-            "• <code>/reset</code> - Restore Trading Settings to Recommended Defaults\n\n"
+            "• <code>/reset</code> - Restore Trading Settings to Recommended Defaults\n"
+            "• <code>/version</code> - Architectural Specs, Routing Engine & Release Notes\n\n"
             "💡 <b>To snipe a token</b>: Paste any CA, DexScreener link, or type a ticker (e.g. <code>BONK</code>) directly here!"
         )
     },
@@ -497,7 +498,8 @@ MESSAGES = {
             "• <code>/positions</code> - عرض صفقاتك المفتوحة مع أزرار البيع الفوري\n"
             "• <code>/panic</code> - تصفية وبيع طوارئ شامل لجميع الصفقات (100%)\n"
             "• <code>/settings</code> - ضبط نسبة الانزلاق ورسوم الغاز واللغة\n"
-            "• <code>/reset</code> - استعادة إعدادات التداول الافتراضية الموصى بها\n\n"
+            "• <code>/reset</code> - استعادة إعدادات التداول الافتراضية الموصى بها\n"
+            "• <code>/version</code> - مواصفات البنية التحتية والمحرك والإصدارات\n\n"
             "💡 <b>للقنص الفوري</b>: الصق عنوان أي عملة أو رابط أو اكتب رمزها (مثل <code>BONK</code>) هنا مباشرة!"
         )
     }

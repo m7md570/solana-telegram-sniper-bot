@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.30.0", card_text)
+        self.assertIn("v3.31.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.30.0")
+        self.assertEqual(BOT_VERSION, "v3.31.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -1764,6 +1764,43 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
             callback_datas = [b.callback_data for b in buttons]
             self.assertIn("btn_qr", callback_datas)
             self.assertIn("btn_refresh", callback_datas)
+
+    def test_55_interactive_help_keyboard_and_version_documentation(self):
+        """Test /help command attaches interactive quick-action navigation keyboard and /version is documented in i18n."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock
+        from telegram_bot import help_command
+        from wallet_manager import get_or_create_wallet, set_user_language
+        from i18n import t
+
+        test_uid = 33221199
+        get_or_create_wallet(test_uid, "HelpTester", initial_language="en")
+        set_user_language(test_uid, "en")
+
+        mock_update = MagicMock()
+        mock_update.effective_user.id = test_uid
+        mock_update.message.reply_text = AsyncMock()
+        mock_context = MagicMock()
+
+        asyncio.run(help_command(mock_update, mock_context))
+        self.assertTrue(mock_update.message.reply_text.called)
+        kwargs = mock_update.message.reply_text.call_args[1]
+        self.assertIn("reply_markup", kwargs)
+        kb = kwargs["reply_markup"]
+        all_buttons = [b for row in kb.inline_keyboard for b in row]
+        callback_datas = [b.callback_data for b in all_buttons]
+        self.assertIn("btn_refresh", callback_datas)
+        self.assertIn("btn_wallet", callback_datas)
+        self.assertIn("btn_trending", callback_datas)
+        self.assertIn("btn_settings", callback_datas)
+        self.assertIn("btn_referral", callback_datas)
+        self.assertIn("btn_status", callback_datas)
+
+        # Verify /version is documented in both English and Arabic help bodies
+        help_en = t("help_body", "en")
+        help_ar = t("help_body", "ar")
+        self.assertIn("/version", help_en)
+        self.assertIn("/version", help_ar)
 
 
 if __name__ == "__main__":

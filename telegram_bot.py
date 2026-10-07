@@ -2411,13 +2411,25 @@ async def history_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler for /help command."""
+    """Handler for /help command with interactive quick-action navigation keyboard."""
     user_id = update.effective_user.id
     user_lang = get_user_language(user_id)
     title = t("help_title", user_lang)
     body = t("help_body", user_lang)
     text = f"{title}\n{body}"
-    await update.message.reply_text(text, parse_mode="HTML")
+    kb = [
+        [
+            InlineKeyboardButton("🚀 Dashboard" if user_lang == "en" else "🚀 الرئيسية", callback_data="btn_refresh"),
+            InlineKeyboardButton("💳 Wallet" if user_lang == "en" else "💳 المحفظة", callback_data="btn_wallet"),
+            InlineKeyboardButton("🔥 Trending" if user_lang == "en" else "🔥 الرائج", callback_data="btn_trending")
+        ],
+        [
+            InlineKeyboardButton("⚙️ Settings" if user_lang == "en" else "⚙️ الإعدادات", callback_data="btn_settings"),
+            InlineKeyboardButton("🤝 Referral" if user_lang == "en" else "🤝 الإحالات", callback_data="btn_referral"),
+            InlineKeyboardButton("ℹ️ Version" if user_lang == "en" else "ℹ️ الإصدار", callback_data="btn_status")
+        ]
+    ]
+    await update.message.reply_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
 
 
 async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):

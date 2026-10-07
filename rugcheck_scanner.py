@@ -4,6 +4,8 @@ Solana Telegram Sniper & Trading Bot — Security & Token Scanner
 Analyzes token contract addresses, live DexScreener metrics, and RugCheck security audits.
 """
 
+import re
+import html
 import requests
 from typing import Dict, Any, Optional
 
@@ -232,3 +234,39 @@ def format_token_card(scan: Dict[str, Any], lang: str = "en") -> str:
         ])
 
     return "\n".join(lines)
+
+
+def search_solana_token(query: str) -> Optional[Dict[str, Any]]:
+    """
+    Searches DexScreener API for Solana tokens matching the ticker or name.
+    Returns the top matching pair with highest liquidity, or None if not found.
+    """
+    if not query:
+        return None
+    clean_query = query.strip().lstrip("$")
+    if not clean_query:
+        return None
+    try:
+        url = f"https://api.dexscreener.com/latest/dex/search?q={clean_query}"
+        resp = _SESSION.get(url, timeout=6)
+        if resp.status_code == 200:
+            data = resp.json()
+            pairs = [p for p in data.get("pairs", []) if p.get("chainId") == "solana"]
+            if pairs:
+                pairs.sort(key=lambda x: float(x.get("liquidity", {}).get("usd", 0) or 0), reverse=True)
+                top = pairs[0]
+                base = top.get("baseToken", {})
+                mint = base.get("address")
+                if mint:
+                    return {
+                        "mint": mint,
+                        "symbol": base.get("symbol", clean_query.upper()),
+                        "name": base.get("name", clean_query),
+                        "price_usd": float(top.get("priceUsd", 0) or 0),
+                        "liquidity_usd": float(top.get("liquidity", {}).get("usd", 0) or 0),
+                        "volume_24h": float(top.get("volume", {}).get("h24", 0) or 0),
+                        "url": top.get("url", "")
+                    }
+    except Exception:
+        pass
+    return None

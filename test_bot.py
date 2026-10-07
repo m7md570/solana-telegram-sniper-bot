@@ -199,6 +199,41 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertIn("Token Card", en_card)
         self.assertIn("Current Price", en_card)
 
+    def test_12_search_solana_token(self):
+        """Test DexScreener token search by ticker or name."""
+        from rugcheck_scanner import search_solana_token
+        result = search_solana_token("bonk")
+        self.assertIsNotNone(result, "Search for 'bonk' should return a token")
+        self.assertTrue(len(result["mint"]) >= 32, "Mint address must be valid Base58")
+        self.assertEqual(result["symbol"].upper(), "BONK")
+        self.assertGreater(result["liquidity_usd"], 50000)
+
+    def test_13_bilingual_errors_and_routing(self):
+        """Test that localized error strings correctly return English vs Arabic."""
+        from wallet_manager import withdraw_sol
+        from jupiter_engine import execute_sell_swap
+
+        # Test withdraw error in English
+        ok_en, err_en = withdraw_sol(self.test_user_id, "invalid_address", 0.1, lang="en")
+        self.assertFalse(ok_en)
+        self.assertIn("Invalid Solana", err_en)
+
+        # Test withdraw error in Arabic
+        ok_ar, err_ar = withdraw_sol(self.test_user_id, "invalid_address", 0.1, lang="ar")
+        self.assertFalse(ok_ar)
+        self.assertIn("غير صالح", err_ar)
+
+        # Test sell swap error in English
+        ok_sell_en, err_sell_en, _ = execute_sell_swap(self.test_user_id, self.bonk_mint, 50, lang="en")
+        self.assertFalse(ok_sell_en)
+        self.assertIn("No token balance", err_sell_en)
+
+        # Test sell swap error in Arabic
+        ok_sell_ar, err_sell_ar, _ = execute_sell_swap(self.test_user_id, self.bonk_mint, 50, lang="ar")
+        self.assertFalse(ok_sell_ar)
+        self.assertIn("لا تملك رصيداً", err_sell_ar)
+
 
 if __name__ == "__main__":
     unittest.main()
+

@@ -95,12 +95,17 @@ MESSAGES = {
             "━━━━━━━━━━━━━━━━━━━\n"
             "💡 <i>Keep sniping high-velocity memecoins with Popcorn!</i>"
         ),
+        "search_prompt": "🔍 <b>Searching DexScreener for:</b> <code>{query}</code>...",
+        "search_not_found": "❌ <b>No Solana token found matching:</b> <code>{query}</code>\nTry sending the exact Contract Address (CA).",
+        "search_found_header": "🔍 <b>Search Result:</b> <code>{name} (${symbol})</code>",
         "refresh_toast": "✅ Balance updated to latest state!",
         "lang_switched_toast": "Language switched to English 🇬🇧",
         "help_title": "❓ <b>Popcorn Solana Sniper & Trading Bot Guide</b> ⚡",
         "help_body": (
             "━━━━━━━━━━━━━━━━━━━\n"
             "• <code>/start</code> - Open Main Dashboard\n"
+            "• <code>/search [TICKER]</code> - Search Token by Name or Symbol\n"
+            "• <code>/buy [CA/TICKER] [AMOUNT]</code> - Instant Custom Buy Snipe\n"
             "• <code>/trending</code> - View Trending Solana Tokens\n"
             "• <code>/pnl</code> - View Your Trading PnL & Performance\n"
             "• <code>/referral</code> - Affiliate Link & Rewards (25%)\n"
@@ -108,7 +113,7 @@ MESSAGES = {
             "• <code>/withdraw [ADDRESS] [AMOUNT]</code> - Withdraw SOL\n"
             "• <code>/positions</code> - View Open Token Holdings\n"
             "• <code>/settings</code> - Configure Slippage & Language\n\n"
-            "💡 <b>To snipe a token</b>: Paste any CA or DexScreener link directly here!"
+            "💡 <b>To snipe a token</b>: Paste any CA, DexScreener link, or type a ticker (e.g. <code>BONK</code>) directly here!"
         )
     },
     "ar": {
@@ -198,12 +203,17 @@ MESSAGES = {
             "━━━━━━━━━━━━━━━━━━━\n"
             "💡 <i>واصل اقتناص العملات الرائجة مع بوت Popcorn Sniper!</i>"
         ),
+        "search_prompt": "🔍 <b>جاري البحث في DexScreener عن:</b> <code>{query}</code>...",
+        "search_not_found": "❌ <b>لم يتم العثور على عملة سولانا مطابقة لـ:</b> <code>{query}</code>\nيرجى محاولة إرسال عنوان العقد الذكي (CA) مباشرة.",
+        "search_found_header": "🔍 <b>نتيجة البحث:</b> <code>{name} (${symbol})</code>",
         "refresh_toast": "✅ الرصيد محدّث لأحدث قيمة!",
         "lang_switched_toast": "تم تحويل اللغة إلى العربية 🇸🇦",
         "help_title": "❓ <b>دليل استخدام بوت قنص وتداول سولانا</b> ⚡",
         "help_body": (
             "━━━━━━━━━━━━━━━━━━━\n"
             "• <code>/start</code> - فتح لوحة التحكم الرئيسية\n"
+            "• <code>/search [الرمز/الاسم]</code> - البحث عن العملات بالاسم أو الرمز\n"
+            "• <code>/buy [العقد/الرمز] [المبلغ]</code> - قنص وشراء فوري بمبلغ مخصص\n"
             "• <code>/trending</code> - عرض أكثر عملات سولانا رواجاً\n"
             "• <code>/pnl</code> - عرض بطاقة الأرباح وإحصائيات التداول\n"
             "• <code>/referral</code> - رابط الإحالة ومكافآت دعوة الأصدقاء (25%)\n"
@@ -211,7 +221,7 @@ MESSAGES = {
             "• <code>/withdraw [العنوان] [المبلغ]</code> - سحب رصيد SOL\n"
             "• <code>/positions</code> - عرض صفقاتك والعملات المفتوحة\n"
             "• <code>/settings</code> - ضبط نسبة الانزلاق واللغة\n\n"
-            "💡 <b>للقنص الفوري</b>: الصق عنوان أي عملة أو رابط DexScreener هنا مباشرة!"
+            "💡 <b>للقنص الفوري</b>: الصق عنوان أي عملة أو رابط أو اكتب رمزها (مثل <code>BONK</code>) هنا مباشرة!"
         )
     }
 }

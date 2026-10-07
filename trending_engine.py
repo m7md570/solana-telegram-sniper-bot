@@ -6,6 +6,7 @@ via DexScreener Boosts and Volume Analytics.
 """
 
 import time
+import html
 import requests
 from typing import List, Dict, Any
 

@@ -170,7 +170,8 @@ def record_trade_db(
 def execute_sell_swap(
     user_id: int,
     token_mint: str,
-    pct_to_sell: int
+    pct_to_sell: int,
+    lang: str = "en"
 ) -> Tuple[bool, str, float]:
     """
     Executes an on-chain market sell for a specific percentage of user's held token into SOL.
@@ -180,7 +181,8 @@ def execute_sell_swap(
 
     keypair = get_user_keypair(user_id)
     if not keypair:
-        return False, "تعذر العثور على محفظة المستخدم.", 0.0
+        err = "تعذر العثور على محفظة المستخدم." if lang == "ar" else "User wallet not found."
+        return False, err, 0.0
 
     pubkey_str = str(keypair.pubkey())
     tokens = get_token_accounts(pubkey_str)
@@ -188,7 +190,8 @@ def execute_sell_swap(
     # Find the target token
     target_token = next((t for t in tokens if t["mint"] == token_mint), None)
     if not target_token or target_token["amount"] <= 0:
-        return False, "لا تملك رصيداً من هذه العملة للبيع.", 0.0
+        err = "لا تملك رصيداً من هذه العملة للبيع." if lang == "ar" else "No token balance available to sell."
+        return False, err, 0.0
 
     total_amount = target_token["amount"]
     decimals = target_token.get("decimals", 6)
@@ -199,7 +202,8 @@ def execute_sell_swap(
     raw_atomic_units = int(sell_amount * (10 ** decimals))
 
     if raw_atomic_units <= 0:
-        return False, "الكمية المراد بيعها صغيرة جداً.", 0.0
+        err = "الكمية المراد بيعها صغيرة جداً." if lang == "ar" else "Amount to sell is too small."
+        return False, err, 0.0
 
     settings = get_user_settings(user_id)
     slippage = settings["slippage_bps"]
@@ -213,12 +217,14 @@ def execute_sell_swap(
         with_fee=True
     )
     if not quote:
-        return False, "تعذر العثور على مسار بيع أو سيولة في Jupiter.", 0.0
+        err = "تعذر العثور على مسار بيع أو سيولة في Jupiter." if lang == "ar" else "No swap liquidity route available on Jupiter."
+        return False, err, 0.0
 
     # Build and sign transaction
     tx_bytes = build_and_sign_swap_tx(quote, keypair, settings["priority_fee"])
     if not tx_bytes:
-        return False, "فشل في بناء وتوقيع معاملة البيع الذكية.", 0.0
+        err = "فشل في بناء وتوقيع معاملة البيع الذكية." if lang == "ar" else "Failed to construct and sign sell transaction."
+        return False, err, 0.0
 
     # Broadcast to Solana RPC
     success, sig_or_err = broadcast_transaction(tx_bytes)

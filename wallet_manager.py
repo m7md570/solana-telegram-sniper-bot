@@ -17,6 +17,7 @@ import requests
 from cryptography.fernet import Fernet
 from solders.keypair import Keypair
 from solders.pubkey import Pubkey
+from solders.hash import Hash
 import base58
 
 from config import (
@@ -305,7 +306,7 @@ def get_recent_blockhash() -> Optional[Any]:
     return None
 
 
-def withdraw_sol(user_id: int, dest_address: str, amount_sol: float) -> Tuple[bool, str]:
+def withdraw_sol(user_id: int, dest_address: str, amount_sol: float, lang: str = "en") -> Tuple[bool, str]:
     """
     Withdraws SOL from user's bot wallet to an external Solana address (e.g. Phantom).
     Returns: (is_success, tx_signature_or_error)
@@ -316,13 +317,15 @@ def withdraw_sol(user_id: int, dest_address: str, amount_sol: float) -> Tuple[bo
 
     kp = get_user_keypair(user_id)
     if not kp:
-        return False, "تعذر العثور على محفظة المستخدم."
+        err = "تعذر العثور على محفظة المستخدم." if lang == "ar" else "User wallet not found."
+        return False, err
 
     # Validate destination pubkey
     try:
         dest_pubkey = Pubkey.from_string(dest_address.strip())
     except Exception:
-        return False, "عنوان المحفظة الوجهة غير صالح (Invalid Solana Address)."
+        err = "عنوان المحفظة الوجهة غير صالح (Invalid Solana Address)." if lang == "ar" else "Invalid Solana destination address."
+        return False, err
 
     user_pubkey_str = str(kp.pubkey())
     current_bal = get_sol_balance(user_pubkey_str)
@@ -330,11 +333,16 @@ def withdraw_sol(user_id: int, dest_address: str, amount_sol: float) -> Tuple[bo
     # Required gas buffer (0.0005 SOL)
     gas_buffer = 0.0005
     if current_bal < (amount_sol + gas_buffer):
-        return False, f"الرصيد غير كافٍ. المتاح: {current_bal:.4f} SOL (المطلوب: {amount_sol} SOL + الرسوم)."
+        if lang == "ar":
+            err = f"الرصيد غير كافٍ. المتاح: {current_bal:.4f} SOL (المطلوب: {amount_sol} SOL + الرسوم)."
+        else:
+            err = f"Insufficient balance. Available: {current_bal:.4f} SOL (Required: {amount_sol} SOL + fees)."
+        return False, err
 
     recent_bh = get_recent_blockhash()
     if not recent_bh:
-        return False, "تعذر جلب Blockhash من شبكة سولانا، يرجى المحاولة بعد لحظات."
+        err = "تعذر جلب Blockhash من شبكة سولانا، يرجى المحاولة بعد لحظات." if lang == "ar" else "Failed to fetch blockhash from Solana network. Please retry."
+        return False, err
 
     lamports = int(amount_sol * 1_000_000_000)
     try:
@@ -358,7 +366,8 @@ def withdraw_sol(user_id: int, dest_address: str, amount_sol: float) -> Tuple[bo
         success, sig_or_err = broadcast_transaction(bytes(signed_tx))
         return success, sig_or_err
     except Exception as e:
-        return False, f"خطأ في تنفيذ التحويل: {e}"
+        err = f"خطأ في تنفيذ التحويل: {e}" if lang == "ar" else f"Transfer execution error: {e}"
+        return False, err
 
 
 def record_referral(new_user_id: int, referrer_id: int) -> bool:

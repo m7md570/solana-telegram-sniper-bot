@@ -1122,7 +1122,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
 
         # 1. Telemetry verification
         telem = get_cluster_telemetry()
-        self.assertEqual(telem["bot_version"], "v3.24.0")
+        self.assertEqual(telem["bot_version"], "v3.27.0")
         self.assertIn("Mainnet", telem["cluster"])
         self.assertEqual(telem["developer_wallet"], "7kz1mcQcaZhYzFUHBFHH6s5tGrDHc7gNhN5WAUyXyq5r")
         self.assertEqual(telem["fee_pct"], 1.0)
@@ -1139,7 +1139,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         mock_update.message.reply_text.assert_called_once()
         text_status = mock_update.message.reply_text.call_args[0][0]
         self.assertIn("Cluster Status", text_status)
-        self.assertIn("v3.24.0", text_status)
+        self.assertIn(BOT_VERSION, text_status)
 
         # 3. Fees command reply test
         mock_update.message.reply_text.reset_mock()
@@ -1535,6 +1535,60 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertIn("defaults", registered_commands)
         self.assertIn("export", registered_commands)
         self.assertIn("backup", registered_commands)
+
+    def test_51_version_command_and_unverified_rugcheck_status(self):
+        """Test /version command, /about alias, and honest UNVERIFIED RugCheck handling."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock
+        from telegram_bot import version_command, build_application
+        from telegram.ext import CommandHandler
+        from rugcheck_scanner import format_token_card
+
+        # 1. Test /version command reply
+        mock_update = MagicMock()
+        mock_update.effective_user.id = 77123999
+        mock_update.message.reply_text = AsyncMock()
+        mock_context = MagicMock()
+
+        asyncio.run(version_command(mock_update, mock_context))
+        self.assertTrue(mock_update.message.reply_text.called)
+        card_text = mock_update.message.reply_text.call_args[0][0]
+        self.assertIn("v3.27.0", card_text)
+        self.assertIn("Jupiter V6", card_text)
+        self.assertIn("AES-256", card_text)
+
+        kb = mock_update.message.reply_text.call_args[1]["reply_markup"]
+        all_btns = [b for row in kb.inline_keyboard for b in row]
+        gh_btn = next((b for b in all_btns if b.url and "github.com" in b.url), None)
+        self.assertIsNotNone(gh_btn, "GitHub releases button must be present in /version card")
+
+        # 2. Test command registration
+        app = build_application("8935718262:AAGZc-RLQplBfx6cWzTtk2zyorXo5o74NqE")
+        command_handlers = [h for h in app.handlers[0] if isinstance(h, CommandHandler)]
+        registered_commands = set()
+        for h in command_handlers:
+            registered_commands.update(h.commands)
+
+        self.assertIn("version", registered_commands)
+        self.assertIn("about", registered_commands)
+
+        # 3. Test format_token_card with UNVERIFIED status
+        unverified_scan = {
+            "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "symbol": "USDC",
+            "name": "USD Coin",
+            "price_usd": 1.0,
+            "mcap": 1_000_000_000,
+            "liquidity_usd": 50_000_000,
+            "price_change_24h": 0.0,
+            "status": "UNVERIFIED",
+            "rug_score": 0,
+            "risks": []
+        }
+        card_en = format_token_card(unverified_scan, lang="en")
+        self.assertIn("Basic Audit (Unindexed on RugCheck)", card_en)
+        card_ar = format_token_card(unverified_scan, lang="ar")
+        self.assertIn("فحص أساسي (غير مفهرس في RugCheck)", card_ar)
 
 
 if __name__ == "__main__":

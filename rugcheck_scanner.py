@@ -38,8 +38,8 @@ def scan_token_security(mint: str) -> Dict[str, Any]:
         "price_change_24h": 0.0,
         "price_change_1h": 0.0,
         "rug_score": 0,
-        "status": "SAFE",
-        "badge": "🛡️ آمن (Safe)",
+        "status": "UNVERIFIED",
+        "badge": "ℹ️ فحص أساسي (غير مفهرس)",
         "risks": [],
         "mint_authority": False,
         "freeze_authority": False,
@@ -107,9 +107,18 @@ def scan_token_security(mint: str) -> Dict[str, Any]:
                 result["status"] = "DANGER"
                 result["badge"] = f"🔴 خطر شديد / فخ (درجة الخطر: {score})"
         else:
+            result["status"] = "UNVERIFIED"
             result["badge"] = "ℹ️ فحص أساسي (غير مفهرس في RugCheck)"
     except Exception as e:
         print(f"RugCheck audit warning: {e}")
+        result["status"] = "UNVERIFIED"
+        result["badge"] = "ℹ️ فحص أساسي (خدمة RugCheck غير متاحة مؤقتاً)"
+
+    # Fallback liquidity check
+    if result["liquidity_usd"] > 0 and result["liquidity_usd"] < 1000:
+        result["status"] = "WARNING"
+        if "Low Liquidity Pool (<$1k)" not in result["risks"]:
+            result["risks"].append("Low Liquidity Pool (<$1k)")
 
     return result
 
@@ -187,6 +196,8 @@ def format_token_card(scan: Dict[str, Any], lang: str = "en") -> str:
             badge = f"🟡 مخاطرة متوسطة (درجة الخطر: {score})"
         elif status == "DANGER":
             badge = f"🔴 خطر شديد / فخ (درجة الخطر: {score})"
+        elif status == "UNVERIFIED":
+            badge = "ℹ️ فحص أساسي (غير مفهرس في RugCheck)"
         else:
             badge = "ℹ️ فحص أساسي"
 
@@ -227,6 +238,8 @@ def format_token_card(scan: Dict[str, Any], lang: str = "en") -> str:
             badge = f"🟡 Warning / Medium Risk (Risk Score: {score})"
         elif status == "DANGER":
             badge = f"🔴 High Risk / Danger (Risk Score: {score})"
+        elif status == "UNVERIFIED":
+            badge = "ℹ️ Basic Audit (Unindexed on RugCheck)"
         else:
             badge = "ℹ️ Basic Audit"
 

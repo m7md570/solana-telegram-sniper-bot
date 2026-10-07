@@ -121,7 +121,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("SolanaSniperBot")
 
-BOT_VERSION = "v3.24.0"
+BOT_VERSION = "v3.27.0"
 
 
 def get_current_time_str() -> str:
@@ -2392,6 +2392,52 @@ async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(msg, parse_mode="HTML")
 
 
+async def version_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for /version and /about command displaying architectural specs and release metadata."""
+    user_id = update.effective_user.id
+    user_lang = get_user_language(user_id)
+
+    if user_lang == "ar":
+        card = (
+            "🍿 <b>Popcorn Sniper Bot — معلومات الإصدار والبنية المعمارية</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🚀 <b>الإصدار الحالي:</b> <code>v3.27.0 (Production)</code>\n"
+            "⚡ <b>محرك التداول:</b> Jupiter V6 Routing Engine + Jito Anti-MEV Bundles\n"
+            "🛡️ <b>نظام الحماية:</b> فحص تلقائي مزدوج (RugCheck + DexScreener Analysis)\n"
+            "🔐 <b>الأمان المالي:</b> محافظ محلية مشفرة بتقنية AES-256 (Non-Custodial)\n"
+            "💎 <b>عمولة التداول:</b> 1.0% فقط على عمليات التداول عبر Jupiter\n"
+            "🎁 <b>برنامج الإحالة:</b> 25% مشاركة أرباح مدى الحياة للمستخدمين\n"
+            "⏱️ <b>زمن الاستجابة:</b> ما دون 400 ميلي ثانية (Sub-400ms High-Velocity)\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🌐 <b>المستودع الرسمي:</b> github.com/m7md570/solana-telegram-sniper-bot"
+        )
+    else:
+        card = (
+            "🍿 <b>Popcorn Solana Sniper Bot — Architectural Specifications</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🚀 <b>Software Release:</b> <code>v3.27.0 (Production)</code>\n"
+            "⚡ <b>Routing Engine:</b> Jupiter V6 Aggregator + Jito Anti-MEV Sandwich Protection\n"
+            "🛡️ <b>Security Engine:</b> Dual Real-Time Audit (RugCheck + DexScreener Integrity)\n"
+            "🔐 <b>Key Management:</b> Non-Custodial Encrypted Local Storage (AES-256)\n"
+            "💎 <b>Platform Fee:</b> 1.0% on executed Jupiter swaps (0% on deposits/withdrawals)\n"
+            "🎁 <b>Affiliate Program:</b> 25% Lifetime Revenue Share (/referral)\n"
+            "⏱️ <b>Execution Velocity:</b> Sub-400ms High-Frequency Architecture\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🌐 <b>Official Repository:</b> github.com/m7md570/solana-telegram-sniper-bot"
+        )
+
+    kb = [
+        [
+            InlineKeyboardButton("🚀 Launch Sniper", callback_data="btn_refresh"),
+            InlineKeyboardButton("🎁 25% Referral", callback_data="btn_referral")
+        ],
+        [
+            InlineKeyboardButton("📦 GitHub Releases", url="https://github.com/m7md570/solana-telegram-sniper-bot/releases")
+        ]
+    ]
+    await update.message.reply_text(card, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb), disable_web_page_preview=True)
+
+
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     """Global error handler to catch and log unexpected errors gracefully."""
     logger.error(f"Exception while handling an update: {context.error}")
@@ -2781,6 +2827,7 @@ async def bot_post_init(app: Application):
             BotCommand("referral", "25% revenue share affiliate link"),
             BotCommand("export", "Non-custodial private key export"),
             BotCommand("settings", "Customize slippage & gas fees"),
+            BotCommand("about", "Bot version & architecture specs"),
             BotCommand("help", "All bot commands and guide")
         ]
         await app.bot.set_my_commands(commands)
@@ -2855,6 +2902,8 @@ def build_application(token: str) -> Application:
     app.add_handler(CommandHandler("settings", settings_command))
     app.add_handler(CommandHandler("reset", reset_command))
     app.add_handler(CommandHandler("defaults", reset_command))
+    app.add_handler(CommandHandler("version", version_command))
+    app.add_handler(CommandHandler("about", version_command))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("cancel", cancel_command))
     app.add_handler(CallbackQueryHandler(callback_router))

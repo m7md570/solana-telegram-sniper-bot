@@ -62,6 +62,8 @@ from wallet_manager import (
     get_user_settings,
     update_user_slippage,
     update_user_priority_fee,
+    update_user_tp,
+    update_user_sl,
     get_token_accounts,
     withdraw_sol,
     record_referral,
@@ -204,6 +206,8 @@ def build_settings_card(user_id: int, user_lang: str) -> Tuple[str, InlineKeyboa
     current_slip = settings["slippage_bps"] / 100.0
     gas_lamports = settings.get("priority_fee", 50000)
     gas_sol = gas_lamports / 1e9
+    current_tp = settings.get("default_tp_pct", 50)
+    current_sl = settings.get("default_sl_pct", 25)
     now_str = get_current_time_str()
 
     tier_label = (
@@ -213,14 +217,21 @@ def build_settings_card(user_id: int, user_lang: str) -> Tuple[str, InlineKeyboa
 
     title = t("settings_title", user_lang)
     body = t("settings_body", user_lang, slippage=current_slip)
-    gas_info = (
-        f"\n\n⚡ <b>Priority Gas:</b> <code>{gas_sol:.5f} SOL</code> ({tier_label})\n"
-        f"Select speed or slippage tier below:"
-    ) if user_lang == "en" else (
-        f"\n\n⚡ <b>أولوية الغاز:</b> <code>{gas_sol:.5f} SOL</code> ({tier_label})\n"
-        f"اختر فئة السرعة أو نسبة الانزلاق أدناه:"
-    )
-    text = f"{title}\n━━━━━━━━━━━━━━━━━━━\n{body}{gas_info}\n🕒 <code>{now_str}</code>"
+    if user_lang == "en":
+        extra_info = (
+            f"\n\n⚡ <b>Priority Gas:</b> <code>{gas_sol:.5f} SOL</code> ({tier_label})\n"
+            f"🎯 <b>Auto Take-Profit:</b> <code>+{current_tp}%</code>\n"
+            f"🛑 <b>Auto Stop-Loss:</b> <code>-{current_sl}%</code>\n\n"
+            f"Select parameters or speed tiers below:"
+        )
+    else:
+        extra_info = (
+            f"\n\n⚡ <b>أولوية الغاز:</b> <code>{gas_sol:.5f} SOL</code> ({tier_label})\n"
+            f"🎯 <b>جني الأرباح التلقائي:</b> <code>+{current_tp}%</code>\n"
+            f"🛑 <b>وقف الخسارة التلقائي:</b> <code>-{current_sl}%</code>\n\n"
+            f"اختر الإعدادات المناسبة لاستراتيجيتك أدناه:"
+        )
+    text = f"{title}\n━━━━━━━━━━━━━━━━━━━\n{body}{extra_info}\n🕒 <code>{now_str}</code>"
 
     kb = [
         [
@@ -233,6 +244,16 @@ def build_settings_card(user_id: int, user_lang: str) -> Tuple[str, InlineKeyboa
             InlineKeyboardButton("⚡ Normal (50k)", callback_data="gas_50000"),
             InlineKeyboardButton("🚀 Turbo (250k)", callback_data="gas_250000"),
             InlineKeyboardButton("🏎️ Ultra (1M)", callback_data="gas_1000000")
+        ],
+        [
+            InlineKeyboardButton("🎯 TP +25%", callback_data="tp_25"),
+            InlineKeyboardButton("🎯 TP +50%", callback_data="tp_50"),
+            InlineKeyboardButton("🎯 TP +100%", callback_data="tp_100")
+        ],
+        [
+            InlineKeyboardButton("🛑 SL -15%", callback_data="sl_15"),
+            InlineKeyboardButton("🛑 SL -25%", callback_data="sl_25"),
+            InlineKeyboardButton("🛑 SL -50%", callback_data="sl_50")
         ],
         [
             InlineKeyboardButton(t("btn_lang_toggle", user_lang), callback_data="btn_toggle_lang")
@@ -916,6 +937,22 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text, kb = build_settings_card(user_id, user_lang)
         await safe_edit_text(query, text, reply_markup=kb)
 
+    elif data.startswith("tp_"):
+        new_tp = int(data.split("_")[1])
+        update_user_tp(user_id, new_tp)
+        ack = t("tp_updated", user_lang, pct=new_tp)
+        await query.answer(ack, show_alert=False)
+        text, kb = build_settings_card(user_id, user_lang)
+        await safe_edit_text(query, text, reply_markup=kb)
+
+    elif data.startswith("sl_"):
+        new_sl = int(data.split("_")[1])
+        update_user_sl(user_id, new_sl)
+        ack = t("sl_updated", user_lang, pct=new_sl)
+        await query.answer(ack, show_alert=False)
+        text, kb = build_settings_card(user_id, user_lang)
+        await safe_edit_text(query, text, reply_markup=kb)
+
     elif data == "btn_snipe_guide":
         title = t("snipe_guide_title", user_lang)
         body = t("snipe_guide_body", user_lang)
@@ -1156,6 +1193,46 @@ async def gas_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_lang = get_user_language(user_id)
     text, kb = build_settings_card(user_id, user_lang)
     await update.message.reply_text(text, parse_mode="HTML", reply_markup=kb)
+
+
+async def tp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for /tp command: /tp [PERCENT]"""
+    user_id = update.effective_user.id
+    user_lang = get_user_language(user_id)
+    args = context.args
+    if not args:
+        await update.message.reply_text(t("tp_syntax_help", user_lang), parse_mode="HTML")
+        return
+    try:
+        val = int(args[0].strip().rstrip("%"))
+        if val < 5 or val > 1000:
+            err = "❌ Please specify between 5% and 1000%." if user_lang == "en" else "❌ يرجى تحديد نسبة بين 5% و 1000%."
+            await update.message.reply_text(err, parse_mode="HTML")
+            return
+        update_user_tp(user_id, val)
+        await update.message.reply_text(t("tp_updated", user_lang, pct=val), parse_mode="HTML")
+    except ValueError:
+        await update.message.reply_text(t("tp_syntax_help", user_lang), parse_mode="HTML")
+
+
+async def sl_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for /sl command: /sl [PERCENT]"""
+    user_id = update.effective_user.id
+    user_lang = get_user_language(user_id)
+    args = context.args
+    if not args:
+        await update.message.reply_text(t("sl_syntax_help", user_lang), parse_mode="HTML")
+        return
+    try:
+        val = int(args[0].strip().rstrip("%"))
+        if val < 5 or val > 95:
+            err = "❌ Please specify between 5% and 95%." if user_lang == "en" else "❌ يرجى تحديد نسبة بين 5% و 95%."
+            await update.message.reply_text(err, parse_mode="HTML")
+            return
+        update_user_sl(user_id, val)
+        await update.message.reply_text(t("sl_updated", user_lang, pct=val), parse_mode="HTML")
+    except ValueError:
+        await update.message.reply_text(t("sl_syntax_help", user_lang), parse_mode="HTML")
 
 
 async def sell_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1466,6 +1543,8 @@ def build_application(token: str) -> Application:
     app.add_handler(CommandHandler("pnl", pnl_command))
     app.add_handler(CommandHandler("gas", gas_command))
     app.add_handler(CommandHandler("priority", gas_command))
+    app.add_handler(CommandHandler("tp", tp_command))
+    app.add_handler(CommandHandler("sl", sl_command))
     app.add_handler(CommandHandler("referral", referral_command))
     app.add_handler(CommandHandler("wallet", wallet_command))
     app.add_handler(CommandHandler("withdraw", withdraw_command))

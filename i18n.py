@@ -132,6 +132,10 @@ MESSAGES = {
         "btn_surge": "🚀 Surge & Gainers",
         "surge_title": "🚀 <b>Solana High-Velocity Gainers & Surge Radar</b> ⚡",
         "surge_empty": "No high-velocity gainers detected at the moment. Please try again shortly.",
+        "tp_syntax_help": "ℹ️ <b>Take-Profit Syntax</b>: <code>/tp [PERCENT]</code>\nExample: <code>/tp 50</code> (Auto sell at +50% gain)",
+        "sl_syntax_help": "ℹ️ <b>Stop-Loss Syntax</b>: <code>/sl [PERCENT]</code>\nExample: <code>/sl 25</code> (Auto stop at -25% loss)",
+        "tp_updated": "🎯 Take-Profit target set to +{pct}%!",
+        "sl_updated": "🛑 Stop-Loss limit set to -{pct}%!",
         "help_title": "❓ <b>Popcorn Solana Sniper & Trading Bot Guide</b> ⚡",
         "help_body": (
             "━━━━━━━━━━━━━━━━━━━\n"
@@ -141,6 +145,8 @@ MESSAGES = {
             "• <code>/sell [CA/TICKER] [PERCENT]</code> - Instant Market Sell (%)\n"
             "• <code>/surge</code> - View Explosive High-Velocity Gainers (1h/24h)\n"
             "• <code>/history</code> - View Recent Trade History & Solscan Links\n"
+            "• <code>/tp [PERCENT]</code> - Configure Auto Take-Profit Target (+%)\n"
+            "• <code>/sl [PERCENT]</code> - Configure Auto Stop-Loss Limit (-%)\n"
             "• <code>/watchlist</code> - View Tracked Tokens & Live Prices\n"
             "• <code>/track [CA/TICKER]</code> - Add Token to Watchlist\n"
             "• <code>/trending</code> - View Trending Solana Tokens\n"
@@ -278,6 +284,10 @@ MESSAGES = {
         "btn_surge": "🚀 العملات الأكثر صعوداً (Surge)",
         "surge_title": "🚀 <b>رادار العملات الأكثر صعوداً وزخماً (Surge)</b> ⚡",
         "surge_empty": "لم يتم رصد عملات صاعدة بزخم كافٍ حالياً. يرجى المحاولة بعد قليل.",
+        "tp_syntax_help": "ℹ️ <b>صيغة جني الأرباح</b>: <code>/tp [النسبة]</code>\nمثال: <code>/tp 50</code> (جني الأرباح تلقائياً عند +50%)",
+        "sl_syntax_help": "ℹ️ <b>صيغة وقف الخسارة</b>: <code>/sl [النسبة]</code>\nمثال: <code>/sl 25</code> (وقف الخسارة تلقائياً عند -25%)",
+        "tp_updated": "🎯 تم ضبط هدف جني الأرباح إلى +{pct}%!",
+        "sl_updated": "🛑 تم ضبط حد وقف الخسارة إلى -{pct}%!",
         "help_title": "❓ <b>دليل استخدام بوت قنص وتداول سولانا</b> ⚡",
         "help_body": (
             "━━━━━━━━━━━━━━━━━━━\n"
@@ -287,6 +297,8 @@ MESSAGES = {
             "• <code>/sell [العقد/الرمز] [النسبة]</code> - بيع فوري بنسبة مئوية (%)\n"
             "• <code>/surge</code> - رادار العملات المتفجرة الأكثر صعوداً (1h/24h)\n"
             "• <code>/history</code> - عرض سجل الصفقات المنفذة وروابط Solscan\n"
+            "• <code>/tp [النسبة]</code> - ضبط هدف جني الأرباح التلقائي (+%)\n"
+            "• <code>/sl [النسبة]</code> - ضبط حد وقف الخسارة التلقائي (-%)\n"
             "• <code>/watchlist</code> - عرض قائمة العملات المتابعة وأسعارها اللحظية\n"
             "• <code>/track [العقد/الرمز]</code> - إضافة عملة إلى قائمة المتابعة\n"
             "• <code>/trending</code> - عرض أكثر عملات سولانا رواجاً\n"

@@ -100,7 +100,9 @@ def init_database():
             ("referral_earnings_sol", "REAL DEFAULT 0.0"),
             ("auto_buy_enabled", "INTEGER DEFAULT 0"),
             ("auto_buy_amount", "REAL DEFAULT 0.1"),
-            ("language", "TEXT DEFAULT 'en'")
+            ("language", "TEXT DEFAULT 'en'"),
+            ("default_tp_pct", "INTEGER DEFAULT 50"),
+            ("default_sl_pct", "INTEGER DEFAULT 25")
         ]
         for col_name, col_type in migrations:
             if col_name not in existing_cols:
@@ -230,21 +232,25 @@ def get_sol_balance(public_key_str: str) -> float:
 
 
 def get_user_settings(user_id: int) -> Dict[str, int]:
-    """Returns user's slippage and priority fee settings."""
+    """Returns user's slippage, priority fee, TP, and SL settings."""
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        row = cursor.execute("SELECT slippage_bps, priority_fee FROM users WHERE user_id = ?", (user_id,)).fetchone()
+        row = cursor.execute("SELECT slippage_bps, priority_fee, default_tp_pct, default_sl_pct FROM users WHERE user_id = ?", (user_id,)).fetchone()
         if row:
             return {
-                "slippage_bps": row["slippage_bps"],
-                "priority_fee": row["priority_fee"]
+                "slippage_bps": row["slippage_bps"] or DEFAULT_SLIPPAGE_BPS,
+                "priority_fee": row["priority_fee"] or DEFAULT_PRIORITY_FEE_LAMPORTS,
+                "default_tp_pct": row["default_tp_pct"] or 50,
+                "default_sl_pct": row["default_sl_pct"] or 25
             }
     finally:
         conn.close()
     return {
         "slippage_bps": DEFAULT_SLIPPAGE_BPS,
-        "priority_fee": DEFAULT_PRIORITY_FEE_LAMPORTS
+        "priority_fee": DEFAULT_PRIORITY_FEE_LAMPORTS,
+        "default_tp_pct": 50,
+        "default_sl_pct": 25
     }
 
 
@@ -263,6 +269,26 @@ def update_user_priority_fee(user_id: int, priority_fee_lamports: int):
     conn = get_db_connection()
     try:
         conn.execute("UPDATE users SET priority_fee = ? WHERE user_id = ?", (priority_fee_lamports, user_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def update_user_tp(user_id: int, tp_pct: int):
+    """Updates user default Take-Profit target percentage."""
+    conn = get_db_connection()
+    try:
+        conn.execute("UPDATE users SET default_tp_pct = ? WHERE user_id = ?", (tp_pct, user_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def update_user_sl(user_id: int, sl_pct: int):
+    """Updates user default Stop-Loss limit percentage."""
+    conn = get_db_connection()
+    try:
+        conn.execute("UPDATE users SET default_sl_pct = ? WHERE user_id = ?", (sl_pct, user_id))
         conn.commit()
     finally:
         conn.close()

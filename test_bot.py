@@ -407,6 +407,46 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertIn("Surge", t("btn_surge", "en"))
         self.assertIn("Surge", t("btn_surge", "ar"))
 
+    def test_22_tp_sl_settings_and_commands(self):
+        """Test Take-Profit and Stop-Loss settings persistence, card formatting, and i18n."""
+        from wallet_manager import update_user_tp, update_user_sl, get_user_settings
+        from telegram_bot import build_settings_card
+        from i18n import t
+
+        # Update and check persistence
+        update_user_tp(self.test_user_id, 75)
+        update_user_sl(self.test_user_id, 30)
+
+        settings = get_user_settings(self.test_user_id)
+        self.assertEqual(settings["default_tp_pct"], 75)
+        self.assertEqual(settings["default_sl_pct"], 30)
+
+        # Test settings card English & Arabic
+        text_en, kb_en = build_settings_card(self.test_user_id, user_lang="en")
+        self.assertIn("+75%", text_en)
+        self.assertIn("-30%", text_en)
+        self.assertIn("Take-Profit", text_en)
+        self.assertIn("Stop-Loss", text_en)
+
+        text_ar, kb_ar = build_settings_card(self.test_user_id, user_lang="ar")
+        self.assertIn("+75%", text_ar)
+        self.assertIn("-30%", text_ar)
+        self.assertIn("جني الأرباح", text_ar)
+        self.assertIn("وقف الخسارة", text_ar)
+
+        # Verify buttons exist in keyboard
+        buttons = [btn for row in kb_en.inline_keyboard for btn in row]
+        tp_btn = next((b for b in buttons if b.callback_data == "tp_50"), None)
+        sl_btn = next((b for b in buttons if b.callback_data == "sl_25"), None)
+        self.assertIsNotNone(tp_btn, "TP button must be present in settings keyboard")
+        self.assertIsNotNone(sl_btn, "SL button must be present in settings keyboard")
+
+        # Verify i18n updates
+        self.assertIn("+50%", t("tp_updated", "en", pct=50))
+        self.assertIn("+50%", t("tp_updated", "ar", pct=50))
+        self.assertIn("-25%", t("sl_updated", "en", pct=25))
+        self.assertIn("-25%", t("sl_updated", "ar", pct=25))
+
 
 if __name__ == "__main__":
     unittest.main()

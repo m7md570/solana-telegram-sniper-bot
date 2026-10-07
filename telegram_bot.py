@@ -70,6 +70,7 @@ from wallet_manager import (
     get_referral_stats,
     get_auto_buy_settings,
     toggle_auto_buy,
+    set_auto_buy_status,
     set_auto_buy_amount,
     get_user_language,
     set_user_language,
@@ -1118,6 +1119,47 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "btn_panic_execute":
         await execute_panic_sell_all(query, user_id, user_lang)
 
+    elif data == "toggle_autobuy":
+        new_state = toggle_auto_buy(user_id)
+        _, current_amt = get_auto_buy_settings(user_id)
+        state_str = ("ENABLED 🟢" if new_state else "DISABLED ⚪") if user_lang == "en" else ("مفعل 🟢" if new_state else "معطل ⚪")
+        ack = t("autobuy_updated", user_lang, status=state_str, amt=current_amt)
+        await query.answer(ack, show_alert=False)
+        title = t("autobuy_status_title", user_lang)
+        body = t("autobuy_status_body", user_lang, status=state_str, amt=current_amt)
+        toggle_label = ("🔕 Disable Auto-Buy" if new_state else "🔔 Enable Auto-Buy") if user_lang == "en" else ("🔕 تعطيل الشراء التلقائي" if new_state else "🔔 تفعيل الشراء التلقائي")
+        kb = [
+            [InlineKeyboardButton(toggle_label, callback_data="toggle_autobuy")],
+            [
+                InlineKeyboardButton("0.05 SOL", callback_data="set_auto_amt_0.05"),
+                InlineKeyboardButton("0.1 SOL", callback_data="set_auto_amt_0.1"),
+                InlineKeyboardButton("0.5 SOL", callback_data="set_auto_amt_0.5")
+            ],
+            [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
+        ]
+        await safe_edit_text(query, f"{title}\n━━━━━━━━━━━━━━━━━━━\n{body}", reply_markup=InlineKeyboardMarkup(kb))
+
+    elif data.startswith("set_auto_amt_"):
+        new_amt = float(data.replace("set_auto_amt_", ""))
+        set_auto_buy_amount(user_id, new_amt)
+        set_auto_buy_status(user_id, True)
+        state_str = "ENABLED 🟢" if user_lang == "en" else "مفعل 🟢"
+        ack = t("autobuy_updated", user_lang, status=state_str, amt=new_amt)
+        await query.answer(ack, show_alert=False)
+        title = t("autobuy_status_title", user_lang)
+        body = t("autobuy_status_body", user_lang, status=state_str, amt=new_amt)
+        toggle_label = "🔕 Disable Auto-Buy" if user_lang == "en" else "🔕 تعطيل الشراء التلقائي"
+        kb = [
+            [InlineKeyboardButton(toggle_label, callback_data="toggle_autobuy")],
+            [
+                InlineKeyboardButton("0.05 SOL", callback_data="set_auto_amt_0.05"),
+                InlineKeyboardButton("0.1 SOL", callback_data="set_auto_amt_0.1"),
+                InlineKeyboardButton("0.5 SOL", callback_data="set_auto_amt_0.5")
+            ],
+            [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
+        ]
+        await safe_edit_text(query, f"{title}\n━━━━━━━━━━━━━━━━━━━\n{body}", reply_markup=InlineKeyboardMarkup(kb))
+
     elif data == "btn_watchlist":
         await render_watchlist(query, user_id, user_lang, is_edit=True)
 
@@ -1452,6 +1494,171 @@ async def gas_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_lang = get_user_language(user_id)
     text, kb = build_settings_card(user_id, user_lang)
     await update.message.reply_text(text, parse_mode="HTML", reply_markup=kb)
+
+
+async def slippage_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for /slippage and /slip command: /slippage [PERCENT]"""
+    user_id = update.effective_user.id
+    user_lang = get_user_language(user_id)
+    args = context.args
+
+    if not args:
+        settings = get_user_settings(user_id)
+        current_pct = settings["slippage_bps"] / 100.0
+        current_bps = settings["slippage_bps"]
+        info_text = (
+            f"🎯 <b>Current Slippage Tolerance:</b> <code>{current_pct:.2f}%</code> (<code>{current_bps} BPS</code>)\n\n"
+            f"{t('slippage_syntax_help', user_lang)}"
+        ) if user_lang == "en" else (
+            f"🎯 <b>نسبة الانزلاق المحددة حالياً:</b> <code>{current_pct:.2f}%</code> (<code>{current_bps} BPS</code>)\n\n"
+            f"{t('slippage_syntax_help', user_lang)}"
+        )
+        kb = [
+            [
+                InlineKeyboardButton("0.5%", callback_data="slip_50"),
+                InlineKeyboardButton("1.0%", callback_data="slip_100"),
+                InlineKeyboardButton("2.0%", callback_data="slip_200"),
+                InlineKeyboardButton("5.0%", callback_data="slip_500")
+            ],
+            [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_settings")]
+        ]
+        await update.message.reply_text(info_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
+        return
+
+    try:
+        val = float(args[0].strip().rstrip("%"))
+        if val < 0.1 or val > 50.0:
+            await update.message.reply_text(t("slippage_invalid", user_lang), parse_mode="HTML")
+            return
+        bps = int(val * 100)
+        update_user_slippage(user_id, bps)
+        msg = t("slippage_updated", user_lang, pct=val, bps=bps)
+        await update.message.reply_text(msg, parse_mode="HTML")
+    except ValueError:
+        await update.message.reply_text(t("slippage_syntax_help", user_lang), parse_mode="HTML")
+
+
+async def autobuy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for /autobuy and /auto command: /autobuy [AMOUNT|on|off]"""
+    user_id = update.effective_user.id
+    user_lang = get_user_language(user_id)
+    args = context.args
+
+    if args:
+        sub = args[0].strip().lower()
+        if sub in ("off", "disable", "stop", "0"):
+            set_auto_buy_status(user_id, False)
+            _, current_amt = get_auto_buy_settings(user_id)
+            status_label = "DISABLED ⚪" if user_lang == "en" else "معطل ⚪"
+            await update.message.reply_text(t("autobuy_updated", user_lang, status=status_label, amt=current_amt), parse_mode="HTML")
+            return
+        elif sub in ("on", "enable", "start", "1"):
+            set_auto_buy_status(user_id, True)
+            _, current_amt = get_auto_buy_settings(user_id)
+            status_label = "ENABLED 🟢" if user_lang == "en" else "مفعل 🟢"
+            await update.message.reply_text(t("autobuy_updated", user_lang, status=status_label, amt=current_amt), parse_mode="HTML")
+            return
+        else:
+            try:
+                amt = float(sub)
+                if amt < 0.005 or amt > 50.0:
+                    err = "❌ Please specify an amount between 0.005 and 50 SOL." if user_lang == "en" else "❌ يرجى تحديد مبلغ بين 0.005 و 50 SOL."
+                    await update.message.reply_text(err, parse_mode="HTML")
+                    return
+                set_auto_buy_amount(user_id, amt)
+                set_auto_buy_status(user_id, True)
+                status_label = "ENABLED 🟢" if user_lang == "en" else "مفعل 🟢"
+                await update.message.reply_text(t("autobuy_updated", user_lang, status=status_label, amt=amt), parse_mode="HTML")
+                return
+            except ValueError:
+                pass
+
+    enabled, amt = get_auto_buy_settings(user_id)
+    status_str = ("ENABLED 🟢" if enabled else "DISABLED ⚪") if user_lang == "en" else ("مفعل 🟢" if enabled else "معطل ⚪")
+    title = t("autobuy_status_title", user_lang)
+    body = t("autobuy_status_body", user_lang, status=status_str, amt=amt)
+    toggle_label = ("🔕 Disable Auto-Buy" if enabled else "🔔 Enable Auto-Buy") if user_lang == "en" else ("🔕 تعطيل الشراء التلقائي" if enabled else "🔔 تفعيل الشراء التلقائي")
+    kb = [
+        [InlineKeyboardButton(toggle_label, callback_data="toggle_autobuy")],
+        [
+            InlineKeyboardButton("0.05 SOL", callback_data="set_auto_amt_0.05"),
+            InlineKeyboardButton("0.1 SOL", callback_data="set_auto_amt_0.1"),
+            InlineKeyboardButton("0.5 SOL", callback_data="set_auto_amt_0.5")
+        ],
+        [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
+    ]
+    await update.message.reply_text(f"{title}\n━━━━━━━━━━━━━━━━━━━\n{body}", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
+
+
+async def price_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for /price and /chart command: /price [CA_OR_TICKER]"""
+    user_id = update.effective_user.id
+    user_lang = get_user_language(user_id)
+    args = context.args
+
+    if not args:
+        await update.message.reply_text(t("price_syntax_help", user_lang), parse_mode="HTML")
+        return
+
+    query = args[0].strip()
+    mint = extract_token_mint(query)
+    if not mint:
+        matched = search_solana_token(query)
+        if matched:
+            mint = matched["mint"]
+
+    if not mint:
+        err = t("search_not_found", user_lang, query=html.escape(query))
+        await update.message.reply_text(err, parse_mode="HTML")
+        return
+
+    wait_text = "💵 <b>جاري فحص السعر والسيولة اللحظية...</b>" if user_lang == "ar" else "💵 <b>Fetching real-time price & liquidity quote...</b>"
+    status_msg = await update.message.reply_text(wait_text, parse_mode="HTML")
+
+    scan = scan_token_security(mint)
+    sym = html.escape(scan.get("symbol", "TOKEN"))
+    name = html.escape(scan.get("name", "Unknown Token"))
+    p_usd = scan.get("price_usd", 0.0)
+    c24 = scan.get("price_change_24h", 0.0)
+    liq = scan.get("liquidity_usd", 0.0)
+    mcap = scan.get("mcap", 0.0)
+    now_str = get_current_time_str()
+    emoji = "📈" if c24 >= 0 else "📉"
+
+    title = t("price_card_title", user_lang)
+    if user_lang == "ar":
+        card = (
+            f"{title} ⚡\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"🪙 <b>{name}</b> (<code>${sym}</code>)\n"
+            f"💵 <b>السعر اللحظي:</b> <code>${p_usd:.8f}</code> {emoji} <code>{c24:+.2f}%</code>\n"
+            f"💎 <b>القيمة السوقية:</b> <code>${mcap:,.0f}</code>\n"
+            f"💧 <b>السيولة المتاحة:</b> <code>${liq:,.0f}</code>\n"
+            f"📋 <b>العقد:</b> <code>{mint}</code>\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"🕒 <code>{now_str}</code>"
+        )
+    else:
+        card = (
+            f"{title} ⚡\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"🪙 <b>{name}</b> (<code>${sym}</code>)\n"
+            f"💵 <b>Current Price:</b> <code>${p_usd:.8f}</code> {emoji} <code>{c24:+.2f}%</code>\n"
+            f"💎 <b>Market Cap:</b> <code>${mcap:,.0f}</code>\n"
+            f"💧 <b>Liquidity:</b> <code>${liq:,.0f}</code>\n"
+            f"📋 <b>CA:</b> <code>{mint}</code>\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"🕒 <code>{now_str}</code>"
+        )
+
+    kb = [
+        [
+            InlineKeyboardButton(f"🚀 Snipe ${sym}", callback_data=f"inspect_{mint}"),
+            InlineKeyboardButton("📊 Chart", url=f"https://dexscreener.com/solana/{mint}")
+        ],
+        [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
+    ]
+    await status_msg.edit_text(card, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb), disable_web_page_preview=True)
 
 
 async def tp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1969,6 +2176,12 @@ def build_application(token: str) -> Application:
     app.add_handler(CommandHandler("pnl", pnl_command))
     app.add_handler(CommandHandler("gas", gas_command))
     app.add_handler(CommandHandler("priority", gas_command))
+    app.add_handler(CommandHandler("slippage", slippage_command))
+    app.add_handler(CommandHandler("slip", slippage_command))
+    app.add_handler(CommandHandler("autobuy", autobuy_command))
+    app.add_handler(CommandHandler("auto", autobuy_command))
+    app.add_handler(CommandHandler("price", price_command))
+    app.add_handler(CommandHandler("chart", price_command))
     app.add_handler(CommandHandler("tp", tp_command))
     app.add_handler(CommandHandler("sl", sl_command))
     app.add_handler(CommandHandler("alerts", alerts_command))

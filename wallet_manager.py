@@ -498,6 +498,17 @@ def toggle_auto_buy(user_id: int) -> bool:
         conn.close()
 
 
+def set_auto_buy_status(user_id: int, enabled: bool):
+    """Explicitly sets auto-buy enabled status."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE users SET auto_buy_enabled = ? WHERE user_id = ?", (1 if enabled else 0, user_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def set_auto_buy_amount(user_id: int, amount_sol: float):
     """Sets the auto-buy amount in SOL."""
     conn = get_db_connection()

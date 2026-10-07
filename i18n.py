@@ -175,15 +175,31 @@ MESSAGES = {
             "💡 <i>Your capital has been safely restored to SOL!</i>"
         ),
         "panic_no_positions": "ℹ️ <b>No open token holdings found to liquidate.</b>",
+        "slippage_updated": "🎯 Slippage tolerance set to <b>{pct:.2f}%</b> (<code>{bps} BPS</code>)!",
+        "slippage_syntax_help": "ℹ️ <b>Slippage Syntax</b>: <code>/slippage [PERCENT]</code>\nExample: <code>/slippage 1.5</code> (or <code>/slip 2.0</code>)",
+        "slippage_invalid": "❌ Please specify a slippage between 0.1% and 50.0% (e.g. <code>1.5</code>).",
+        "autobuy_status_title": "🤖 <b>Auto-Buy Sniper Engine</b>",
+        "autobuy_status_body": (
+            "Status: <b>{status}</b>\n"
+            "Amount: <code>{amt:.3f} SOL</code> per snipe\n\n"
+            "When enabled, Popcorn Bot automatically executes an instant buy swap whenever you paste a Solana token Contract Address (CA)."
+        ),
+        "autobuy_updated": "🤖 Auto-Buy is now <b>{status}</b> (<code>{amt:.3f} SOL</code>)!",
+        "autobuy_syntax_help": "ℹ️ <b>Auto-Buy Syntax</b>: <code>/autobuy [AMOUNT|on|off]</code>\nExample: <code>/autobuy 0.1</code> or <code>/autobuy off</code>",
+        "price_card_title": "💵 <b>Token Price & Liquidity Radar</b>",
+        "price_syntax_help": "ℹ️ <b>Price Syntax</b>: <code>/price [CA_OR_TICKER]</code>\nExample: <code>/price bonk</code>",
         "help_title": "❓ <b>Popcorn Solana Sniper & Trading Bot Guide</b> ⚡",
         "help_body": (
             "━━━━━━━━━━━━━━━━━━━\n"
             "• <code>/start</code> - Open Main Dashboard\n"
             "• <code>/search [TICKER]</code> - Search Token by Name or Symbol\n"
+            "• <code>/price [CA/TICKER]</code> - Quick Price & Liquidity Radar\n"
             "• <code>/audit [CA/TICKER]</code> - Full Token Security & RugCheck Scan\n"
             "• <code>/ping</code> - Check Solana RPC & Jupiter Routing Speed\n"
             "• <code>/buy [CA/TICKER] [AMOUNT]</code> - Instant Custom Buy Snipe\n"
             "• <code>/sell [CA/TICKER] [PERCENT]</code> - Instant Market Sell (%)\n"
+            "• <code>/autobuy [AMOUNT|off]</code> - Configure Instant Auto-Buy Sniper\n"
+            "• <code>/slippage [PERCENT]</code> - Set Custom Slippage Tolerance (%)\n"
             "• <code>/surge</code> - View Explosive High-Velocity Gainers (1h/24h)\n"
             "• <code>/history</code> - View Recent Trade History & Solscan Links\n"
             "• <code>/alerts</code> - Toggle Autonomous Price Volatility Alerts\n"
@@ -369,15 +385,31 @@ MESSAGES = {
             "💡 <i>تم تأمين رأس مالك واستعادته بالكامل كـ SOL!</i>"
         ),
         "panic_no_positions": "ℹ️ <b>لا توجد أي صفقات أو أرصدة عملات مفتوحة لتصفيتها.</b>",
+        "slippage_updated": "🎯 تم ضبط نسبة الانزلاق المسموح إلى <b>{pct:.2f}%</b> (<code>{bps} BPS</code>)!",
+        "slippage_syntax_help": "ℹ️ <b>صيغة الانزلاق</b>: <code>/slippage [النسبة]</code>\nمثال: <code>/slippage 1.5</code> (أو <code>/slip 2.0</code>)",
+        "slippage_invalid": "❌ يرجى تحديد نسبة انزلاق صالحة بين 0.1% و 50.0% (مثل <code>1.5</code>).",
+        "autobuy_status_title": "🤖 <b>رادار القنص والشراء التلقائي (Auto-Buy)</b>",
+        "autobuy_status_body": (
+            "الحالة: <b>{status}</b>\n"
+            "المبلغ: <code>{amt:.3f} SOL</code> لكل صفقة\n\n"
+            "عند التفعيل، يقوم البوت فورياً بشراء العملة بالمبلغ المحدد بمجرد لصق عنوان عقدها (CA) دون الحاجة للضغط على أي زر."
+        ),
+        "autobuy_updated": "🤖 تم ضبط الشراء التلقائي: <b>{status}</b> (<code>{amt:.3f} SOL</code>)!",
+        "autobuy_syntax_help": "ℹ️ <b>صيغة الشراء التلقائي</b>: <code>/autobuy [المبلغ|on|off]</code>\nمثال: <code>/autobuy 0.1</code> أو <code>/autobuy off</code>",
+        "price_card_title": "💵 <b>رادار سعر وسيولة العملة اللحظي</b>",
+        "price_syntax_help": "ℹ️ <b>صيغة فحص السعر</b>: <code>/price [العقد_أو_الرمز]</code>\nمثال: <code>/price bonk</code>",
         "help_title": "❓ <b>دليل استخدام بوت قنص وتداول سولانا</b> ⚡",
         "help_body": (
             "━━━━━━━━━━━━━━━━━━━\n"
             "• <code>/start</code> - فتح لوحة التحكم الرئيسية\n"
             "• <code>/search [الرمز/الاسم]</code> - البحث عن العملات بالاسم أو الرمز\n"
+            "• <code>/price [العقد/الرمز]</code> - فحص سريع للسعر والسيولة والماركت كاب\n"
             "• <code>/audit [العقد/الرمز]</code> - فحص وتدقيق أمان العقد و RugCheck\n"
             "• <code>/ping</code> - فحص سرعة استجابة خوادم سولانا و Jupiter\n"
             "• <code>/buy [العقد/الرمز] [المبلغ]</code> - قنص وشراء فوري بمبلغ مخصص\n"
             "• <code>/sell [العقد/الرمز] [النسبة]</code> - بيع فوري بنسبة مئوية (%)\n"
+            "• <code>/autobuy [المبلغ|off]</code> - ضبط القنص والشراء التلقائي الفوري\n"
+            "• <code>/slippage [النسبة]</code> - ضبط نسبة الانزلاق المخصصة (%)\n"
             "• <code>/surge</code> - رادار العملات المتفجرة الأكثر صعوداً (1h/24h)\n"
             "• <code>/history</code> - عرض سجل الصفقات المنفذة وروابط Solscan\n"
             "• <code>/alerts</code> - تفعيل أو تعطيل تنبيهات تقلبات الأسعار التلقائية\n"

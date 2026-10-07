@@ -670,6 +670,66 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertIn("COMPLETED", t("panic_success_title", "en"))
         self.assertIn("بنجاح", t("panic_success_title", "ar"))
 
+    def test_28_precision_slippage_and_autobuy_suite(self):
+        """Test precision custom slippage, auto-buy commands, price card radar, and bilingual i18n."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock
+        from telegram_bot import slippage_command, autobuy_command, price_command
+        from wallet_manager import get_user_settings, get_auto_buy_settings
+        from i18n import t
+
+        test_uid = 99881144
+        get_or_create_wallet(test_uid, "PrecisionTester")
+
+        # 1. Test custom slippage command: 1.5% -> 150 bps
+        mock_update = MagicMock()
+        mock_update.effective_user.id = test_uid
+        mock_update.message.reply_text = AsyncMock()
+        mock_context = MagicMock()
+        mock_context.args = ["1.5%"]
+        asyncio.run(slippage_command(mock_update, mock_context))
+        st = get_user_settings(test_uid)
+        self.assertEqual(st["slippage_bps"], 150, "Slippage should be set to 150 bps")
+
+        # 2. Test slippage invalid bounds
+        mock_context.args = ["60"]  # > 50%
+        mock_update.message.reply_text.reset_mock()
+        asyncio.run(slippage_command(mock_update, mock_context))
+        err_msg = mock_update.message.reply_text.call_args[0][0]
+        self.assertIn("0.1%", err_msg)
+
+        # 3. Test autobuy command: /autobuy 0.25
+        mock_context.args = ["0.25"]
+        asyncio.run(autobuy_command(mock_update, mock_context))
+        en, amt = get_auto_buy_settings(test_uid)
+        self.assertTrue(en)
+        self.assertEqual(amt, 0.25)
+
+        # 4. Test autobuy toggle to off: /autobuy off
+        mock_context.args = ["off"]
+        asyncio.run(autobuy_command(mock_update, mock_context))
+        en, _ = get_auto_buy_settings(test_uid)
+        self.assertFalse(en)
+
+        # 5. Test price command
+        mock_update.message.reply_text = AsyncMock()
+        mock_status = AsyncMock()
+        mock_update.message.reply_text.return_value = mock_status
+        mock_context.args = ["BONK"]
+        asyncio.run(price_command(mock_update, mock_context))
+        self.assertTrue(mock_status.edit_text.called)
+        card_text = mock_status.edit_text.call_args[0][0]
+        self.assertIn("BONK", card_text.upper())
+        self.assertIn("Price", card_text)
+
+        # 6. Verify i18n keys in both languages
+        self.assertIn("Slippage", t("slippage_syntax_help", "en"))
+        self.assertIn("الانزلاق", t("slippage_syntax_help", "ar"))
+        self.assertIn("Auto-Buy", t("autobuy_status_title", "en"))
+        self.assertIn("التلقائي", t("autobuy_status_title", "ar"))
+        self.assertIn("Price", t("price_card_title", "en"))
+        self.assertIn("سعر", t("price_card_title", "ar"))
+
 
 if __name__ == "__main__":
     unittest.main()

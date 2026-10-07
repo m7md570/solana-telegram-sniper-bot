@@ -118,10 +118,13 @@ python telegram_bot.py
 |---|---|
 | `/start` | Initializes user trading wallet and opens the main dashboard |
 | `/search [TICKER]` | Resolves any Solana token by ticker or name via DexScreener API |
+| `/price [CA/TICKER]` | Quick token price, 24h change, liquidity & chart radar |
 | `/audit [CA/TICKER]` | Direct RugCheck security & DexScreener financial audit scanner |
 | `/ping` / `/speed` | Live Solana Primary RPC & Jupiter V6 routing latency benchmark |
 | `/buy [CA/TICKER] [SOL]` | Instant 1-step direct buy snipe with optimal routing |
 | `/sell [CA/TICKER] [%]` | Instant 1-step market sell (e.g. `/sell bonk 100` or `/sell CA 50`) |
+| `/autobuy [AMT/off]` | Instant Auto-Buy Sniper on CA paste (configurable SOL amount) |
+| `/slippage [PCT]` | Sets precision custom slippage tolerance (e.g. `/slippage 1.5`) |
 | `/panic` / `/sellall` | 1-Click Emergency liquidation: market sells 100% of all holdings back to SOL |
 | `/tp [PCT]` / `/sl [PCT]` | Autonomous Take-Profit target (+%) and Stop-Loss limit (-%) triggers |
 | `/alerts` | Autonomous price volatility & momentum radar alerts (±10%) |
@@ -143,7 +146,7 @@ python telegram_bot.py
 ## 🧪 Benchmark & Quality Assurance
 
 * **RPC Broadcast Latency:** < 350ms via Jupiter V6
-* **Unit Test Coverage:** 27/27 comprehensive tests passing (`test_bot.py`)
+* **Unit Test Coverage:** 28/28 comprehensive tests passing (`test_bot.py`)
 * **Security Checks:** Zero plain-text private key logging. Local AES-256 database encryption.
 * **MEV Defense:** Dynamic price-impact slippage auto-scaling and anti-sandwich protection.
 

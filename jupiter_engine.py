@@ -29,6 +29,14 @@ from config import (
 )
 from wallet_manager import get_db_connection
 
+# Persistent HTTP session with connection pooling and keep-alive for sub-300ms Jupiter execution
+_SESSION = requests.Session()
+_SESSION.headers.update({
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9"
+})
+
 
 def calculate_optimal_slippage(price_impact_pct: float, base_slippage_bps: int = DEFAULT_SLIPPAGE_BPS) -> int:
     """
@@ -71,7 +79,7 @@ def get_jupiter_quote(
         params["platformFeeBps"] = str(PLATFORM_FEE_BPS)
 
     try:
-        resp = requests.get(JUPITER_QUOTE_API, params=params, timeout=8)
+        resp = _SESSION.get(JUPITER_QUOTE_API, params=params, timeout=8)
         if resp.status_code == 200:
             return resp.json()
         else:
@@ -106,7 +114,7 @@ def build_and_sign_swap_tx(
         payload["feeAccount"] = DEVELOPER_WALLET
 
     try:
-        resp = requests.post(JUPITER_SWAP_API, json=payload, timeout=10)
+        resp = _SESSION.post(JUPITER_SWAP_API, json=payload, timeout=10)
         if resp.status_code != 200:
             print(f"Jupiter swap build error ({resp.status_code}): {resp.text}")
             return None
@@ -155,7 +163,7 @@ def broadcast_transaction(tx_bytes: bytes) -> Tuple[bool, str]:
     endpoints = [PRIMARY_RPC] + FALLBACK_RPCS
     for rpc in endpoints:
         try:
-            r = requests.post(rpc, json=payload, timeout=6)
+            r = _SESSION.post(rpc, json=payload, timeout=6)
             if r.status_code == 200:
                 res = r.json()
                 if "result" in res:

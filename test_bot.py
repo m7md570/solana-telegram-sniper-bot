@@ -338,6 +338,41 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertIsNotNone(share_btn_ar)
         self.assertIn(f"ref_{test_uid}", share_btn_ar.url)
 
+    def test_20_trade_history_and_session_pooling(self):
+        """Test trade history stats retrieval, i18n keys, and HTTP session pooling."""
+        from jupiter_engine import _SESSION, record_trade_db
+        from wallet_manager import get_user_trade_stats
+        from i18n import t
+
+        # Verify persistent session
+        self.assertIsNotNone(_SESSION)
+        self.assertIn("User-Agent", _SESSION.headers)
+
+        # Record dummy trade for test user
+        record_trade_db(
+            user_id=self.test_user_id,
+            input_mint=WSOL_MINT,
+            output_mint=self.bonk_mint,
+            amount_in=0.05,
+            amount_out=1500000.0,
+            fee_sol=0.0005,
+            tx_sig="5UfvXzTestSignatureTradeHistory11111111111111111111",
+            status="CONFIRMED"
+        )
+
+        stats = get_user_trade_stats(self.test_user_id)
+        self.assertGreaterEqual(stats["total_trades"], 1)
+        self.assertGreater(len(stats["recent_trades"]), 0)
+        recent_trade = stats["recent_trades"][0]
+        self.assertEqual(recent_trade["input_mint"], WSOL_MINT)
+        self.assertEqual(recent_trade["output_mint"], self.bonk_mint)
+
+        # Verify i18n keys
+        title_en = t("trades_history_title", "en")
+        title_ar = t("trades_history_title", "ar")
+        self.assertIn("Trade History", title_en)
+        self.assertIn("سجل الصفقات", title_ar)
+
 
 if __name__ == "__main__":
     unittest.main()

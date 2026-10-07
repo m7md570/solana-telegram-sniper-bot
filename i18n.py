@@ -126,6 +126,9 @@ MESSAGES = {
         "gas_tier_normal": "⚡ Normal (0.00005 SOL)",
         "gas_tier_turbo": "🚀 Turbo (0.00025 SOL)",
         "gas_tier_ultra": "🏎️ Ultra (0.001 SOL)",
+        "btn_history": "📜 Trade History",
+        "trades_history_title": "📜 <b>Recent Trade History</b> ⚡",
+        "trades_no_history": "No trades executed yet. Paste a token CA or send a ticker to snipe your first memecoin!",
         "help_title": "❓ <b>Popcorn Solana Sniper & Trading Bot Guide</b> ⚡",
         "help_body": (
             "━━━━━━━━━━━━━━━━━━━\n"
@@ -133,6 +136,7 @@ MESSAGES = {
             "• <code>/search [TICKER]</code> - Search Token by Name or Symbol\n"
             "• <code>/buy [CA/TICKER] [AMOUNT]</code> - Instant Custom Buy Snipe\n"
             "• <code>/sell [CA/TICKER] [PERCENT]</code> - Instant Market Sell (%)\n"
+            "• <code>/history</code> - View Recent Trade History & Solscan Links\n"
             "• <code>/watchlist</code> - View Tracked Tokens & Live Prices\n"
             "• <code>/track [CA/TICKER]</code> - Add Token to Watchlist\n"
             "• <code>/trending</code> - View Trending Solana Tokens\n"
@@ -264,6 +268,9 @@ MESSAGES = {
         "gas_tier_normal": "⚡ عادي (0.00005 SOL)",
         "gas_tier_turbo": "🚀 سريع (0.00025 SOL)",
         "gas_tier_ultra": "🏎️ فائق السرعة (0.001 SOL)",
+        "btn_history": "📜 سجل الصفقات",
+        "trades_history_title": "📜 <b>سجل الصفقات المنفذة</b> ⚡",
+        "trades_no_history": "لم يتم تنفيذ أي صفقات بعد. الصق عنوان أي عملة للبدء في قنص العملات فورياً!",
         "help_title": "❓ <b>دليل استخدام بوت قنص وتداول سولانا</b> ⚡",
         "help_body": (
             "━━━━━━━━━━━━━━━━━━━\n"
@@ -271,6 +278,7 @@ MESSAGES = {
             "• <code>/search [الرمز/الاسم]</code> - البحث عن العملات بالاسم أو الرمز\n"
             "• <code>/buy [العقد/الرمز] [المبلغ]</code> - قنص وشراء فوري بمبلغ مخصص\n"
             "• <code>/sell [العقد/الرمز] [النسبة]</code> - بيع فوري بنسبة مئوية (%)\n"
+            "• <code>/history</code> - عرض سجل الصفقات المنفذة وروابط Solscan\n"
             "• <code>/watchlist</code> - عرض قائمة العملات المتابعة وأسعارها اللحظية\n"
             "• <code>/track [العقد/الرمز]</code> - إضافة عملة إلى قائمة المتابعة\n"
             "• <code>/trending</code> - عرض أكثر عملات سولانا رواجاً\n"

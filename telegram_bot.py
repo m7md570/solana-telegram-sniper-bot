@@ -125,14 +125,15 @@ def get_main_menu_keyboard(user_id: int, lang: str = "en") -> InlineKeyboardMark
             InlineKeyboardButton(t("btn_positions", lang), callback_data="btn_positions")
         ],
         [
-            InlineKeyboardButton(t("btn_wallet", lang), callback_data="btn_wallet"),
+            InlineKeyboardButton(t("btn_history", lang), callback_data="btn_history"),
             InlineKeyboardButton(t("btn_referral", lang), callback_data="btn_referral")
         ],
         [
-            InlineKeyboardButton(f"{t('btn_autobuy', lang)} ({auto_badge})", callback_data="btn_autobuy_settings"),
+            InlineKeyboardButton(t("btn_wallet", lang), callback_data="btn_wallet"),
             InlineKeyboardButton(t("btn_settings", lang), callback_data="btn_settings")
         ],
         [
+            InlineKeyboardButton(f"{t('btn_autobuy', lang)} ({auto_badge})", callback_data="btn_autobuy_settings"),
             InlineKeyboardButton(lang_toggle_btn, callback_data="btn_toggle_lang")
         ],
         [
@@ -548,6 +549,69 @@ async def render_watchlist(target, user_id: int, user_lang: str, is_edit: bool =
         await target.reply_text(full_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
 
 
+async def render_trade_history(target, user_id: int, user_lang: str, is_edit: bool = False):
+    """Renders recent executed trades with Solscan transaction links."""
+    stats = get_user_trade_stats(user_id)
+    recent = stats.get("recent_trades", [])
+    now_str = get_current_time_str()
+    title = t("trades_history_title", user_lang)
+
+    if not recent:
+        empty_text = (
+            f"{title}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"{t('trades_no_history', user_lang)}\n\n"
+            f"🕒 <code>{now_str}</code>"
+        )
+        kb = [[InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]]
+        if is_edit:
+            await safe_edit_text(target, empty_text, reply_markup=InlineKeyboardMarkup(kb))
+        else:
+            await target.reply_text(empty_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
+        return
+
+    text_lines = [
+        title,
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    ]
+    for tr in recent[:8]:
+        in_m = tr["input_mint"]
+        out_m = tr["output_mint"]
+        amt_in = tr["amount_in"]
+        amt_out = tr["amount_out"]
+        fee = tr.get("platform_fee_sol", 0.0) or 0.0
+        sig = tr.get("tx_signature", "")
+        status = tr.get("status", "CONFIRMED")
+        dt = (tr.get("created_at") or "")[:19]
+
+        is_buy = (in_m == WSOL_MINT)
+        if is_buy:
+            mint_short = f"{out_m[:4]}...{out_m[-4:]}"
+            action_label = f"🟢 <b>BUY</b> <code>{amt_out:,.1f}</code> ({mint_short})"
+            cost_label = f"💰 <code>{amt_in:.4f} SOL</code> (Fee: <code>{fee:.5f} SOL</code>)"
+        else:
+            mint_short = f"{in_m[:4]}...{in_m[-4:]}"
+            action_label = f"🔴 <b>SELL</b> <code>{amt_in:,.1f}</code> ({mint_short})"
+            cost_label = f"💰 Recv: <code>{amt_out:.4f} SOL</code> (Fee: <code>{fee:.5f} SOL</code>)"
+
+        sig_link = f"<a href='https://solscan.io/tx/{sig}'>Solscan ↗</a>" if sig else "<code>Pending</code>"
+        text_lines.append(f"{action_label}\n{cost_label} | {sig_link}\n🕒 <i>{dt}</i>\n")
+
+    text_lines.append(f"🕒 <code>{now_str}</code>")
+    refresh_btn_text = "🔄 " + ("Refresh History" if user_lang == "en" else "تحديث السجل")
+    kb = [
+        [
+            InlineKeyboardButton(refresh_btn_text, callback_data="btn_history"),
+            InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
+        ]
+    ]
+    full_text = "\n".join(text_lines)
+    if is_edit:
+        await safe_edit_text(target, full_text, reply_markup=InlineKeyboardMarkup(kb))
+    else:
+        await target.reply_text(full_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb), disable_web_page_preview=True)
+
+
 async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handles all inline button clicks with bilingual localization."""
     query = update.callback_query
@@ -743,6 +807,9 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "btn_watchlist":
         await render_watchlist(query, user_id, user_lang, is_edit=True)
 
+    elif data == "btn_history":
+        await render_trade_history(query, user_id, user_lang, is_edit=True)
+
     elif data.startswith("track_"):
         mint = data.replace("track_", "", 1)
         scan = scan_token_security(mint)
@@ -777,10 +844,13 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = f"{t('pnl_title', user_lang)}\n{pnl_body_text}\n🕒 <code>{now_str}</code>"
         kb = [
             [
-                InlineKeyboardButton(t("btn_trending", user_lang), callback_data="btn_trending"),
+                InlineKeyboardButton(t("btn_history", user_lang), callback_data="btn_history"),
                 InlineKeyboardButton(t("btn_positions", user_lang), callback_data="btn_positions")
             ],
-            [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
+            [
+                InlineKeyboardButton(t("btn_trending", user_lang), callback_data="btn_trending"),
+                InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
+            ]
         ]
         await safe_edit_text(query, text, reply_markup=InlineKeyboardMarkup(kb))
 
@@ -1124,12 +1194,22 @@ async def pnl_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = f"{t('pnl_title', user_lang)}\n{pnl_body_text}\n🕒 <code>{now_str}</code>"
     kb = [
         [
-            InlineKeyboardButton(t("btn_trending", user_lang), callback_data="btn_trending"),
+            InlineKeyboardButton(t("btn_history", user_lang), callback_data="btn_history"),
             InlineKeyboardButton(t("btn_positions", user_lang), callback_data="btn_positions")
         ],
-        [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
+        [
+            InlineKeyboardButton(t("btn_trending", user_lang), callback_data="btn_trending"),
+            InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
+        ]
     ]
     await update.message.reply_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
+
+
+async def history_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for /history and /trades command."""
+    user_id = update.effective_user.id
+    user_lang = get_user_language(user_id)
+    await render_trade_history(update.message, user_id, user_lang, is_edit=False)
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1347,6 +1427,8 @@ def build_application(token: str) -> Application:
     app.add_handler(CommandHandler("watchlist", watchlist_command))
     app.add_handler(CommandHandler("track", track_command))
     app.add_handler(CommandHandler("positions", positions_command))
+    app.add_handler(CommandHandler("history", history_command))
+    app.add_handler(CommandHandler("trades", history_command))
     app.add_handler(CommandHandler("settings", settings_command))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CallbackQueryHandler(callback_router))

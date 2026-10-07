@@ -157,6 +157,24 @@ MESSAGES = {
             "💡 <i>Sub-second routing ensures optimal entry on explosive memecoins!</i>"
         ),
         "audit_usage_help": "ℹ️ <b>Audit Syntax</b>: <code>/audit [CA_OR_TICKER]</code>\nExample: <code>/audit bonk</code>",
+        "panic_confirm_title": "🚨 <b>EMERGENCY PANIC SELL-ALL (100%)</b>",
+        "panic_confirm_body": (
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "⚠️ <b>Are you sure you want to market sell ALL open positions immediately?</b>\n\n"
+            "This will liquidate 100% of all tokens in your wallet and convert them back into SOL via Jupiter V6.\n\n"
+            "📊 Open Positions: <code>{count} tokens</code>"
+        ),
+        "btn_panic_confirm": "🚨 Liquidate All Positions (100%)",
+        "btn_panic_execute": "🚨 YES, SELL ALL NOW!",
+        "panic_success_title": "🎉 <b>EMERGENCY LIQUIDATION COMPLETED!</b> 🟢",
+        "panic_success_body": (
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "✅ <b>Successfully Liquidated:</b> <code>{success_cnt}/{total_cnt} positions</code>\n"
+            "💰 <b>Total Reclaimed:</b> <code>{total_sol:.4f} SOL</code> in wallet\n"
+            "🛡️ <b>Platform Fee:</b> 1.0% settled automatically\n\n"
+            "💡 <i>Your capital has been safely restored to SOL!</i>"
+        ),
+        "panic_no_positions": "ℹ️ <b>No open token holdings found to liquidate.</b>",
         "help_title": "❓ <b>Popcorn Solana Sniper & Trading Bot Guide</b> ⚡",
         "help_body": (
             "━━━━━━━━━━━━━━━━━━━\n"
@@ -180,6 +198,7 @@ MESSAGES = {
             "• <code>/wallet</code> - View Wallet, Deposit & Export Keys\n"
             "• <code>/withdraw [ADDRESS] [AMOUNT]</code> - Withdraw SOL\n"
             "• <code>/positions</code> - View Open Holdings with 1-Click Sell\n"
+            "• <code>/panic</code> - Emergency Market Sell All Open Positions (100%)\n"
             "• <code>/settings</code> - Configure Slippage, Gas & Language\n\n"
             "💡 <b>To snipe a token</b>: Paste any CA, DexScreener link, or type a ticker (e.g. <code>BONK</code>) directly here!"
         )
@@ -332,6 +351,24 @@ MESSAGES = {
             "💡 <i>زمن الاستجابة الفائق يضمن لك اقتناص العملات المتفجرة بأفضل سعر ممكن!</i>"
         ),
         "audit_usage_help": "ℹ️ <b>صيغة الفحص والتدقيق</b>: <code>/audit [العقد_أو_الرمز]</code>\nمثال: <code>/audit bonk</code>",
+        "panic_confirm_title": "🚨 <b>تصفية وبيع طوارئ شامل لجميع الصفقات (100%)</b>",
+        "panic_confirm_body": (
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "⚠️ <b>هل أنت متأكد من رغبتك في بيع وتصفية جميع صفقاتك المفتوحة فورياً بسعر السوق؟</b>\n\n"
+            "سيقوم البوت ببيع 100% من جميع العملات المحتفظ بها في محفظتك وتحويلها بالكامل إلى SOL عبر Jupiter V6.\n\n"
+            "📊 عدد الصفقات المفتوحة: <code>{count} عملات</code>"
+        ),
+        "btn_panic_confirm": "🚨 بيع وتصفية شاملة لجميع الصفقات (100%)",
+        "btn_panic_execute": "🚨 نعم، قم ببيع وتصفية كل شيء الآن!",
+        "panic_success_title": "🎉 <b>اكتملت تصفية الطوارئ بنجاح تام!</b> 🟢",
+        "panic_success_body": (
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "✅ <b>تمت التصفية بنجاح:</b> <code>{success_cnt}/{total_cnt} صفقات</code>\n"
+            "💰 <b>إجمالي المسترد في المحفظة:</b> <code>{total_sol:.4f} SOL</code>\n"
+            "🛡️ <b>رسوم المنصة:</b> 1.0% مقتطعة آلياً\n\n"
+            "💡 <i>تم تأمين رأس مالك واستعادته بالكامل كـ SOL!</i>"
+        ),
+        "panic_no_positions": "ℹ️ <b>لا توجد أي صفقات أو أرصدة عملات مفتوحة لتصفيتها.</b>",
         "help_title": "❓ <b>دليل استخدام بوت قنص وتداول سولانا</b> ⚡",
         "help_body": (
             "━━━━━━━━━━━━━━━━━━━\n"
@@ -355,6 +392,7 @@ MESSAGES = {
             "• <code>/wallet</code> - عرض المحفظة والإيداع وتصدير المفاتيح\n"
             "• <code>/withdraw [العنوان] [المبلغ]</code> - سحب رصيد SOL\n"
             "• <code>/positions</code> - عرض صفقاتك المفتوحة مع أزرار البيع الفوري\n"
+            "• <code>/panic</code> - تصفية وبيع طوارئ شامل لجميع الصفقات (100%)\n"
             "• <code>/settings</code> - ضبط نسبة الانزلاق ورسوم الغاز واللغة\n\n"
             "💡 <b>للقنص الفوري</b>: الصق عنوان أي عملة أو رابط أو اكتب رمزها (مثل <code>BONK</code>) هنا مباشرة!"
         )

@@ -118,8 +118,15 @@ python telegram_bot.py
 |---|---|
 | `/start` | Initializes user trading wallet and opens the main dashboard |
 | `/search [TICKER]` | Resolves any Solana token by ticker or name via DexScreener API |
+| `/audit [CA/TICKER]` | Direct RugCheck security & DexScreener financial audit scanner |
+| `/ping` / `/speed` | Live Solana Primary RPC & Jupiter V6 routing latency benchmark |
 | `/buy [CA/TICKER] [SOL]` | Instant 1-step direct buy snipe with optimal routing |
 | `/sell [CA/TICKER] [%]` | Instant 1-step market sell (e.g. `/sell bonk 100` or `/sell CA 50`) |
+| `/panic` / `/sellall` | 1-Click Emergency liquidation: market sells 100% of all holdings back to SOL |
+| `/tp [PCT]` / `/sl [PCT]` | Autonomous Take-Profit target (+%) and Stop-Loss limit (-%) triggers |
+| `/alerts` | Autonomous price volatility & momentum radar alerts (±10%) |
+| `/surge` / `/gainers` | Real-time Solana high-velocity gainers & surge radar (1h/24h) |
+| `/history` / `/trades` | Full trade history terminal with Solscan on-chain transaction links |
 | `/gas` / `/priority` | Configures Priority Gas speed tiers (Normal 50k, Turbo 250k, Ultra 1M) |
 | `/watchlist` | Displays personalized token watchlist with live prices and 24h changes |
 | `/track [CA/TICKER]` | Adds any token to user watchlist for continuous tracking |
@@ -128,7 +135,7 @@ python telegram_bot.py
 | `/referral` | Viral 25% lifetime referral program link and rewards tracker |
 | `/wallet` | Non-custodial wallet management, deposit address, and key export |
 | `/withdraw [ADDR] [SOL]` | Withdraws SOL directly to Phantom or external wallet |
-| `/positions` | Lists all currently held SPL token balances |
+| `/positions` | Lists all currently held SPL token balances with 1-click Sell buttons |
 | `/settings` | Dual-mode configuration for slippage, priority fee, and bilingual UI |
 
 ---
@@ -136,7 +143,7 @@ python telegram_bot.py
 ## 🧪 Benchmark & Quality Assurance
 
 * **RPC Broadcast Latency:** < 350ms via Jupiter V6
-* **Unit Test Coverage:** 18/18 tests passing (`test_bot.py`)
+* **Unit Test Coverage:** 27/27 comprehensive tests passing (`test_bot.py`)
 * **Security Checks:** Zero plain-text private key logging. Local AES-256 database encryption.
 * **MEV Defense:** Dynamic price-impact slippage auto-scaling and anti-sandwich protection.
 

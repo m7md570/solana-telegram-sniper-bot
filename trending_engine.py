@@ -247,23 +247,28 @@ def get_batch_token_prices(mints: List[str]) -> Dict[str, Dict[str, Any]]:
         chunk = mints[i:i + chunk_size]
         joined = ",".join(chunk)
         url = f"https://api.dexscreener.com/latest/dex/tokens/{joined}"
-        try:
-            r = _SESSION.get(url, timeout=7)
-            if r.status_code == 200:
-                pairs = r.json().get("pairs", [])
-                for p in pairs:
-                    base = p.get("baseToken", {})
-                    mint_addr = base.get("address")
-                    if mint_addr and mint_addr in chunk and mint_addr not in results:
-                        results[mint_addr] = {
-                            "symbol": base.get("symbol", "UNKNOWN"),
-                            "name": base.get("name", "Unknown"),
-                            "price_usd": float(p.get("priceUsd") or 0.0),
-                            "change_24h": float(p.get("priceChange", {}).get("h24") or 0.0),
-                            "change_1h": float(p.get("priceChange", {}).get("h1") or 0.0),
-                            "liquidity": float(p.get("liquidity", {}).get("usd") or 0.0)
-                        }
-        except Exception as e:
-            print(f"Error fetching batch token prices: {e}")
+        for attempt in range(2):
+            try:
+                r = _SESSION.get(url, timeout=12)
+                if r.status_code == 200:
+                    pairs = r.json().get("pairs", [])
+                    for p in pairs:
+                        base = p.get("baseToken", {})
+                        mint_addr = base.get("address")
+                        if mint_addr and mint_addr in chunk and mint_addr not in results:
+                            results[mint_addr] = {
+                                "symbol": base.get("symbol", "UNKNOWN"),
+                                "name": base.get("name", "Unknown"),
+                                "price_usd": float(p.get("priceUsd") or 0.0),
+                                "change_24h": float(p.get("priceChange", {}).get("h24") or 0.0),
+                                "change_1h": float(p.get("priceChange", {}).get("h1") or 0.0),
+                                "liquidity": float(p.get("liquidity", {}).get("usd") or 0.0)
+                            }
+                    break
+            except Exception as e:
+                if attempt == 0:
+                    time.sleep(1)
+                    continue
+                print(f"Error fetching batch token prices: {e}")
 
     return results

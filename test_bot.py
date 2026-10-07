@@ -605,6 +605,71 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertIn("Latency", t("btn_ping", "en"))
         self.assertIn("استجابة", t("btn_ping", "ar"))
 
+    def test_27_panic_sell_all_engine(self):
+        """Test emergency panic sell-all confirmation, liquidation execution, and bilingual i18n."""
+        import asyncio
+        from unittest.mock import AsyncMock, patch
+        from telegram_bot import render_panic_confirm, execute_panic_sell_all, render_positions
+        from i18n import t
+
+        test_uid = 99881133
+        get_or_create_wallet(test_uid, "PanicTester")
+        mock_target = AsyncMock()
+
+        # 1. Test render_panic_confirm with NO positions
+        asyncio.run(render_panic_confirm(mock_target, test_uid, user_lang="en", is_edit=False))
+        self.assertTrue(mock_target.reply_text.called)
+        msg_empty = mock_target.reply_text.call_args[0][0]
+        self.assertIn("No open token holdings found", msg_empty)
+
+        # 2. Test render_panic_confirm WITH positions
+        mock_target.reset_mock()
+        mock_tokens = [
+            {"mint": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", "amount": 1000000.0, "decimals": 5},
+            {"mint": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU", "amount": 500.0, "decimals": 6}
+        ]
+        with patch("telegram_bot.get_token_accounts", return_value=mock_tokens):
+            asyncio.run(render_panic_confirm(mock_target, test_uid, user_lang="en", is_edit=False))
+            self.assertTrue(mock_target.reply_text.called)
+            confirm_msg = mock_target.reply_text.call_args[0][0]
+            self.assertIn("EMERGENCY PANIC SELL-ALL", confirm_msg)
+            self.assertIn("2 tokens", confirm_msg)
+
+            # Check execute button present
+            reply_markup = mock_target.reply_text.call_args[1]["reply_markup"]
+            all_btns = [b for row in reply_markup.inline_keyboard for b in row]
+            exec_btn = next((b for b in all_btns if b.callback_data == "btn_panic_execute"), None)
+            self.assertIsNotNone(exec_btn, "btn_panic_execute must be present")
+
+        # 3. Test execute_panic_sell_all execution
+        mock_target.reset_mock()
+        with patch("telegram_bot.get_token_accounts", return_value=mock_tokens), \
+             patch("telegram_bot.execute_sell_swap", return_value=(True, "mock_panic_tx_sig", 0.05)):
+            asyncio.run(execute_panic_sell_all(mock_target, test_uid, user_lang="en"))
+            edited_mock = mock_target.edit_message_text if mock_target.edit_message_text.called else mock_target.edit_text
+            self.assertTrue(edited_mock.called)
+            final_call = edited_mock.call_args_list[-1]
+            success_text = final_call[0][0]
+            self.assertIn("EMERGENCY LIQUIDATION COMPLETED", success_text)
+            self.assertIn("2/2 positions", success_text)
+            self.assertIn("0.1000 SOL", success_text)
+
+        # 4. Check render_positions has btn_panic_confirm button
+        mock_target.reset_mock()
+        with patch("telegram_bot.get_token_accounts", return_value=mock_tokens):
+            asyncio.run(render_positions(mock_target, test_uid, user_lang="en", is_edit=False))
+            self.assertTrue(mock_target.reply_text.called)
+            pos_markup = mock_target.reply_text.call_args[1]["reply_markup"]
+            all_pos_btns = [b for row in pos_markup.inline_keyboard for b in row]
+            panic_btn = next((b for b in all_pos_btns if b.callback_data == "btn_panic_confirm"), None)
+            self.assertIsNotNone(panic_btn, "btn_panic_confirm must be present in positions card")
+
+        # 5. Check bilingual i18n keys
+        self.assertIn("PANIC", t("panic_confirm_title", "en"))
+        self.assertIn("طوارئ", t("panic_confirm_title", "ar"))
+        self.assertIn("COMPLETED", t("panic_success_title", "en"))
+        self.assertIn("بنجاح", t("panic_success_title", "ar"))
+
 
 if __name__ == "__main__":
     unittest.main()

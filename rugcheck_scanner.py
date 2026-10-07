@@ -6,6 +6,7 @@ Analyzes token contract addresses, live DexScreener metrics, and RugCheck securi
 
 import re
 import html
+import time
 import requests
 from typing import Dict, Any, Optional
 
@@ -43,25 +44,29 @@ def scan_token_security(mint: str) -> Dict[str, Any]:
         "is_valid": False
     }
 
-    # 1. Fetch Market & Financial Data from DexScreener
-    try:
-        url = f"{DEXSCREENER_API}/{mint}"
-        r = _SESSION.get(url, timeout=7)
-        if r.status_code == 200:
-            data = r.json()
-            pairs = data.get("pairs") or []
-            if pairs:
-                p = pairs[0]
-                result["symbol"] = p.get("baseToken", {}).get("symbol", "UNKNOWN")
-                result["name"] = p.get("baseToken", {}).get("name", "Unknown Token")
-                result["price_usd"] = float(p.get("priceUsd") or 0.0)
-                result["mcap"] = float(p.get("fdv") or p.get("marketCap") or 0.0)
-                result["liquidity_usd"] = float(p.get("liquidity", {}).get("usd") or 0.0)
-                result["volume_24h"] = float(p.get("volume", {}).get("h24") or 0.0)
-                result["price_change_24h"] = float(p.get("priceChange", {}).get("h24") or 0.0)
-                result["is_valid"] = True
-    except Exception as e:
-        print(f"DexScreener fetch warning: {e}")
+    for attempt in range(2):
+        try:
+            url = f"{DEXSCREENER_API}/{mint}"
+            r = _SESSION.get(url, timeout=12)
+            if r.status_code == 200:
+                data = r.json()
+                pairs = data.get("pairs") or []
+                if pairs:
+                    p = pairs[0]
+                    result["symbol"] = p.get("baseToken", {}).get("symbol", "UNKNOWN")
+                    result["name"] = p.get("baseToken", {}).get("name", "Unknown Token")
+                    result["price_usd"] = float(p.get("priceUsd") or 0.0)
+                    result["mcap"] = float(p.get("fdv") or p.get("marketCap") or 0.0)
+                    result["liquidity_usd"] = float(p.get("liquidity", {}).get("usd") or 0.0)
+                    result["volume_24h"] = float(p.get("volume", {}).get("h24") or 0.0)
+                    result["price_change_24h"] = float(p.get("priceChange", {}).get("h24") or 0.0)
+                    result["is_valid"] = True
+                    break
+        except Exception as e:
+            if attempt == 0:
+                time.sleep(1)
+                continue
+            print(f"DexScreener fetch warning: {e}")
 
     # 2. Fetch Security & Audit from RugCheck
     try:

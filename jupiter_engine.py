@@ -78,14 +78,21 @@ def get_jupiter_quote(
     if with_fee:
         params["platformFeeBps"] = str(PLATFORM_FEE_BPS)
 
-    try:
-        resp = _SESSION.get(JUPITER_QUOTE_API, params=params, timeout=8)
-        if resp.status_code == 200:
-            return resp.json()
-        else:
-            print(f"Jupiter quote error ({resp.status_code}): {resp.text}")
-    except Exception as e:
-        print(f"Jupiter quote exception: {e}")
+    for attempt in range(2):
+        try:
+            resp = _SESSION.get(JUPITER_QUOTE_API, params=params, timeout=12)
+            if resp.status_code == 200:
+                return resp.json()
+            elif attempt == 0:
+                time.sleep(1)
+                continue
+            else:
+                print(f"Jupiter quote error ({resp.status_code}): {resp.text}")
+        except Exception as e:
+            if attempt == 0:
+                time.sleep(1)
+                continue
+            print(f"Jupiter quote exception: {e}")
 
     return None
 

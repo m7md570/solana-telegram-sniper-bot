@@ -2376,8 +2376,18 @@ async def price_alert_worker(application: Application):
 
 
 async def bot_post_init(app: Application):
-    """Spawns background workers upon bot startup."""
+    """Spawns background workers and ensures English default profile description for global link previews."""
     asyncio.create_task(price_alert_worker(app))
+    try:
+        desc_en = (
+            "⚡ Ultra-fast Solana Sniper & Trading Bot powered by Jupiter V6 & RugCheck.\n\n"
+            "🎯 Sub-400ms Swaps | 1-Click Buy/Sell | Built-in RugCheck Honeypot Scanner | Trending Radar | Non-Custodial Encrypted Wallets."
+        )
+        short_en = "⚡ Ultra-fast Solana Sniper & Trading Bot via Jupiter V6 & RugCheck. Sub-400ms 1-click swaps & auto-audit."
+        await app.bot.set_my_description(desc_en, language_code="")
+        await app.bot.set_my_short_description(short_en, language_code="")
+    except Exception as e:
+        logger.warning(f"Could not sync bot descriptions: {e}")
 
 
 def build_application(token: str) -> Application:

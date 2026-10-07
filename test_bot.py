@@ -1213,6 +1213,27 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         tokens = wallet_manager.get_token_accounts(pubkey)
         self.assertIsInstance(tokens, list)
 
+    def test_43_batch_trending_tokens_engine(self):
+        """Test trending_engine single-request batch API and list formatting."""
+        from trending_engine import get_trending_tokens, format_trending_list
+
+        tokens = get_trending_tokens(limit=3)
+        self.assertIsInstance(tokens, list)
+        if tokens:
+            t0 = tokens[0]
+            self.assertIn("mint", t0)
+            self.assertIn("symbol", t0)
+            self.assertIn("price_usd", t0)
+
+            # Test English and Arabic formatted lists
+            card_en = format_trending_list(tokens, lang="en")
+            self.assertIn("Top Trending", card_en)
+            self.assertIn(t0["symbol"], card_en)
+
+            card_ar = format_trending_list(tokens, lang="ar")
+            self.assertIn("أكثر عملات سولانا رواجاً", card_ar)
+            self.assertIn(t0["symbol"], card_ar)
+
 
 if __name__ == "__main__":
     unittest.main()

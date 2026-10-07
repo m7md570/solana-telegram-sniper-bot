@@ -51,37 +51,49 @@ def get_trending_tokens(limit: int = 5) -> List[Dict[str, Any]]:
                     seen.add(m)
                     unique_mints.append(m)
 
-            for mint in unique_mints[:limit]:
+            # Fetch all trending tokens in a single high-speed batch request
+            mints_to_fetch = unique_mints[:limit]
+            if mints_to_fetch:
                 try:
-                    pair_url = f"https://api.dexscreener.com/latest/dex/tokens/{mint}"
-                    resp = _SESSION.get(pair_url, timeout=6)
+                    batch_url = f"https://api.dexscreener.com/latest/dex/tokens/{','.join(mints_to_fetch)}"
+                    resp = _SESSION.get(batch_url, timeout=7)
                     if resp.status_code == 200:
                         pairs = resp.json().get("pairs", [])
-                        if pairs:
-                            p = pairs[0]
-                            symbol = p.get("baseToken", {}).get("symbol", "UNKNOWN")
-                            name = p.get("baseToken", {}).get("name", "Unknown Token")
-                            price = float(p.get("priceUsd") or 0.0)
-                            change_24h = float(p.get("priceChange", {}).get("h24") or 0.0)
-                            change_1h = float(p.get("priceChange", {}).get("h1") or 0.0)
-                            vol = float(p.get("volume", {}).get("h24") or 0.0)
-                            liq = float(p.get("liquidity", {}).get("usd") or 0.0)
-                            fdv = float(p.get("fdv") or p.get("marketCap") or 0.0)
+                        # Group by mint address, picking the pair with highest liquidity
+                        pairs_by_mint = {}
+                        for p in pairs:
+                            m = p.get("baseToken", {}).get("address")
+                            if m:
+                                cur_liq = float(p.get("liquidity", {}).get("usd") or 0.0)
+                                if m not in pairs_by_mint or cur_liq > pairs_by_mint[m]["_liq"]:
+                                    pairs_by_mint[m] = {"pair": p, "_liq": cur_liq}
 
-                            trending.append({
-                                "mint": mint,
-                                "symbol": symbol,
-                                "name": name,
-                                "price_usd": price,
-                                "change_1h": change_1h,
-                                "change_24h": change_24h,
-                                "volume_24h": vol,
-                                "liquidity": liq,
-                                "fdv": fdv
-                            })
+                        # Preserve trending ranking order
+                        for mint in mints_to_fetch:
+                            if mint in pairs_by_mint:
+                                p = pairs_by_mint[mint]["pair"]
+                                symbol = p.get("baseToken", {}).get("symbol", "UNKNOWN")
+                                name = p.get("baseToken", {}).get("name", "Unknown Token")
+                                price = float(p.get("priceUsd") or 0.0)
+                                change_24h = float(p.get("priceChange", {}).get("h24") or 0.0)
+                                change_1h = float(p.get("priceChange", {}).get("h1") or 0.0)
+                                vol = float(p.get("volume", {}).get("h24") or 0.0)
+                                liq = float(p.get("liquidity", {}).get("usd") or 0.0)
+                                fdv = float(p.get("fdv") or p.get("marketCap") or 0.0)
+
+                                trending.append({
+                                    "mint": mint,
+                                    "symbol": symbol,
+                                    "name": name,
+                                    "price_usd": price,
+                                    "change_1h": change_1h,
+                                    "change_24h": change_24h,
+                                    "volume_24h": vol,
+                                    "liquidity": liq,
+                                    "fdv": fdv
+                                })
                 except Exception as e:
-                    print(f"Error fetching pair for {mint}: {e}")
-                    continue
+                    print(f"Error fetching batch pairs: {e}")
 
         if trending:
             _TRENDING_CACHE["timestamp"] = now

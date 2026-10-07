@@ -786,6 +786,68 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
             pos_btn = next((b for b in all_btns if b.callback_data == "btn_positions"), None)
             self.assertIsNotNone(pos_btn, "btn_positions must be in wallet keyboard")
 
+    def test_30_batch_watchlist_and_untrack_command(self):
+        """Test batch watchlist price rendering, untrack/remove command, and DEX terminal URL parsing."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock, patch
+        from telegram_bot import render_watchlist, untrack_command
+        from rugcheck_scanner import extract_token_mint
+        from wallet_manager import add_to_watchlist, get_user_watchlist
+
+        test_uid = 99881166
+        get_or_create_wallet(test_uid, "WatchlistTester")
+        test_mint = "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"
+
+        # 1. Test URL parsing for GMGN, BullX, Photon, and Raydium
+        gmgn_url = f"https://gmgn.ai/sol/token/{test_mint}"
+        bullx_url = f"https://bullx.io/terminal?chainId=1399811149&address={test_mint}"
+        photon_url = f"https://photon-sol.tinyastro.io/en/r/@{test_mint}"
+        raydium_url = f"https://raydium.io/swap/?inputMint=sol&outputMint={test_mint}"
+
+        self.assertEqual(extract_token_mint(gmgn_url), test_mint)
+        self.assertEqual(extract_token_mint(bullx_url), test_mint)
+        self.assertEqual(extract_token_mint(photon_url), test_mint)
+        self.assertEqual(extract_token_mint(raydium_url), test_mint)
+
+        # 2. Add to watchlist and test render_watchlist with batch prices
+        add_to_watchlist(test_uid, test_mint, "BONK", current_price=0.000025)
+        mock_target = AsyncMock()
+
+        mock_batch_prices = {
+            test_mint: {
+                "symbol": "BONK",
+                "name": "Bonk",
+                "price_usd": 0.000028,
+                "change_24h": 12.5,
+                "change_1h": 1.2,
+                "liquidity": 5000000.0
+            }
+        }
+        with patch("telegram_bot.get_batch_token_prices", return_value=mock_batch_prices):
+            asyncio.run(render_watchlist(mock_target, test_uid, user_lang="en", is_edit=False))
+            self.assertTrue(mock_target.reply_text.called)
+            wl_text = mock_target.reply_text.call_args[0][0]
+            self.assertIn("BONK", wl_text)
+            self.assertIn("0.000028", wl_text)
+            self.assertIn("+12.5%", wl_text)
+
+        # 3. Test untrack_command
+        mock_update = MagicMock()
+        mock_update.effective_user.id = test_uid
+        mock_update.message.reply_text = AsyncMock()
+        mock_context = MagicMock()
+        mock_context.args = ["BONK"]
+
+        asyncio.run(untrack_command(mock_update, mock_context))
+        self.assertTrue(mock_update.message.reply_text.called)
+        reply = mock_update.message.reply_text.call_args[0][0]
+        self.assertIn("Removed", reply)
+        self.assertIn("BONK", reply)
+
+        # Confirm removal from database
+        items = get_user_watchlist(test_uid)
+        self.assertEqual(len(items), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

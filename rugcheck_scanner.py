@@ -123,7 +123,11 @@ def extract_token_mint(text: str) -> Optional[str]:
         r"pump\.fun/([1-9A-HJ-NP-Za-km-z]{32,44})",
         r"solscan\.io/token/([1-9A-HJ-NP-Za-km-z]{32,44})",
         r"solanatracker\.io/token/([1-9A-HJ-NP-Za-km-z]{32,44})",
-        r"birdeye\.so/token/([1-9A-HJ-NP-Za-km-z]{32,44})"
+        r"birdeye\.so/token/([1-9A-HJ-NP-Za-km-z]{32,44})",
+        r"gmgn\.ai/sol/token/([1-9A-HJ-NP-Za-km-z]{32,44})",
+        r"bullx\.io/terminal\?.*(?:address|token)=([1-9A-HJ-NP-Za-km-z]{32,44})",
+        r"photon-sol\.tinyastro\.io/.*(?:token|r/@)([1-9A-HJ-NP-Za-km-z]{32,44})",
+        r"raydium\.io/swap/\?.*outputMint=([1-9A-HJ-NP-Za-km-z]{32,44})"
     ]
     for pat in patterns:
         m = re.search(pat, text, re.I)

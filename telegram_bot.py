@@ -580,12 +580,16 @@ async def render_watchlist(target, user_id: int, user_lang: str, is_edit: bool =
         "━━━━━━━━━━━━━━━━━━━━━━━━━━"
     ]
     kb = []
-    for item in watchlist[:8]:
+    active_items = watchlist[:8]
+    mints_to_fetch = [item["mint"] for item in active_items]
+    batch_prices = get_batch_token_prices(mints_to_fetch)
+
+    for item in active_items:
         sym = html.escape(item["symbol"])
         mint = item["mint"]
-        scan = scan_token_security(mint)
-        p = scan.get("price_usd", 0.0)
-        c24 = scan.get("price_change_24h", 0.0)
+        b_info = batch_prices.get(mint, {})
+        p = float(b_info.get("price_usd") or item.get("last_price") or item.get("initial_price") or 0.0)
+        c24 = float(b_info.get("change_24h") or 0.0)
         emoji = "📈" if c24 >= 0 else "📉"
         text_lines.append(f"• <b>${sym}</b>: <code>${p:.6f}</code> {emoji} <code>{c24:+.1f}%</code>")
         text_lines.append(f"  📋 <code>{mint}</code>\n")
@@ -1965,6 +1969,59 @@ async def track_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(ack, parse_mode="HTML")
 
 
+async def untrack_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for /untrack and /remove command to remove a token from user's watchlist."""
+    user_id = update.effective_user.id
+    user_lang = get_user_language(user_id)
+    args = context.args
+    if not args:
+        hint = (
+            "ℹ️ <b>Usage</b>: <code>/untrack [CA_OR_TICKER]</code>\nExample: <code>/untrack bonk</code>"
+        ) if user_lang == "en" else (
+            "ℹ️ <b>الاستخدام</b>: <code>/untrack [العقد_أو_الرمز]</code>\nمثال: <code>/untrack bonk</code>"
+        )
+        await update.message.reply_text(hint, parse_mode="HTML")
+        return
+
+    raw = args[0].strip()
+    mint = extract_token_mint(raw)
+    sym = raw.upper().lstrip("$")
+
+    # Match against user's active watchlist items first
+    wl = get_user_watchlist(user_id)
+    matched_mint = None
+    matched_sym = sym
+    for item in wl:
+        if mint and item["mint"].lower() == mint.lower():
+            matched_mint = item["mint"]
+            matched_sym = item["symbol"]
+            break
+        if item["symbol"].upper() == sym:
+            matched_mint = item["mint"]
+            matched_sym = item["symbol"]
+            break
+
+    if not matched_mint:
+        if not mint:
+            matched = search_solana_token(raw)
+            if matched:
+                mint = matched["mint"]
+                matched_sym = matched.get("symbol", sym)
+        matched_mint = mint
+
+    if not matched_mint:
+        err = f"❌ Could not resolve token: {html.escape(raw)}" if user_lang == "en" else f"❌ تعذر التعرف على العملة: {html.escape(raw)}"
+        await update.message.reply_text(err, parse_mode="HTML")
+        return
+
+    removed = remove_from_watchlist(user_id, matched_mint)
+    if removed:
+        ack = f"🗑️ <b>Removed ${html.escape(matched_sym)} from your Watchlist!</b>" if user_lang == "en" else f"🗑️ <b>تمت إزالة ${html.escape(matched_sym)} من قائمة المتابعة!</b>"
+    else:
+        ack = f"ℹ️ Token ${html.escape(matched_sym)} is not in your watchlist." if user_lang == "en" else f"ℹ️ العملة ${html.escape(matched_sym)} ليست موجودة في قائمة المتابعة."
+    await update.message.reply_text(ack, parse_mode="HTML")
+
+
 async def alerts_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler for /alerts command: /alerts [on|off] or interactive toggle."""
     user_id = update.effective_user.id
@@ -2234,6 +2291,8 @@ def build_application(token: str) -> Application:
     app.add_handler(CommandHandler("withdraw", withdraw_command))
     app.add_handler(CommandHandler("watchlist", watchlist_command))
     app.add_handler(CommandHandler("track", track_command))
+    app.add_handler(CommandHandler("untrack", untrack_command))
+    app.add_handler(CommandHandler("remove", untrack_command))
     app.add_handler(CommandHandler("positions", positions_command))
     app.add_handler(CommandHandler("panic", panic_command))
     app.add_handler(CommandHandler("sellall", panic_command))

@@ -131,8 +131,9 @@ python telegram_bot.py
 | `/surge` / `/gainers` | Real-time Solana high-velocity gainers & surge radar (1h/24h) |
 | `/history` / `/trades` | Full trade history terminal with Solscan on-chain transaction links |
 | `/gas` / `/priority` | Configures Priority Gas speed tiers (Normal 50k, Turbo 250k, Ultra 1M) |
-| `/watchlist` | Displays personalized token watchlist with live prices and 24h changes |
+| `/watchlist` | Displays personalized token watchlist with live batch prices and 24h changes |
 | `/track [CA/TICKER]` | Adds any token to user watchlist for continuous tracking |
+| `/untrack [CA/TICKER]` | Removes a tracked token from watchlist (also supports `/remove`) |
 | `/trending` | Real-time DexScreener Solana trending tokens radar |
 | `/pnl` | Executive trading performance card (total volume, trades count) |
 | `/referral` | Viral 25% lifetime referral program link and rewards tracker |
@@ -146,7 +147,7 @@ python telegram_bot.py
 ## 🧪 Benchmark & Quality Assurance
 
 * **RPC Broadcast Latency:** < 350ms via Jupiter V6
-* **Unit Test Coverage:** 29/29 comprehensive tests passing (`test_bot.py`)
+* **Unit Test Coverage:** 30/30 comprehensive tests passing (`test_bot.py`)
 * **Security Checks:** Zero plain-text private key logging. Local AES-256 database encryption.
 * **MEV Defense:** Dynamic price-impact slippage auto-scaling and anti-sandwich protection.
 

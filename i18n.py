@@ -136,6 +136,15 @@ MESSAGES = {
         "sl_syntax_help": "ℹ️ <b>Stop-Loss Syntax</b>: <code>/sl [PERCENT]</code>\nExample: <code>/sl 25</code> (Auto stop at -25% loss)",
         "tp_updated": "🎯 Take-Profit target set to +{pct}%!",
         "sl_updated": "🛑 Stop-Loss limit set to -{pct}%!",
+        "price_alert_title": "🚨 <b>PRICE & VOLATILITY ALERT!</b> ⚡",
+        "alerts_status_title": "🔔 <b>Price Movement Alerts Settings</b>",
+        "alerts_status_body": (
+            "Status: <b>{status}</b>\n"
+            "Threshold: <code>±10%</code> price movement\n\n"
+            "When enabled, Popcorn Bot automatically tracks all tokens on your watchlist "
+            "and dispatches instant alerts with 1-click Snipe buttons when momentum or volatility strikes."
+        ),
+        "alerts_toggled": "🔔 Price alerts are now {status}!",
         "help_title": "❓ <b>Popcorn Solana Sniper & Trading Bot Guide</b> ⚡",
         "help_body": (
             "━━━━━━━━━━━━━━━━━━━\n"
@@ -145,6 +154,7 @@ MESSAGES = {
             "• <code>/sell [CA/TICKER] [PERCENT]</code> - Instant Market Sell (%)\n"
             "• <code>/surge</code> - View Explosive High-Velocity Gainers (1h/24h)\n"
             "• <code>/history</code> - View Recent Trade History & Solscan Links\n"
+            "• <code>/alerts</code> - Toggle Autonomous Price Volatility Alerts\n"
             "• <code>/tp [PERCENT]</code> - Configure Auto Take-Profit Target (+%)\n"
             "• <code>/sl [PERCENT]</code> - Configure Auto Stop-Loss Limit (-%)\n"
             "• <code>/watchlist</code> - View Tracked Tokens & Live Prices\n"
@@ -288,6 +298,14 @@ MESSAGES = {
         "sl_syntax_help": "ℹ️ <b>صيغة وقف الخسارة</b>: <code>/sl [النسبة]</code>\nمثال: <code>/sl 25</code> (وقف الخسارة تلقائياً عند -25%)",
         "tp_updated": "🎯 تم ضبط هدف جني الأرباح إلى +{pct}%!",
         "sl_updated": "🛑 تم ضبط حد وقف الخسارة إلى -{pct}%!",
+        "price_alert_title": "🚨 <b>تنبيه حركة وتقلبات السعر!</b> ⚡",
+        "alerts_status_title": "🔔 <b>إعدادات تنبيهات حركة الأسعار والتقلبات</b>",
+        "alerts_status_body": (
+            "الحالة: <b>{status}</b>\n"
+            "حساسية التنبيه: <code>±10%</code> تغيّر في السعر\n\n"
+            "عند التفعيل، يراقب البوت عملات قائمة متابعتك آلياً ويرسل إشعارات فورية مع أزرار قنص بنقرة واحدة عند رصد أي صعود حاد أو تقلبات."
+        ),
+        "alerts_toggled": "🔔 تنبيهات الأسعار الآن {status}!",
         "help_title": "❓ <b>دليل استخدام بوت قنص وتداول سولانا</b> ⚡",
         "help_body": (
             "━━━━━━━━━━━━━━━━━━━\n"
@@ -297,6 +315,7 @@ MESSAGES = {
             "• <code>/sell [العقد/الرمز] [النسبة]</code> - بيع فوري بنسبة مئوية (%)\n"
             "• <code>/surge</code> - رادار العملات المتفجرة الأكثر صعوداً (1h/24h)\n"
             "• <code>/history</code> - عرض سجل الصفقات المنفذة وروابط Solscan\n"
+            "• <code>/alerts</code> - تفعيل أو تعطيل تنبيهات تقلبات الأسعار التلقائية\n"
             "• <code>/tp [النسبة]</code> - ضبط هدف جني الأرباح التلقائي (+%)\n"
             "• <code>/sl [النسبة]</code> - ضبط حد وقف الخسارة التلقائي (-%)\n"
             "• <code>/watchlist</code> - عرض قائمة العملات المتابعة وأسعارها اللحظية\n"

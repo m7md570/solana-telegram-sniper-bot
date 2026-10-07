@@ -76,7 +76,12 @@ from wallet_manager import (
     get_user_trade_stats,
     add_to_watchlist,
     remove_from_watchlist,
-    get_user_watchlist
+    get_user_watchlist,
+    toggle_price_alerts,
+    get_price_alerts_status,
+    set_price_alerts_status,
+    get_all_active_watchlist_subscriptions,
+    update_watchlist_price_and_alert
 )
 from rugcheck_scanner import (
     scan_token_security,
@@ -96,7 +101,8 @@ from trending_engine import (
     get_trending_tokens,
     format_trending_list,
     get_top_gainers,
-    format_gainers_list
+    format_gainers_list,
+    get_batch_token_prices
 )
 from i18n import t
 
@@ -201,13 +207,14 @@ def get_token_card_keyboard(mint: str, user_lang: str, user_id: int = 0, symbol:
 
 
 def build_settings_card(user_id: int, user_lang: str) -> Tuple[str, InlineKeyboardMarkup]:
-    """Constructs the unified trading settings interface with slippage and priority gas tiers."""
+    """Constructs the unified trading settings interface with slippage, gas, and volatility alert toggles."""
     settings = get_user_settings(user_id)
     current_slip = settings["slippage_bps"] / 100.0
     gas_lamports = settings.get("priority_fee", 50000)
     gas_sol = gas_lamports / 1e9
     current_tp = settings.get("default_tp_pct", 50)
     current_sl = settings.get("default_sl_pct", 25)
+    alerts_on = get_price_alerts_status(user_id)
     now_str = get_current_time_str()
 
     tier_label = (
@@ -221,16 +228,20 @@ def build_settings_card(user_id: int, user_lang: str) -> Tuple[str, InlineKeyboa
         extra_info = (
             f"\n\n⚡ <b>Priority Gas:</b> <code>{gas_sol:.5f} SOL</code> ({tier_label})\n"
             f"🎯 <b>Auto Take-Profit:</b> <code>+{current_tp}%</code>\n"
-            f"🛑 <b>Auto Stop-Loss:</b> <code>-{current_sl}%</code>\n\n"
+            f"🛑 <b>Auto Stop-Loss:</b> <code>-{current_sl}%</code>\n"
+            f"🔔 <b>Price Movement Alerts:</b> <code>{'ENABLED' if alerts_on else 'DISABLED'}</code>\n\n"
             f"Select parameters or speed tiers below:"
         )
+        alerts_btn_text = "🔔 Alerts: ON (±10%)" if alerts_on else "🔕 Alerts: OFF"
     else:
         extra_info = (
             f"\n\n⚡ <b>أولوية الغاز:</b> <code>{gas_sol:.5f} SOL</code> ({tier_label})\n"
             f"🎯 <b>جني الأرباح التلقائي:</b> <code>+{current_tp}%</code>\n"
-            f"🛑 <b>وقف الخسارة التلقائي:</b> <code>-{current_sl}%</code>\n\n"
+            f"🛑 <b>وقف الخسارة التلقائي:</b> <code>-{current_sl}%</code>\n"
+            f"🔔 <b>تنبيهات تقلبات الأسعار:</b> <code>{'مفعلة' if alerts_on else 'معطلة'}</code>\n\n"
             f"اختر الإعدادات المناسبة لاستراتيجيتك أدناه:"
         )
+        alerts_btn_text = "🔔 التنبيهات: مفعلة (±10%)" if alerts_on else "🔕 التنبيهات: معطلة"
     text = f"{title}\n━━━━━━━━━━━━━━━━━━━\n{body}{extra_info}\n🕒 <code>{now_str}</code>"
 
     kb = [
@@ -254,6 +265,9 @@ def build_settings_card(user_id: int, user_lang: str) -> Tuple[str, InlineKeyboa
             InlineKeyboardButton("🛑 SL -15%", callback_data="sl_15"),
             InlineKeyboardButton("🛑 SL -25%", callback_data="sl_25"),
             InlineKeyboardButton("🛑 SL -50%", callback_data="sl_50")
+        ],
+        [
+            InlineKeyboardButton(alerts_btn_text, callback_data="toggle_alerts")
         ],
         [
             InlineKeyboardButton(t("btn_lang_toggle", user_lang), callback_data="btn_toggle_lang")
@@ -877,7 +891,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         mint = data.replace("track_", "", 1)
         scan = scan_token_security(mint)
         sym = scan.get("symbol", "TOKEN")
-        add_to_watchlist(user_id, mint, sym)
+        current_price = float(scan.get("price_usd") or 0.0)
+        add_to_watchlist(user_id, mint, sym, current_price=current_price)
         await query.answer(t("watchlist_added", user_lang), show_alert=False)
 
     elif data.startswith("untrack_"):
@@ -949,6 +964,14 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         new_sl = int(data.split("_")[1])
         update_user_sl(user_id, new_sl)
         ack = t("sl_updated", user_lang, pct=new_sl)
+        await query.answer(ack, show_alert=False)
+        text, kb = build_settings_card(user_id, user_lang)
+        await safe_edit_text(query, text, reply_markup=kb)
+
+    elif data == "toggle_alerts":
+        new_state = toggle_price_alerts(user_id)
+        state_str = ("ENABLED" if new_state else "DISABLED") if user_lang == "en" else ("مفعلة" if new_state else "معطلة")
+        ack = t("alerts_toggled", user_lang, status=state_str)
         await query.answer(ack, show_alert=False)
         text, kb = build_settings_card(user_id, user_lang)
         await safe_edit_text(query, text, reply_markup=kb)
@@ -1412,12 +1435,37 @@ async def track_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         err = f"❌ Could not find token: {html.escape(raw)}" if user_lang == "en" else f"❌ تعذر العثور على العملة: {html.escape(raw)}"
         await update.message.reply_text(err, parse_mode="HTML")
         return
+    scan = scan_token_security(mint)
     if sym == "TOKEN":
-        scan = scan_token_security(mint)
         sym = scan.get("symbol", "TOKEN")
-    add_to_watchlist(user_id, mint, sym)
+    current_price = float(scan.get("price_usd") or 0.0)
+    add_to_watchlist(user_id, mint, sym, current_price=current_price)
     ack = f"⭐ <b>Added ${html.escape(sym)} to your Watchlist!</b>" if user_lang == "en" else f"⭐ <b>تمت إضافة ${html.escape(sym)} إلى قائمة المتابعة!</b>"
     await update.message.reply_text(ack, parse_mode="HTML")
+
+
+async def alerts_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for /alerts command: /alerts [on|off] or interactive toggle."""
+    user_id = update.effective_user.id
+    user_lang = get_user_language(user_id)
+    args = context.args
+    if args:
+        sub = args[0].lower().strip()
+        if sub in ("on", "enable", "1", "start"):
+            set_price_alerts_status(user_id, True)
+        elif sub in ("off", "disable", "0", "stop"):
+            set_price_alerts_status(user_id, False)
+
+    status = get_price_alerts_status(user_id)
+    status_str = ("ENABLED 🟢" if status else "DISABLED ⚪") if user_lang == "en" else ("مفعلة 🟢" if status else "معطلة ⚪")
+    title = t("alerts_status_title", user_lang)
+    body = t("alerts_status_body", user_lang, status=status_str)
+    btn_toggle = ("🔕 Turn OFF Alerts" if status else "🔔 Turn ON Alerts") if user_lang == "en" else ("🔕 تعطيل التنبيهات" if status else "🔔 تفعيل التنبيهات")
+    kb = [
+        [InlineKeyboardButton(btn_toggle, callback_data="toggle_alerts")],
+        [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
+    ]
+    await update.message.reply_text(f"{title}\n━━━━━━━━━━━━━━━━━━━\n{body}", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
 
 
 async def buy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1528,9 +1576,111 @@ async def buy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await status_msg.edit_text(f"❌ <b>Transaction failed</b>: <code>{html.escape(sig_or_err)}</code>", parse_mode="HTML")
 
 
+async def price_alert_worker(application: Application):
+    """
+    Autonomous Background Volatility & Price Alert Worker.
+    Periodically checks prices of all tokens tracked in user watchlists.
+    When a price swings >= threshold_pct, automatically dispatches
+    a high-impact trading alert card with 1-click Snipe buttons.
+    """
+    logger.info("Autonomous Price Alert Worker started.")
+    await asyncio.sleep(15)
+    while True:
+        try:
+            subscriptions = get_all_active_watchlist_subscriptions()
+            if subscriptions:
+                mints = list({s["token_mint"] for s in subscriptions})
+                price_data = get_batch_token_prices(mints)
+
+                now_ts = time.time()
+                for sub in subscriptions:
+                    user_id = sub["user_id"]
+                    mint = sub["token_mint"]
+                    sym = sub["symbol"]
+                    last_price = float(sub["last_price_usd"] or 0.0)
+                    threshold = float(sub["alert_threshold_pct"] or 10.0)
+                    last_alert = float(sub["last_alert_time"] or 0.0)
+                    lang = sub["language"]
+
+                    token_info = price_data.get(mint)
+                    if not token_info or token_info.get("price_usd", 0.0) <= 0:
+                        continue
+
+                    current_price = token_info["price_usd"]
+                    if last_price <= 0:
+                        update_watchlist_price_and_alert(user_id, mint, current_price, record_alert=False)
+                        continue
+
+                    pct_change = ((current_price - last_price) / last_price) * 100.0
+
+                    if abs(pct_change) >= threshold and (now_ts - last_alert) >= 600:
+                        emoji = "🚀" if pct_change > 0 else "🔻"
+                        now_str = get_current_time_str()
+
+                        if lang == "ar":
+                            card = (
+                                f"🚨 <b>تنبيه حركة وتقلبات السعر!</b> {emoji}\n"
+                                f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                                f"الرمز: <b>${html.escape(sym)}</b>\n"
+                                f"الحركة: <b>{emoji} {pct_change:+.1f}%</b>\n"
+                                f"السعر الحالي: <code>${current_price:.6f}</code>\n"
+                                f"السعر السابق: <code>${last_price:.6f}</code>\n"
+                                f"العقد: <code>{mint}</code>\n\n"
+                                f"💡 <i>استغل فرصة التحرك واقنص فورياً عبر الأزرار أدناه:</i>\n"
+                                f"🕒 <code>{now_str}</code>"
+                            )
+                        else:
+                            card = (
+                                f"🚨 <b>PRICE & VOLATILITY ALERT!</b> {emoji}\n"
+                                f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                                f"Token: <b>${html.escape(sym)}</b>\n"
+                                f"Movement: <b>{emoji} {pct_change:+.1f}%</b>\n"
+                                f"Current Price: <code>${current_price:.6f}</code>\n"
+                                f"Previous Price: <code>${last_price:.6f}</code>\n"
+                                f"Mint: <code>{mint}</code>\n\n"
+                                f"💡 <i>Take action now! 1-click snipe buttons below:</i>\n"
+                                f"🕒 <code>{now_str}</code>"
+                            )
+
+                        kb = [
+                            [
+                                InlineKeyboardButton(f"🚀 Snipe ${html.escape(sym)}", callback_data=f"inspect_{mint}"),
+                                InlineKeyboardButton("📈 DexScreener", url=f"https://dexscreener.com/solana/{mint}")
+                            ],
+                            [
+                                InlineKeyboardButton("⚡ Buy 0.1 SOL", callback_data=f"buy_{mint}_0.1"),
+                                InlineKeyboardButton("⚡ Buy 0.5 SOL", callback_data=f"buy_{mint}_0.5")
+                            ]
+                        ]
+
+                        try:
+                            await application.bot.send_message(
+                                chat_id=user_id,
+                                text=card,
+                                parse_mode="HTML",
+                                reply_markup=InlineKeyboardMarkup(kb),
+                                disable_web_page_preview=True
+                            )
+                            update_watchlist_price_and_alert(user_id, mint, current_price, record_alert=True)
+                        except Exception as send_err:
+                            logger.warning(f"Could not dispatch price alert to user {user_id}: {send_err}")
+                    else:
+                        update_watchlist_price_and_alert(user_id, mint, current_price, record_alert=False)
+
+        except Exception as e:
+            logger.error(f"Error in price_alert_worker: {e}")
+
+        await asyncio.sleep(60)
+
+
+async def bot_post_init(app: Application):
+    """Spawns background workers upon bot startup."""
+    asyncio.create_task(price_alert_worker(app))
+
+
 def build_application(token: str) -> Application:
     """Builds the Telegram Application instance with all command and callback handlers."""
-    app = Application.builder().token(token).build()
+    app = Application.builder().token(token).post_init(bot_post_init).build()
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("trending", trending_command))
     app.add_handler(CommandHandler("surge", surge_command))
@@ -1545,6 +1695,8 @@ def build_application(token: str) -> Application:
     app.add_handler(CommandHandler("priority", gas_command))
     app.add_handler(CommandHandler("tp", tp_command))
     app.add_handler(CommandHandler("sl", sl_command))
+    app.add_handler(CommandHandler("alerts", alerts_command))
+    app.add_handler(CommandHandler("alert", alerts_command))
     app.add_handler(CommandHandler("referral", referral_command))
     app.add_handler(CommandHandler("wallet", wallet_command))
     app.add_handler(CommandHandler("withdraw", withdraw_command))

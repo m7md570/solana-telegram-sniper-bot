@@ -102,11 +102,24 @@ def init_database():
             ("auto_buy_amount", "REAL DEFAULT 0.1"),
             ("language", "TEXT DEFAULT 'en'"),
             ("default_tp_pct", "INTEGER DEFAULT 50"),
-            ("default_sl_pct", "INTEGER DEFAULT 25")
+            ("default_sl_pct", "INTEGER DEFAULT 25"),
+            ("price_alerts_enabled", "INTEGER DEFAULT 1")
         ]
         for col_name, col_type in migrations:
             if col_name not in existing_cols:
                 cursor.execute(f"ALTER TABLE users ADD COLUMN {col_name} {col_type}")
+
+        # Watchlist migrations for price volatility tracking
+        existing_wl_cols = [r[1] for r in cursor.execute("PRAGMA table_info(watchlist)").fetchall()]
+        wl_migrations = [
+            ("initial_price_usd", "REAL DEFAULT 0.0"),
+            ("last_price_usd", "REAL DEFAULT 0.0"),
+            ("alert_threshold_pct", "REAL DEFAULT 10.0"),
+            ("last_alert_time", "REAL DEFAULT 0.0")
+        ]
+        for col_name, col_type in wl_migrations:
+            if col_name not in existing_wl_cols:
+                cursor.execute(f"ALTER TABLE watchlist ADD COLUMN {col_name} {col_type}")
 
         conn.commit()
     finally:
@@ -526,14 +539,18 @@ def get_user_trade_stats(user_id: int) -> Dict[str, Any]:
         conn.close()
 
 
-def add_to_watchlist(user_id: int, token_mint: str, symbol: str) -> bool:
-    """Adds a token to user's personal watchlist."""
+def add_to_watchlist(user_id: int, token_mint: str, symbol: str, current_price: float = 0.0) -> bool:
+    """Adds a token to user's personal watchlist with initial tracking price."""
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT OR IGNORE INTO watchlist (user_id, token_mint, symbol) VALUES (?, ?, ?)",
-            (user_id, token_mint, symbol.upper())
+            """INSERT INTO watchlist (user_id, token_mint, symbol, initial_price_usd, last_price_usd, alert_threshold_pct, last_alert_time)
+               VALUES (?, ?, ?, ?, ?, 10.0, 0.0)
+               ON CONFLICT(user_id, token_mint) DO UPDATE SET 
+               symbol = excluded.symbol,
+               last_price_usd = CASE WHEN excluded.last_price_usd > 0 THEN excluded.last_price_usd ELSE watchlist.last_price_usd END""",
+            (user_id, token_mint, symbol.upper(), current_price, current_price)
         )
         conn.commit()
         return cursor.rowcount > 0
@@ -557,15 +574,103 @@ def remove_from_watchlist(user_id: int, token_mint: str) -> bool:
 
 
 def get_user_watchlist(user_id: int) -> List[Dict[str, Any]]:
-    """Retrieves all tracked tokens for a user."""
+    """Retrieves all tracked tokens for a user with price history."""
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
         rows = cursor.execute(
-            "SELECT token_mint, symbol, created_at FROM watchlist WHERE user_id = ? ORDER BY id DESC",
+            "SELECT token_mint, symbol, initial_price_usd, last_price_usd, alert_threshold_pct, created_at "
+            "FROM watchlist WHERE user_id = ? ORDER BY id DESC",
             (user_id,)
         ).fetchall()
-        return [{"mint": r["token_mint"], "symbol": r["symbol"], "created_at": r["created_at"]} for r in rows]
+        return [{
+            "mint": r["token_mint"],
+            "symbol": r["symbol"],
+            "initial_price": float(r["initial_price_usd"] or 0.0),
+            "last_price": float(r["last_price_usd"] or 0.0),
+            "threshold_pct": float(r["alert_threshold_pct"] or 10.0),
+            "created_at": r["created_at"]
+        } for r in rows]
+    finally:
+        conn.close()
+
+
+def get_all_active_watchlist_subscriptions() -> List[Dict[str, Any]]:
+    """Retrieves all active watchlist entries across users who have price alerts enabled."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        rows = cursor.execute(
+            """SELECT w.user_id, w.token_mint, w.symbol, w.initial_price_usd, w.last_price_usd,
+                      w.alert_threshold_pct, w.last_alert_time, COALESCE(u.language, 'en') as language
+               FROM watchlist w
+               LEFT JOIN users u ON w.user_id = u.user_id
+               WHERE COALESCE(u.price_alerts_enabled, 1) = 1"""
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def update_watchlist_price_and_alert(user_id: int, token_mint: str, new_price: float, record_alert: bool = False):
+    """Updates the last recorded price and optionally the last alerted timestamp."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        if record_alert:
+            cursor.execute(
+                "UPDATE watchlist SET last_price_usd = ?, last_alert_time = ? WHERE user_id = ? AND token_mint = ?",
+                (new_price, time.time(), user_id, token_mint)
+            )
+        else:
+            cursor.execute(
+                "UPDATE watchlist SET last_price_usd = ? WHERE user_id = ? AND token_mint = ?",
+                (new_price, user_id, token_mint)
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def toggle_price_alerts(user_id: int) -> bool:
+    """Toggles user's price alert subscription status."""
+    get_or_create_wallet(user_id)
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        row = cursor.execute("SELECT price_alerts_enabled FROM users WHERE user_id = ?", (user_id,)).fetchone()
+        current = bool(row["price_alerts_enabled"]) if row and row["price_alerts_enabled"] is not None else True
+        new_val = 0 if current else 1
+        cursor.execute("UPDATE users SET price_alerts_enabled = ? WHERE user_id = ?", (new_val, user_id))
+        conn.commit()
+        return bool(new_val)
+    finally:
+        conn.close()
+
+
+def get_price_alerts_status(user_id: int) -> bool:
+    """Returns True if price alerts are enabled for this user."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        row = cursor.execute("SELECT price_alerts_enabled FROM users WHERE user_id = ?", (user_id,)).fetchone()
+        if row and row["price_alerts_enabled"] is not None:
+            return bool(row["price_alerts_enabled"])
+        return True
+    finally:
+        conn.close()
+
+
+def set_price_alerts_status(user_id: int, enabled: bool) -> bool:
+    """Explicitly enables or disables price alerts for a user."""
+    get_or_create_wallet(user_id)
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        val = 1 if enabled else 0
+        cursor.execute("UPDATE users SET price_alerts_enabled = ? WHERE user_id = ?", (val, user_id))
+        conn.commit()
+        return bool(val)
     finally:
         conn.close()
 

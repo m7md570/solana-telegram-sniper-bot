@@ -447,6 +447,90 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertIn("-25%", t("sl_updated", "en", pct=25))
         self.assertIn("-25%", t("sl_updated", "ar", pct=25))
 
+    def test_23_batch_prices_and_volatility_alerts(self):
+        """Test DexScreener multi-token batch price querying and watchlist price tracking."""
+        from trending_engine import get_batch_token_prices
+        from wallet_manager import (
+            add_to_watchlist,
+            get_user_watchlist,
+            get_all_active_watchlist_subscriptions,
+            update_watchlist_price_and_alert,
+            remove_from_watchlist
+        )
+
+        test_uid = 88991122
+        mint1 = "So11111111111111111111111111111111111111112"
+        mint2 = "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"
+
+        # 1. Batch price fetch
+        prices = get_batch_token_prices([mint1, mint2])
+        self.assertIn(mint1, prices)
+        self.assertGreater(prices[mint1]["price_usd"], 0.0)
+
+        # 2. Add with price
+        remove_from_watchlist(test_uid, mint1)
+        add_to_watchlist(test_uid, mint1, "SOL", current_price=150.0)
+        wl = get_user_watchlist(test_uid)
+        self.assertEqual(len(wl), 1)
+        self.assertEqual(wl[0]["initial_price"], 150.0)
+
+        # 3. Active subscriptions
+        subs = get_all_active_watchlist_subscriptions()
+        user_subs = [s for s in subs if s["user_id"] == test_uid]
+        self.assertEqual(len(user_subs), 1)
+        self.assertEqual(user_subs[0]["token_mint"], mint1)
+
+        # 4. Update price & alert
+        update_watchlist_price_and_alert(test_uid, mint1, 175.0, record_alert=True)
+        wl_updated = get_user_watchlist(test_uid)
+        self.assertEqual(wl_updated[0]["last_price"], 175.0)
+
+        # Cleanup
+        remove_from_watchlist(test_uid, mint1)
+
+    def test_24_price_alerts_settings_and_i18n(self):
+        """Test price alert toggling, settings card integration, and bilingual localization."""
+        from wallet_manager import (
+            toggle_price_alerts,
+            get_price_alerts_status,
+            set_price_alerts_status
+        )
+        from telegram_bot import build_settings_card
+        from i18n import t
+
+        test_uid = 88991133
+        # Explicit enable & disable
+        set_price_alerts_status(test_uid, True)
+        self.assertTrue(get_price_alerts_status(test_uid))
+
+        set_price_alerts_status(test_uid, False)
+        self.assertFalse(get_price_alerts_status(test_uid))
+
+        # Toggle back to True
+        new_state = toggle_price_alerts(test_uid)
+        self.assertTrue(new_state)
+        self.assertTrue(get_price_alerts_status(test_uid))
+
+        # Check settings card formatting
+        text_en, kb_en = build_settings_card(test_uid, user_lang="en")
+        self.assertIn("Price Movement Alerts:", text_en)
+        self.assertIn("ENABLED", text_en)
+
+        buttons_en = [btn for row in kb_en.inline_keyboard for btn in row]
+        alert_btn = next((b for b in buttons_en if b.callback_data == "toggle_alerts"), None)
+        self.assertIsNotNone(alert_btn)
+        self.assertIn("Alerts: ON", alert_btn.text)
+
+        text_ar, kb_ar = build_settings_card(test_uid, user_lang="ar")
+        self.assertIn("تنبيهات تقلبات الأسعار:", text_ar)
+        self.assertIn("مفعلة", text_ar)
+
+        # i18n keys check
+        self.assertIn("ALERT", t("price_alert_title", "en"))
+        self.assertIn("تنبيه", t("price_alert_title", "ar"))
+        self.assertIn("ENABLED", t("alerts_toggled", "en", status="ENABLED"))
+        self.assertIn("مفعلة", t("alerts_toggled", "ar", status="مفعلة"))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.37.0", card_text)
+        self.assertIn("v3.38.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.37.0")
+        self.assertEqual(BOT_VERSION, "v3.38.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -2101,6 +2101,61 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertIsNotNone(rel_btn_ar, "Release URL button must exist in Arabic status keyboard")
         self.assertIn(BOT_VERSION, rel_btn_ar.text)
         self.assertIn("الإصدار", rel_btn_ar.text)
+
+    def test_62_fees_card_referral_link_and_withdraw_guide_actions(self):
+        """Test render_fees_card embeds 1-click referral button and btn_withdraw_guide attaches deposit/wallet actions."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock, patch
+        from telegram_bot import render_fees_card, callback_router
+
+        # 1. Test render_fees_card includes btn_referral in keyboard
+        mock_target = MagicMock()
+        mock_target.reply_text = AsyncMock()
+        test_uid = 99881133
+
+        asyncio.run(render_fees_card(mock_target, test_uid, user_lang="en", is_edit=False))
+        self.assertTrue(mock_target.reply_text.called)
+        call_args = mock_target.reply_text.call_args
+        kb_fees = call_args[1]["reply_markup"]
+        fees_cbs = [b.callback_data for row in kb_fees.inline_keyboard for b in row if b.callback_data]
+        self.assertIn("btn_referral", fees_cbs)
+        self.assertIn("btn_status", fees_cbs)
+        self.assertIn("btn_gas_fees", fees_cbs)
+
+        # 2. Test btn_withdraw_guide attaches QR code deposit button when balance is low (< 0.005 SOL)
+        mock_query_low = MagicMock()
+        mock_query_low.from_user.id = test_uid
+        mock_query_low.data = "btn_withdraw_guide"
+        mock_query_low.edit_message_text = AsyncMock()
+        mock_query_low.answer = AsyncMock()
+        mock_update = MagicMock(callback_query=mock_query_low)
+        mock_context = MagicMock()
+
+        with patch("telegram_bot.get_sol_balance", return_value=0.0):
+            asyncio.run(callback_router(mock_update, mock_context))
+            self.assertTrue(mock_query_low.edit_message_text.called)
+            edit_args = mock_query_low.edit_message_text.call_args
+            kb_low = edit_args[1]["reply_markup"]
+            low_cbs = [b.callback_data for row in kb_low.inline_keyboard for b in row if b.callback_data]
+            self.assertIn("btn_qr", low_cbs)
+            self.assertIn("btn_wallet", low_cbs)
+
+        # 3. Test btn_withdraw_guide attaches refresh button when balance is funded (>= 0.005 SOL)
+        mock_query_high = MagicMock()
+        mock_query_high.from_user.id = test_uid
+        mock_query_high.data = "btn_withdraw_guide"
+        mock_query_high.edit_message_text = AsyncMock()
+        mock_query_high.answer = AsyncMock()
+        mock_update_high = MagicMock(callback_query=mock_query_high)
+
+        with patch("telegram_bot.get_sol_balance", return_value=1.5):
+            asyncio.run(callback_router(mock_update_high, mock_context))
+            self.assertTrue(mock_query_high.edit_message_text.called)
+            edit_args_high = mock_query_high.edit_message_text.call_args
+            kb_high = edit_args_high[1]["reply_markup"]
+            high_cbs = [b.callback_data for row in kb_high.inline_keyboard for b in row if b.callback_data]
+            self.assertIn("btn_withdraw_guide", high_cbs)
+            self.assertIn("btn_wallet", high_cbs)
 
 
 if __name__ == "__main__":

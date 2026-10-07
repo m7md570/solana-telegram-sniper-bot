@@ -1078,6 +1078,7 @@ async def render_fees_card(target, user_id: int, user_lang: str, is_edit: bool =
         )
         status_label = "🛰️ حالة الشبكة"
         settings_label = "⚙️ إعدادات الغاز"
+        referral_label = "🎁 برنامج الإحالة"
     else:
         card = (
             "💰 <b>Transparent Fee Schedule & Payouts</b>\n"
@@ -1092,6 +1093,7 @@ async def render_fees_card(target, user_id: int, user_lang: str, is_edit: bool =
         )
         status_label = "🛰️ Cluster Status"
         settings_label = "⚙️ Gas Settings"
+        referral_label = "🎁 Referral Rewards"
 
     kb = [
         [
@@ -1099,6 +1101,7 @@ async def render_fees_card(target, user_id: int, user_lang: str, is_edit: bool =
             InlineKeyboardButton(settings_label, callback_data="btn_gas_fees")
         ],
         [
+            InlineKeyboardButton(referral_label, callback_data="btn_referral"),
             InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
         ]
     ]
@@ -1411,7 +1414,14 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         title = t("withdraw_title", user_lang)
         body = t("withdraw_body", user_lang, balance=bal)
         text = f"{title}\n━━━━━━━━━━━━━━━━━━━\n{body}"
-        kb = [[InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_wallet")]]
+        action_btn = InlineKeyboardButton(t("btn_show_qr", user_lang), callback_data="btn_qr") if bal < 0.005 else InlineKeyboardButton(t("btn_refresh", user_lang), callback_data="btn_withdraw_guide")
+        kb = [
+            [
+                action_btn,
+                InlineKeyboardButton(t("btn_wallet", user_lang), callback_data="btn_wallet")
+            ],
+            [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
+        ]
         await safe_edit_text(query, text, reply_markup=InlineKeyboardMarkup(kb))
 
     elif data == "btn_export_key":

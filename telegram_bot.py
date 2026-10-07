@@ -652,7 +652,11 @@ async def render_watchlist(target, user_id: int, user_lang: str, is_edit: bool =
             f"{t('watchlist_empty', user_lang)}\n\n"
             f"🕒 <code>{now_str}</code>"
         )
-        kb = [[InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]]
+        trending_btn = "🔥 Explore Trending" if user_lang == "en" else "🔥 استكشاف العملات الرائجة"
+        kb = [
+            [InlineKeyboardButton(trending_btn, callback_data="btn_trending")],
+            [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
+        ]
         if is_edit:
             await safe_edit_text(target, empty_text, reply_markup=InlineKeyboardMarkup(kb))
         else:
@@ -2623,7 +2627,14 @@ async def track_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     current_price = float(scan.get("price_usd") or 0.0)
     add_to_watchlist(user_id, mint, sym, current_price=current_price)
     ack = f"⭐ <b>Added ${html.escape(sym)} to your Watchlist!</b>" if user_lang == "en" else f"⭐ <b>تمت إضافة ${html.escape(sym)} إلى قائمة المتابعة!</b>"
-    await update.message.reply_text(ack, parse_mode="HTML")
+    kb = [
+        [
+            InlineKeyboardButton("📊 View Watchlist" if user_lang == "en" else "📊 عرض قائمة المتابعة", callback_data="btn_watchlist"),
+            InlineKeyboardButton(f"⚡ Snipe ${sym}", callback_data=f"inspect_{mint}")
+        ],
+        [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
+    ]
+    await update.message.reply_text(ack, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
 
 
 async def untrack_command(update: Update, context: ContextTypes.DEFAULT_TYPE):

@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.35.0", card_text)
+        self.assertIn("v3.36.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.35.0")
+        self.assertEqual(BOT_VERSION, "v3.36.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -2008,6 +2008,57 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
             cb_data = [b.callback_data for b in buttons]
             self.assertIn("btn_trending", cb_data)
             self.assertIn("btn_refresh", cb_data)
+
+    def test_60_watchlist_action_keyboard_and_empty_trending_link(self):
+        """Test render_watchlist with 0 tokens attaches trending button, and track_command attaches action buttons."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock, patch
+        from telegram_bot import render_watchlist, track_command
+        from wallet_manager import get_or_create_wallet, set_user_language
+
+        test_uid = 66778899
+        get_or_create_wallet(test_uid, "WatchlistTester", initial_language="en")
+        set_user_language(test_uid, "en")
+
+        # 1. Test empty watchlist attaches btn_trending and btn_refresh
+        mock_msg = MagicMock()
+        mock_msg.reply_text = AsyncMock()
+
+        with patch("telegram_bot.get_user_watchlist", return_value=[]):
+            asyncio.run(render_watchlist(mock_msg, test_uid, "en", is_edit=False))
+            self.assertTrue(mock_msg.reply_text.called)
+            kwargs = mock_msg.reply_text.call_args[1]
+            self.assertIn("reply_markup", kwargs)
+            kb = kwargs["reply_markup"]
+            buttons = [b for row in kb.inline_keyboard for b in row]
+            cb_data = [b.callback_data for b in buttons]
+            self.assertIn("btn_trending", cb_data)
+            self.assertIn("btn_refresh", cb_data)
+
+        # 2. Test track_command attaches btn_watchlist, inspect, and btn_refresh
+        mock_update = MagicMock()
+        mock_update.effective_user.id = test_uid
+        mock_update.message.reply_text = AsyncMock()
+        mock_context = MagicMock()
+        mock_context.args = ["bonk"]
+
+        fake_matched = {"mint": self.bonk_mint, "symbol": "BONK"}
+        fake_scan = {"symbol": "BONK", "price_usd": 0.000025}
+
+        with patch("telegram_bot.search_solana_token", return_value=fake_matched), \
+             patch("telegram_bot.scan_token_security", return_value=fake_scan), \
+             patch("telegram_bot.add_to_watchlist") as mock_add:
+            asyncio.run(track_command(mock_update, mock_context))
+            self.assertTrue(mock_update.message.reply_text.called)
+            mock_add.assert_called_once_with(test_uid, self.bonk_mint, "BONK", current_price=0.000025)
+            track_kwargs = mock_update.message.reply_text.call_args[1]
+            self.assertIn("reply_markup", track_kwargs)
+            track_kb = track_kwargs["reply_markup"]
+            all_b = [b for row in track_kb.inline_keyboard for b in row]
+            cb_list = [b.callback_data for b in all_b]
+            self.assertIn("btn_watchlist", cb_list)
+            self.assertIn(f"inspect_{self.bonk_mint}", cb_list)
+            self.assertIn("btn_refresh", cb_list)
 
 
 if __name__ == "__main__":

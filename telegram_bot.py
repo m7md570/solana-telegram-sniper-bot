@@ -54,7 +54,8 @@ from config import (
     DEVELOPER_WALLET,
     PLATFORM_FEE_BPS,
     WSOL_MINT,
-    USDC_MINT
+    USDC_MINT,
+    BOT_VERSION
 )
 from wallet_manager import (
     get_or_create_wallet,
@@ -120,8 +121,6 @@ logging.basicConfig(
     level=logging.INFO
 )
 logger = logging.getLogger("SolanaSniperBot")
-
-BOT_VERSION = "v3.27.0"
 
 
 def get_current_time_str() -> str:
@@ -2401,8 +2400,9 @@ async def version_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         card = (
             "🍿 <b>Popcorn Sniper Bot — معلومات الإصدار والبنية المعمارية</b>\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n"
-            "🚀 <b>الإصدار الحالي:</b> <code>v3.27.0 (Production)</code>\n"
+            f"🚀 <b>الإصدار الحالي:</b> <code>{BOT_VERSION} (Production)</code>\n"
             "⚡ <b>محرك التداول:</b> Jupiter V6 Routing Engine + Jito Anti-MEV Bundles\n"
+            "🪙 <b>معايير التوكن:</b> SPL Standard + Token-2022 Extensions (دعم شامل)\n"
             "🛡️ <b>نظام الحماية:</b> فحص تلقائي مزدوج (RugCheck + DexScreener Analysis)\n"
             "🔐 <b>الأمان المالي:</b> محافظ محلية مشفرة بتقنية AES-256 (Non-Custodial)\n"
             "💎 <b>عمولة التداول:</b> 1.0% فقط على عمليات التداول عبر Jupiter\n"
@@ -2415,8 +2415,9 @@ async def version_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         card = (
             "🍿 <b>Popcorn Solana Sniper Bot — Architectural Specifications</b>\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n"
-            "🚀 <b>Software Release:</b> <code>v3.27.0 (Production)</code>\n"
+            f"🚀 <b>Software Release:</b> <code>{BOT_VERSION} (Production)</code>\n"
             "⚡ <b>Routing Engine:</b> Jupiter V6 Aggregator + Jito Anti-MEV Sandwich Protection\n"
+            "🪙 <b>Token Standards:</b> SPL Standard + Token-2022 Extensions (Universal)\n"
             "🛡️ <b>Security Engine:</b> Dual Real-Time Audit (RugCheck + DexScreener Integrity)\n"
             "🔐 <b>Key Management:</b> Non-Custodial Encrypted Local Storage (AES-256)\n"
             "💎 <b>Platform Fee:</b> 1.0% on executed Jupiter swaps (0% on deposits/withdrawals)\n"

@@ -29,7 +29,10 @@ from config import (
     FALLBACK_RPCS,
     DEFAULT_SLIPPAGE_BPS,
     DEFAULT_PRIORITY_FEE_LAMPORTS,
-    WSOL_MINT
+    WSOL_MINT,
+    BOT_VERSION,
+    TOKEN_PROGRAM_ID,
+    TOKEN_2022_PROGRAM_ID
 )
 
 # Derive 32-byte URL-safe base64 key for Fernet from MASTER_KEY
@@ -46,7 +49,7 @@ _retry_strategy = Retry(
 _adapter = HTTPAdapter(pool_connections=15, pool_maxsize=30, max_retries=_retry_strategy)
 _RPC_SESSION.mount("https://", _adapter)
 _RPC_SESSION.mount("http://", _adapter)
-_RPC_SESSION.headers.update({"User-Agent": "PopcornSniperBot/3.24 (Solana Engine)"})
+_RPC_SESSION.headers.update({"User-Agent": f"PopcornSniperBot/{BOT_VERSION} (Solana Engine)"})
 
 
 def get_db_connection() -> sqlite3.Connection:
@@ -345,37 +348,50 @@ def update_user_sl(user_id: int, sl_pct: int):
 
 
 def get_token_accounts(public_key_str: str) -> List[Dict[str, Any]]:
-    """Fetches all SPL token holdings for a given public key."""
+    """Fetches all SPL (legacy & Token-2022) token holdings for a given public key."""
     endpoints = [PRIMARY_RPC] + FALLBACK_RPCS
-    payload = {
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "getTokenAccountsByOwner",
-        "params": [
-            public_key_str,
-            {"programId": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"},
-            {"encoding": "jsonParsed"}
-        ]
-    }
+    programs = [TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID]
 
     for rpc in endpoints:
-        try:
-            resp = _RPC_SESSION.post(rpc, json=payload, timeout=8)
-            if resp.status_code == 200:
-                data = resp.json()
-                tokens = []
-                for item in data.get("result", {}).get("value", []):
-                    info = item["account"]["data"]["parsed"]["info"]
-                    amount = float(info["tokenAmount"]["uiAmount"] or 0)
-                    if amount > 0:
-                        tokens.append({
-                            "mint": info["mint"],
-                            "amount": amount,
-                            "decimals": info["tokenAmount"]["decimals"]
-                        })
-                return tokens
-        except Exception:
-            continue
+        rpc_tokens = []
+        rpc_success = True
+        seen_mints = set()
+        for prog in programs:
+            payload = {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "getTokenAccountsByOwner",
+                "params": [
+                    public_key_str,
+                    {"programId": prog},
+                    {"encoding": "jsonParsed"}
+                ]
+            }
+            try:
+                resp = _RPC_SESSION.post(rpc, json=payload, timeout=8)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    for item in data.get("result", {}).get("value", []):
+                        info = item["account"]["data"]["parsed"]["info"]
+                        amount = float(info["tokenAmount"]["uiAmount"] or 0)
+                        mint = info["mint"]
+                        if amount > 0 and mint not in seen_mints:
+                            seen_mints.add(mint)
+                            rpc_tokens.append({
+                                "mint": mint,
+                                "amount": amount,
+                                "decimals": info["tokenAmount"]["decimals"],
+                                "program": prog
+                            })
+                else:
+                    rpc_success = False
+                    break
+            except Exception:
+                rpc_success = False
+                break
+
+        if rpc_success or rpc_tokens:
+            return rpc_tokens
 
     return []
 

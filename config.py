@@ -34,9 +34,8 @@ PLATFORM_FEE_BPS = 100
 # ==============================================================================
 PRIMARY_RPC = os.getenv("SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com")
 FALLBACK_RPCS = [
-    "https://solana-api.projectserum.com",
-    "https://rpc.ankr.com/solana",
-    "https://mainnet.helius-rpc.com/?api-key=public",
+    "https://api.mainnet.solana.com",
+    "https://solana-rpc.publicnode.com",
 ]
 
 # Standard Solana Native Mint (Wrapped SOL)
@@ -70,3 +69,8 @@ DB_PATH = DATA_DIR / "bot_database.sqlite"
 DEFAULT_SLIPPAGE_BPS = 100     # 1% slippage
 MAX_SLIPPAGE_BPS = 1500        # 15% slippage cap
 DEFAULT_PRIORITY_FEE_LAMPORTS = 50_000  # 0.00005 SOL priority fee for fast landing
+
+# System Version & Token Programs
+BOT_VERSION = "v3.28.0"
+TOKEN_PROGRAM_ID = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+TOKEN_2022_PROGRAM_ID = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"

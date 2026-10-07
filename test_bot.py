@@ -1122,7 +1122,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
 
         # 1. Telemetry verification
         telem = get_cluster_telemetry()
-        self.assertEqual(telem["bot_version"], "v3.27.0")
+        self.assertEqual(telem["bot_version"], BOT_VERSION)
         self.assertIn("Mainnet", telem["cluster"])
         self.assertEqual(telem["developer_wallet"], "7kz1mcQcaZhYzFUHBFHH6s5tGrDHc7gNhN5WAUyXyq5r")
         self.assertEqual(telem["fee_pct"], 1.0)
@@ -1553,9 +1553,10 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.27.0", card_text)
+        self.assertIn("v3.28.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
+        self.assertIn("Token-2022", card_text)
 
         kb = mock_update.message.reply_text.call_args[1]["reply_markup"]
         all_btns = [b for row in kb.inline_keyboard for b in row]
@@ -1589,6 +1590,80 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertIn("Basic Audit (Unindexed on RugCheck)", card_en)
         card_ar = format_token_card(unverified_scan, lang="ar")
         self.assertIn("فحص أساسي (غير مفهرس في RugCheck)", card_ar)
+
+    def test_52_token_2022_support_and_config_bot_version(self):
+        """Test Token-2022 multi-program portfolio discovery and BOT_VERSION config single-source-of-truth."""
+        from unittest.mock import patch, MagicMock
+        from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
+        from wallet_manager import get_token_accounts
+
+        self.assertEqual(BOT_VERSION, "v3.28.0")
+        self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
+        self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
+
+        # Mock multi-program RPC response
+        mock_resp_spl = MagicMock()
+        mock_resp_spl.status_code = 200
+        mock_resp_spl.json.return_value = {
+            "result": {
+                "value": [
+                    {
+                        "account": {
+                            "data": {
+                                "parsed": {
+                                    "info": {
+                                        "mint": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
+                                        "tokenAmount": {"uiAmount": 500000.0, "decimals": 5}
+                                    }
+                                }
+                            }
+                        }
+                    }
+                ]
+            }
+        }
+
+        mock_resp_2022 = MagicMock()
+        mock_resp_2022.status_code = 200
+        mock_resp_2022.json.return_value = {
+            "result": {
+                "value": [
+                    {
+                        "account": {
+                            "data": {
+                                "parsed": {
+                                    "info": {
+                                        "mint": "2022TokenMintAddress11111111111111111111111111",
+                                        "tokenAmount": {"uiAmount": 1250.75, "decimals": 6}
+                                    }
+                                }
+                            }
+                        }
+                    }
+                ]
+            }
+        }
+
+        def mock_post(url, json=None, timeout=None):
+            prog = json["params"][1]["programId"]
+            if prog == TOKEN_PROGRAM_ID:
+                return mock_resp_spl
+            else:
+                return mock_resp_2022
+
+        with patch("wallet_manager._RPC_SESSION.post", side_effect=mock_post):
+            tokens = get_token_accounts("7kz1mcQcaZhYzFUHBFHH6s5tGrDHc7gNhN5WAUyXyq5r")
+            self.assertEqual(len(tokens), 2, "Must aggregate holdings across both SPL and Token-2022 programs")
+            
+            spl_tok = next((t for t in tokens if t["mint"] == "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"), None)
+            self.assertIsNotNone(spl_tok)
+            self.assertEqual(spl_tok["amount"], 500000.0)
+            self.assertEqual(spl_tok["program"], TOKEN_PROGRAM_ID)
+
+            tok_2022 = next((t for t in tokens if t["mint"] == "2022TokenMintAddress11111111111111111111111111"), None)
+            self.assertIsNotNone(tok_2022)
+            self.assertEqual(tok_2022["amount"], 1250.75)
+            self.assertEqual(tok_2022["program"], TOKEN_2022_PROGRAM_ID)
 
 
 if __name__ == "__main__":

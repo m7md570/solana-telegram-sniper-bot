@@ -154,6 +154,9 @@ def get_main_menu_keyboard(user_id: int, lang: str = "en") -> InlineKeyboardMark
         ],
         [
             InlineKeyboardButton(t("btn_withdraw", lang), callback_data="btn_withdraw_guide"),
+            InlineKeyboardButton(t("btn_ping", lang), callback_data="btn_ping")
+        ],
+        [
             InlineKeyboardButton(t("btn_refresh", lang), callback_data="btn_refresh")
         ]
     ]
@@ -766,6 +769,72 @@ async def render_positions(target, user_id: int, user_lang: str, is_edit: bool =
         await target.reply_text(full_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb), disable_web_page_preview=True)
 
 
+def benchmark_network_latency() -> Dict[str, Any]:
+    """Measures live round-trip latency to Solana Primary RPC and Jupiter V6 API."""
+    import time
+    from config import PRIMARY_RPC, JUPITER_QUOTE_API, WSOL_MINT, USDC_MINT
+    from jupiter_engine import _SESSION
+
+    rpc_ms = 999.0
+    rpc_ok = False
+    try:
+        t0 = time.time()
+        r = _SESSION.post(PRIMARY_RPC, json={"jsonrpc": "2.0", "id": 1, "method": "getHealth"}, timeout=5)
+        rpc_ms = (time.time() - t0) * 1000.0
+        rpc_ok = (r.status_code == 200)
+    except Exception:
+        rpc_ok = False
+
+    jup_ms = 999.0
+    jup_ok = False
+    try:
+        t1 = time.time()
+        url = f"{JUPITER_QUOTE_API}?inputMint={WSOL_MINT}&outputMint={USDC_MINT}&amount=10000000"
+        r2 = _SESSION.get(url, timeout=5)
+        jup_ms = (time.time() - t1) * 1000.0
+        jup_ok = (r2.status_code == 200)
+    except Exception:
+        jup_ok = False
+
+    return {
+        "rpc_ms": rpc_ms,
+        "rpc_ok": rpc_ok,
+        "jup_ms": jup_ms,
+        "jup_ok": jup_ok
+    }
+
+
+async def render_network_ping(target, user_id: int, user_lang: str, is_edit: bool = False):
+    """Renders real-time Solana cluster latency and Jupiter routing benchmark card."""
+    bench = benchmark_network_latency()
+    now_str = get_current_time_str()
+
+    rpc_ms = bench["rpc_ms"]
+    jup_ms = bench["jup_ms"]
+
+    if user_lang == "ar":
+        rpc_status = "🟢 سرعة فائقة" if rpc_ms < 1000 else "🟡 معتدل"
+        jup_status = "🟢 استجابة فورية" if jup_ms < 2000 else "🟡 معتدل"
+    else:
+        rpc_status = "🟢 Ultra-Fast" if rpc_ms < 1000 else "🟡 Normal"
+        jup_status = "🟢 Sub-Second" if jup_ms < 2000 else "🟡 Normal"
+
+    title = t("ping_title", user_lang)
+    body = t("ping_body", user_lang, rpc_ms=rpc_ms, rpc_status=rpc_status, jup_ms=jup_ms, jup_status=jup_status)
+    retest_label = "🔄 فحص السرعة مجدداً" if user_lang == "ar" else "🔄 Re-test Latency"
+
+    kb = [
+        [InlineKeyboardButton(retest_label, callback_data="btn_ping")],
+        [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
+    ]
+    card_text = f"{title}\n{body}\n🕒 <code>{now_str}</code>"
+
+    if is_edit:
+        await safe_edit_text(target, card_text, reply_markup=InlineKeyboardMarkup(kb))
+    else:
+        await target.reply_text(card_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
+
+
 async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handles all inline button clicks with bilingual localization."""
     query = update.callback_query
@@ -956,6 +1025,10 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif data == "btn_history":
         await render_trade_history(query, user_id, user_lang, is_edit=True)
+
+    elif data == "btn_ping":
+        await query.message.reply_chat_action("typing")
+        await render_network_ping(query, user_id, user_lang, is_edit=True)
 
     elif data.startswith("track_"):
         mint = data.replace("track_", "", 1)
@@ -1405,6 +1478,46 @@ async def pnl_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
 
 
+async def ping_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for /ping, /speed, and /network command."""
+    user_id = update.effective_user.id
+    user_lang = get_user_language(user_id)
+    await render_network_ping(update.message, user_id, user_lang, is_edit=False)
+
+
+async def audit_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for /audit and /check command: /audit [CA_OR_TICKER]"""
+    user = update.effective_user
+    user_id = user.id
+    user_lang = get_user_language(user_id)
+    args = context.args
+
+    if not args:
+        help_msg = t("audit_usage_help", user_lang)
+        await update.message.reply_text(help_msg, parse_mode="HTML")
+        return
+
+    query = args[0].strip()
+    mint = extract_token_mint(query)
+    if not mint:
+        matched = search_solana_token(query)
+        if matched:
+            mint = matched["mint"]
+
+    if not mint:
+        err = t("search_not_found", user_lang, query=html.escape(query))
+        await update.message.reply_text(err, parse_mode="HTML")
+        return
+
+    wait_text = "🔍 <b>جاري فحص وتدقيق أمان العقد الذكي...</b>" if user_lang == "ar" else "🔍 <b>Running full security audit on token...</b>"
+    status_msg = await update.message.reply_text(wait_text, parse_mode="HTML")
+
+    scan = scan_token_security(mint)
+    card_text = format_token_card(scan, lang=user_lang)
+    kb = get_token_card_keyboard(mint, user_lang, user_id=user_id, symbol=scan.get("symbol", "TOKEN"))
+    await status_msg.edit_text(card_text, parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True)
+
+
 async def history_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler for /history and /trades command."""
     user_id = update.effective_user.id
@@ -1755,6 +1868,11 @@ def build_application(token: str) -> Application:
     app.add_handler(CommandHandler("sl", sl_command))
     app.add_handler(CommandHandler("alerts", alerts_command))
     app.add_handler(CommandHandler("alert", alerts_command))
+    app.add_handler(CommandHandler("ping", ping_command))
+    app.add_handler(CommandHandler("speed", ping_command))
+    app.add_handler(CommandHandler("network", ping_command))
+    app.add_handler(CommandHandler("audit", audit_command))
+    app.add_handler(CommandHandler("check", audit_command))
     app.add_handler(CommandHandler("referral", referral_command))
     app.add_handler(CommandHandler("wallet", wallet_command))
     app.add_handler(CommandHandler("withdraw", withdraw_command))

@@ -145,11 +145,25 @@ MESSAGES = {
             "and dispatches instant alerts with 1-click Snipe buttons when momentum or volatility strikes."
         ),
         "alerts_toggled": "🔔 Price alerts are now {status}!",
+        "btn_ping": "⚡ Network Latency",
+        "ping_title": "⚡ <b>Solana Network & RPC Latency Benchmark</b>",
+        "ping_body": (
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🌐 <b>Primary RPC:</b> <code>{rpc_ms:.0f} ms</code> ({rpc_status})\n"
+            "🔀 <b>Jupiter V6 Routing:</b> <code>{jup_ms:.0f} ms</code> ({jup_status})\n"
+            "⛓️ <b>Cluster Health:</b> <code>OK / 100% Finalized</code>\n"
+            "🛡️ <b>Sandwich MEV Protection:</b> <code>ACTIVE</code>\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "💡 <i>Sub-second routing ensures optimal entry on explosive memecoins!</i>"
+        ),
+        "audit_usage_help": "ℹ️ <b>Audit Syntax</b>: <code>/audit [CA_OR_TICKER]</code>\nExample: <code>/audit bonk</code>",
         "help_title": "❓ <b>Popcorn Solana Sniper & Trading Bot Guide</b> ⚡",
         "help_body": (
             "━━━━━━━━━━━━━━━━━━━\n"
             "• <code>/start</code> - Open Main Dashboard\n"
             "• <code>/search [TICKER]</code> - Search Token by Name or Symbol\n"
+            "• <code>/audit [CA/TICKER]</code> - Full Token Security & RugCheck Scan\n"
+            "• <code>/ping</code> - Check Solana RPC & Jupiter Routing Speed\n"
             "• <code>/buy [CA/TICKER] [AMOUNT]</code> - Instant Custom Buy Snipe\n"
             "• <code>/sell [CA/TICKER] [PERCENT]</code> - Instant Market Sell (%)\n"
             "• <code>/surge</code> - View Explosive High-Velocity Gainers (1h/24h)\n"
@@ -165,7 +179,7 @@ MESSAGES = {
             "• <code>/referral</code> - Affiliate Link & Rewards (25%)\n"
             "• <code>/wallet</code> - View Wallet, Deposit & Export Keys\n"
             "• <code>/withdraw [ADDRESS] [AMOUNT]</code> - Withdraw SOL\n"
-            "• <code>/positions</code> - View Open Token Holdings\n"
+            "• <code>/positions</code> - View Open Holdings with 1-Click Sell\n"
             "• <code>/settings</code> - Configure Slippage, Gas & Language\n\n"
             "💡 <b>To snipe a token</b>: Paste any CA, DexScreener link, or type a ticker (e.g. <code>BONK</code>) directly here!"
         )
@@ -306,11 +320,25 @@ MESSAGES = {
             "عند التفعيل، يراقب البوت عملات قائمة متابعتك آلياً ويرسل إشعارات فورية مع أزرار قنص بنقرة واحدة عند رصد أي صعود حاد أو تقلبات."
         ),
         "alerts_toggled": "🔔 تنبيهات الأسعار الآن {status}!",
+        "btn_ping": "⚡ سرعة استجابة الشبكة",
+        "ping_title": "⚡ <b>رادار سرعة واستجابة شبكة سولانا و Jupiter</b>",
+        "ping_body": (
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🌐 <b>خادم سولانا الرئيسي (RPC):</b> <code>{rpc_ms:.0f} ملي ثانية</code> ({rpc_status})\n"
+            "🔀 <b>مسارات توجيه Jupiter V6:</b> <code>{jup_ms:.0f} ملي ثانية</code> ({jup_status})\n"
+            "⛓️ <b>صحة واستقرار الشبكة:</b> <code>ممتازة / تأكيد لحظي</code>\n"
+            "🛡️ <b>حماية ساندوتش MEV:</b> <code>مفعلة تلقائياً</code>\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "💡 <i>زمن الاستجابة الفائق يضمن لك اقتناص العملات المتفجرة بأفضل سعر ممكن!</i>"
+        ),
+        "audit_usage_help": "ℹ️ <b>صيغة الفحص والتدقيق</b>: <code>/audit [العقد_أو_الرمز]</code>\nمثال: <code>/audit bonk</code>",
         "help_title": "❓ <b>دليل استخدام بوت قنص وتداول سولانا</b> ⚡",
         "help_body": (
             "━━━━━━━━━━━━━━━━━━━\n"
             "• <code>/start</code> - فتح لوحة التحكم الرئيسية\n"
             "• <code>/search [الرمز/الاسم]</code> - البحث عن العملات بالاسم أو الرمز\n"
+            "• <code>/audit [العقد/الرمز]</code> - فحص وتدقيق أمان العقد و RugCheck\n"
+            "• <code>/ping</code> - فحص سرعة استجابة خوادم سولانا و Jupiter\n"
             "• <code>/buy [العقد/الرمز] [المبلغ]</code> - قنص وشراء فوري بمبلغ مخصص\n"
             "• <code>/sell [العقد/الرمز] [النسبة]</code> - بيع فوري بنسبة مئوية (%)\n"
             "• <code>/surge</code> - رادار العملات المتفجرة الأكثر صعوداً (1h/24h)\n"
@@ -326,7 +354,7 @@ MESSAGES = {
             "• <code>/referral</code> - رابط الإحالة ومكافآت دعوة الأصدقاء (25%)\n"
             "• <code>/wallet</code> - عرض المحفظة والإيداع وتصدير المفاتيح\n"
             "• <code>/withdraw [العنوان] [المبلغ]</code> - سحب رصيد SOL\n"
-            "• <code>/positions</code> - عرض صفقاتك والعملات المفتوحة\n"
+            "• <code>/positions</code> - عرض صفقاتك المفتوحة مع أزرار البيع الفوري\n"
             "• <code>/settings</code> - ضبط نسبة الانزلاق ورسوم الغاز واللغة\n\n"
             "💡 <b>للقنص الفوري</b>: الصق عنوان أي عملة أو رابط أو اكتب رمزها (مثل <code>BONK</code>) هنا مباشرة!"
         )

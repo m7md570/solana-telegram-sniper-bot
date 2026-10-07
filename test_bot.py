@@ -573,6 +573,38 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
             self.assertIsNotNone(sell_100, "Sell 100% button must be generated")
             self.assertIsNotNone(inspect_btn, "Inspect button must be generated")
 
+    def test_26_network_ping_and_audit_commands(self):
+        """Test Solana RPC latency benchmark, ping card formatting, and audit command."""
+        import asyncio
+        from unittest.mock import AsyncMock
+        from telegram_bot import benchmark_network_latency, render_network_ping
+        from i18n import t
+
+        # 1. Benchmark latency measurement
+        bench = benchmark_network_latency()
+        self.assertIn("rpc_ms", bench)
+        self.assertIn("jup_ms", bench)
+        self.assertGreater(bench["rpc_ms"], 0.0)
+
+        # 2. Render network ping card
+        mock_target = AsyncMock()
+        asyncio.run(render_network_ping(mock_target, self.test_user_id, user_lang="en", is_edit=False))
+        self.assertTrue(mock_target.reply_text.called)
+        msg_en = mock_target.reply_text.call_args[0][0]
+        self.assertIn("Latency Benchmark", msg_en)
+        self.assertIn("Primary RPC", msg_en)
+
+        # 3. Test Arabic ping card
+        mock_target.reset_mock()
+        asyncio.run(render_network_ping(mock_target, self.test_user_id, user_lang="ar", is_edit=False))
+        self.assertTrue(mock_target.reply_text.called)
+        msg_ar = mock_target.reply_text.call_args[0][0]
+        self.assertIn("رادار سرعة واستجابة", msg_ar)
+
+        # 4. Check i18n keys
+        self.assertIn("Latency", t("btn_ping", "en"))
+        self.assertIn("استجابة", t("btn_ping", "ar"))
+
 
 if __name__ == "__main__":
     unittest.main()

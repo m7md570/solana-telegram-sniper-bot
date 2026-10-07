@@ -295,7 +295,8 @@ def build_settings_card(user_id: int, user_lang: str) -> Tuple[str, InlineKeyboa
             InlineKeyboardButton(t("btn_gas_radar", user_lang), callback_data="btn_gas_fees")
         ],
         [
-            InlineKeyboardButton(t("btn_lang_toggle", user_lang), callback_data="btn_toggle_lang")
+            InlineKeyboardButton(t("btn_lang_toggle", user_lang), callback_data="btn_toggle_lang"),
+            InlineKeyboardButton("❓ Help" if user_lang == "en" else "❓ المساعدة", callback_data="btn_help")
         ],
         [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
     ]
@@ -1208,6 +1209,34 @@ async def execute_panic_sell_all(target, user_id: int, user_lang: str):
     await safe_edit_text(target, full_text, reply_markup=InlineKeyboardMarkup(kb))
 
 
+async def render_help_card(target, user_id: int, user_lang: str, is_edit: bool = False):
+    """Renders comprehensive interactive user manual and command directory."""
+    title = t("help_title", user_lang)
+    body = t("help_body", user_lang)
+    text = f"{title}\n{body}"
+    kb = [
+        [
+            InlineKeyboardButton("🚀 Dashboard" if user_lang == "en" else "🚀 الرئيسية", callback_data="btn_refresh"),
+            InlineKeyboardButton("💳 Wallet" if user_lang == "en" else "💳 المحفظة", callback_data="btn_wallet"),
+            InlineKeyboardButton("🔥 Trending" if user_lang == "en" else "🔥 الرائج", callback_data="btn_trending")
+        ],
+        [
+            InlineKeyboardButton("⚙️ Settings" if user_lang == "en" else "⚙️ الإعدادات", callback_data="btn_settings"),
+            InlineKeyboardButton("🤝 Referral" if user_lang == "en" else "🤝 الإحالات", callback_data="btn_referral"),
+            InlineKeyboardButton("ℹ️ Version" if user_lang == "en" else "ℹ️ الإصدار", callback_data="btn_status")
+        ],
+        [
+            InlineKeyboardButton("🚀 Quick Tour" if user_lang == "en" else "🚀 الجولة السريعة", callback_data="btn_tour"),
+            InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
+        ]
+    ]
+    markup = InlineKeyboardMarkup(kb)
+    if is_edit:
+        await safe_edit_text(target, text, reply_markup=markup)
+    else:
+        await target.reply_text(text, parse_mode="HTML", reply_markup=markup)
+
+
 async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handles all inline button clicks with bilingual localization."""
     query = update.callback_query
@@ -1599,6 +1628,9 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "btn_settings":
         text, kb = build_settings_card(user_id, user_lang)
         await safe_edit_text(query, text, reply_markup=kb)
+
+    elif data == "btn_help":
+        await render_help_card(query, user_id, user_lang, is_edit=True)
 
     elif data.startswith("slip_"):
         new_bps = int(data.split("_")[1])
@@ -2510,22 +2542,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler for /help command with interactive quick-action navigation keyboard."""
     user_id = update.effective_user.id
     user_lang = get_user_language(user_id)
-    title = t("help_title", user_lang)
-    body = t("help_body", user_lang)
-    text = f"{title}\n{body}"
-    kb = [
-        [
-            InlineKeyboardButton("🚀 Dashboard" if user_lang == "en" else "🚀 الرئيسية", callback_data="btn_refresh"),
-            InlineKeyboardButton("💳 Wallet" if user_lang == "en" else "💳 المحفظة", callback_data="btn_wallet"),
-            InlineKeyboardButton("🔥 Trending" if user_lang == "en" else "🔥 الرائج", callback_data="btn_trending")
-        ],
-        [
-            InlineKeyboardButton("⚙️ Settings" if user_lang == "en" else "⚙️ الإعدادات", callback_data="btn_settings"),
-            InlineKeyboardButton("🤝 Referral" if user_lang == "en" else "🤝 الإحالات", callback_data="btn_referral"),
-            InlineKeyboardButton("ℹ️ Version" if user_lang == "en" else "ℹ️ الإصدار", callback_data="btn_status")
-        ]
-    ]
-    await update.message.reply_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
+    await render_help_card(update.message, user_id, user_lang, is_edit=False)
 
 
 async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):

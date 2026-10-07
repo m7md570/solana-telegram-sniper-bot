@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.43.0", card_text)
+        self.assertIn("v3.44.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.43.0")
+        self.assertEqual(BOT_VERSION, "v3.44.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -2407,6 +2407,52 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
             cb_btns = [b for row in kb_cb.inline_keyboard for b in row]
             refresh_cb_btn = next((b for b in cb_btns if b.callback_data == "btn_pnl"), None)
             self.assertIsNotNone(refresh_cb_btn, "btn_pnl callback must provide live refresh button")
+
+    def test_68_help_card_parity_and_callback_routing(self):
+        """Test render_help_card quick actions parity, build_settings_card btn_help, and callback routing."""
+        import asyncio
+        from unittest.mock import MagicMock, AsyncMock, patch
+        from telegram_bot import render_help_card, help_command, build_settings_card, callback_router
+
+        # 1. Test render_help_card in English
+        mock_target = MagicMock()
+        mock_target.reply_text = AsyncMock()
+        test_uid = 99887711
+
+        asyncio.run(render_help_card(mock_target, test_uid, user_lang="en", is_edit=False))
+        self.assertTrue(mock_target.reply_text.called)
+        kb_en = mock_target.reply_text.call_args[1]["reply_markup"]
+        all_cbs = [b.callback_data for row in kb_en.inline_keyboard for b in row if b.callback_data]
+        self.assertIn("btn_refresh", all_cbs)
+        self.assertIn("btn_wallet", all_cbs)
+        self.assertIn("btn_trending", all_cbs)
+        self.assertIn("btn_settings", all_cbs)
+        self.assertIn("btn_referral", all_cbs)
+        self.assertIn("btn_status", all_cbs)
+        self.assertIn("btn_tour", all_cbs)
+
+        # 2. Test build_settings_card includes btn_help button
+        _, kb_settings = build_settings_card(test_uid, "en")
+        settings_cbs = [b.callback_data for row in kb_settings.inline_keyboard for b in row if b.callback_data]
+        self.assertIn("btn_help", settings_cbs, "btn_help must be present in settings keyboard")
+
+        # 3. Test callback_router btn_help
+        mock_query = MagicMock()
+        mock_query.from_user.id = test_uid
+        mock_query.data = "btn_help"
+        mock_query.answer = AsyncMock()
+        mock_query.edit_message_text = AsyncMock()
+        mock_update = MagicMock(callback_query=mock_query)
+        mock_context = MagicMock()
+
+        with patch("telegram_bot.get_user_language", return_value="en"):
+            asyncio.run(callback_router(mock_update, mock_context))
+            self.assertTrue(mock_query.answer.called)
+            self.assertTrue(mock_query.edit_message_text.called)
+            kb_edited = mock_query.edit_message_text.call_args[1]["reply_markup"]
+            edited_cbs = [b.callback_data for row in kb_edited.inline_keyboard for b in row if b.callback_data]
+            self.assertIn("btn_tour", edited_cbs)
+            self.assertIn("btn_status", edited_cbs)
 
 
 if __name__ == "__main__":

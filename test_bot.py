@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.39.0", card_text)
+        self.assertIn("v3.40.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.39.0")
+        self.assertEqual(BOT_VERSION, "v3.40.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -2203,6 +2203,78 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertTrue(any("twitter.com/intent/tweet" in u for u in urls_cb))
         self.assertIn("btn_referral", cbs_cb)
         self.assertIn("btn_refresh", cbs_cb)
+
+    def test_64_trending_resilience_and_marketing_generation(self):
+        """Test trending engine handles DexScreener null pairs safely and marketing autopilot builds verified alpha posts."""
+        from unittest.mock import patch, MagicMock
+        from trending_engine import get_trending_tokens
+        import trending_engine
+        from marketing_autopilot import generate_marketing_post
+
+        # Reset cache for isolated test
+        trending_engine._TRENDING_CACHE["timestamp"] = 0
+        trending_engine._TRENDING_CACHE["data"] = []
+
+        # 1. Test null pairs response from DexScreener batch endpoint does not raise TypeError
+        mock_resp_null = MagicMock()
+        mock_resp_null.status_code = 200
+        mock_resp_null.json.return_value = {"schemaVersion": "1.0.0", "pairs": None}
+
+        # Mock single token fallback response
+        mock_resp_single = MagicMock()
+        mock_resp_single.status_code = 200
+        mock_resp_single.json.return_value = {
+            "pairs": [
+                {
+                    "baseToken": {"address": self.bonk_mint, "symbol": "BONK", "name": "Bonk"},
+                    "priceUsd": "0.000025",
+                    "priceChange": {"h1": "1.5", "h24": "12.4"},
+                    "volume": {"h24": "5000000"},
+                    "liquidity": {"usd": "1200000"},
+                    "marketCap": "1500000000"
+                }
+            ]
+        }
+
+        def mock_get(url, *args, **kwargs):
+            if "token-boosts" in url:
+                mock_b = MagicMock()
+                mock_b.status_code = 200
+                mock_b.json.return_value = []
+                return mock_b
+            if "," in url:
+                return mock_resp_null
+            return mock_resp_single
+
+        with patch.object(trending_engine._SESSION, "get", side_effect=mock_get):
+            tokens = get_trending_tokens(limit=2)
+            self.assertIsInstance(tokens, list)
+            self.assertGreater(len(tokens), 0)
+            self.assertEqual(tokens[0]["symbol"], "BONK")
+            self.assertEqual(tokens[0]["price_usd"], 0.000025)
+
+        # 2. Test marketing alpha post generation
+        fake_trending = [
+            {
+                "mint": self.bonk_mint,
+                "symbol": "BONK",
+                "price_usd": 0.000025,
+                "change_24h": 12.4,
+                "change_1h": 1.5,
+                "volume_24h": 5_000_000,
+                "liquidity": 1_200_000
+            }
+        ]
+        fake_scan = {"rug_score": 0, "status": "SAFE"}
+
+        with patch("marketing_autopilot.get_trending_tokens", return_value=fake_trending), \
+             patch("marketing_autopilot.scan_token_security", return_value=fake_scan):
+            post_text, mint = generate_marketing_post()
+            self.assertIsNotNone(post_text)
+            self.assertEqual(mint, self.bonk_mint)
+            self.assertIn("$BONK Trending", post_text)
+            self.assertIn("RugCheck: 🟢 SAFE", post_text)
+            self.assertLessEqual(len(post_text), 260)
 
 
 if __name__ == "__main__":

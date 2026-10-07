@@ -1798,6 +1798,30 @@ async def qr_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_photo(photo=buf, caption=caption, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
 
 
+async def export_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for /export and /backup command: Exports the user's private key with strict security warning."""
+    user = update.effective_user
+    user_id = user.id
+    user_lang = get_user_language(user_id)
+    p_key = export_private_key_b58(user_id)
+    if user_lang == "ar":
+        text = (
+            f"🚨 <b>تحذير أمني شديد</b>: لا تشارك هذا المفتاح مع أي شخص أو في أي محادثة أبداً!\n\n"
+            f"🔑 <b>المفتاح الخاص (Base58)</b>:\n"
+            f"<code>{p_key}</code>\n\n"
+            f"💡 يمكنك نسخه واستيراده في محفظة Phantom أو Solflare للوصول المباشر إلى أموالك دون وسيط."
+        )
+    else:
+        text = (
+            f"🚨 <b>STRICT SECURITY WARNING</b>: Never share this private key with anyone or in any group chat!\n\n"
+            f"🔑 <b>Private Key (Base58)</b>:\n"
+            f"<code>{p_key}</code>\n\n"
+            f"💡 You can copy and import this into Phantom or Solflare wallet anytime to access your funds non-custodially."
+        )
+    kb = [[InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_wallet")]]
+    await update.message.reply_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
+
+
 async def gas_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler for /gas command: queries Solana on-chain priority fees and displays live congestion radar."""
     user_id = update.effective_user.id
@@ -2739,6 +2763,9 @@ def build_application(token: str) -> Application:
     app.add_handler(CommandHandler("qr", qr_command))
     app.add_handler(CommandHandler("deposit", qr_command))
     app.add_handler(CommandHandler("withdraw", withdraw_command))
+    app.add_handler(CommandHandler("export", export_command))
+    app.add_handler(CommandHandler("backup", export_command))
+    app.add_handler(CommandHandler("exportkey", export_command))
 
     app.add_handler(CommandHandler("watchlist", watchlist_command))
     app.add_handler(CommandHandler("track", track_command))

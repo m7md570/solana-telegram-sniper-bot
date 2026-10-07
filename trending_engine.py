@@ -267,15 +267,17 @@ def get_batch_token_prices(mints: List[str]) -> Dict[str, Dict[str, Any]]:
                     for p in pairs:
                         base = p.get("baseToken", {})
                         mint_addr = base.get("address")
-                        if mint_addr and mint_addr in chunk and mint_addr not in results:
-                            results[mint_addr] = {
-                                "symbol": base.get("symbol", "UNKNOWN"),
-                                "name": base.get("name", "Unknown"),
-                                "price_usd": float(p.get("priceUsd") or 0.0),
-                                "change_24h": float(p.get("priceChange", {}).get("h24") or 0.0),
-                                "change_1h": float(p.get("priceChange", {}).get("h1") or 0.0),
-                                "liquidity": float(p.get("liquidity", {}).get("usd") or 0.0)
-                            }
+                        if mint_addr and mint_addr in chunk:
+                            cur_liq = float(p.get("liquidity", {}).get("usd") or 0.0)
+                            if mint_addr not in results or cur_liq > results[mint_addr].get("liquidity", 0.0):
+                                results[mint_addr] = {
+                                    "symbol": base.get("symbol", "UNKNOWN"),
+                                    "name": base.get("name", "Unknown"),
+                                    "price_usd": float(p.get("priceUsd") or 0.0),
+                                    "change_24h": float(p.get("priceChange", {}).get("h24") or 0.0),
+                                    "change_1h": float(p.get("priceChange", {}).get("h1") or 0.0),
+                                    "liquidity": cur_liq
+                                }
                     break
             except Exception as e:
                 if attempt == 0:

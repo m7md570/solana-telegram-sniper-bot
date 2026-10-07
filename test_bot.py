@@ -1319,6 +1319,59 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
             self.assertFalse(ok)
             self.assertIn("Simulation failed", err)
 
+    def test_47_export_command_and_batch_pricing_liquidity_fix(self):
+        """Test export_command security flow, i18n guide sync, and batch pricing primary pool selection."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock, patch
+        from telegram_bot import export_command
+        from trending_engine import get_batch_token_prices
+        from i18n import t
+
+        test_uid = 99881200
+        get_or_create_wallet(test_uid, "ExportTester")
+
+        # 1. Test export_command in English
+        mock_update = MagicMock()
+        mock_update.effective_user.id = test_uid
+        mock_update.message.reply_text = AsyncMock()
+        mock_context = MagicMock()
+
+        asyncio.run(export_command(mock_update, mock_context))
+        self.assertTrue(mock_update.message.reply_text.called)
+        msg_text = mock_update.message.reply_text.call_args[0][0]
+        self.assertIn("Private Key", msg_text)
+        self.assertIn("STRICT SECURITY WARNING", msg_text)
+
+        # 2. Test i18n help guide includes /export in both languages
+        help_en = t("help_body", "en")
+        help_ar = t("help_body", "ar")
+        self.assertIn("/export", help_en)
+        self.assertIn("/export", help_ar)
+
+        # 3. Test get_batch_token_prices selects highest-liquidity pair
+        mock_pairs_response = MagicMock(status_code=200)
+        mock_pairs_response.json.return_value = {
+            "pairs": [
+                {
+                    "baseToken": {"address": self.bonk_mint, "symbol": "BONK", "name": "Bonk"},
+                    "priceUsd": "0.000010",
+                    "priceChange": {"h24": 5.0, "h1": 1.0},
+                    "liquidity": {"usd": 500.0}  # Low/dead liquidity pair
+                },
+                {
+                    "baseToken": {"address": self.bonk_mint, "symbol": "BONK", "name": "Bonk"},
+                    "priceUsd": "0.000028",
+                    "priceChange": {"h24": 12.0, "h1": 2.5},
+                    "liquidity": {"usd": 15000000.0}  # True primary pool
+                }
+            ]
+        }
+        with patch("trending_engine._SESSION.get", return_value=mock_pairs_response):
+            prices = get_batch_token_prices([self.bonk_mint])
+            self.assertIn(self.bonk_mint, prices)
+            self.assertEqual(prices[self.bonk_mint]["price_usd"], 0.000028)
+            self.assertEqual(prices[self.bonk_mint]["liquidity"], 15000000.0)
+
 
 if __name__ == "__main__":
     unittest.main()

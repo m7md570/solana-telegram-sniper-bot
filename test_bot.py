@@ -258,6 +258,66 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertTrue(remove_from_watchlist(test_uid, test_mint))
         self.assertEqual(len(get_user_watchlist(test_uid)), 0)
 
+    def test_15_priority_fee_management(self):
+        """Test user priority fee updates and tier persistence."""
+        from wallet_manager import update_user_priority_fee, get_user_settings
+        test_uid = 77112233
+        get_or_create_wallet(test_uid, "GasTester")
+
+        update_user_priority_fee(test_uid, 250_000)
+        s = get_user_settings(test_uid)
+        self.assertEqual(s["priority_fee"], 250_000, "Priority fee must update to 250,000 lamports")
+
+        update_user_priority_fee(test_uid, 1_000_000)
+        s2 = get_user_settings(test_uid)
+        self.assertEqual(s2["priority_fee"], 1_000_000, "Priority fee must update to 1,000,000 lamports")
+
+    def test_16_optimal_slippage_and_mev_protection(self):
+        """Test dynamic slippage calculation and MEV sandwich protection."""
+        from jupiter_engine import calculate_optimal_slippage
+        from config import MAX_SLIPPAGE_BPS
+
+        # Low price impact: should use base slippage
+        slip_low = calculate_optimal_slippage(price_impact_pct=0.1, base_slippage_bps=100)
+        self.assertEqual(slip_low, 100)
+
+        # Moderate price impact: should scale with buffer
+        slip_mod = calculate_optimal_slippage(price_impact_pct=1.5, base_slippage_bps=100)
+        self.assertEqual(slip_mod, 200)  # 150 + 50
+
+        # Very high price impact: must be capped at MAX_SLIPPAGE_BPS (1500)
+        slip_high = calculate_optimal_slippage(price_impact_pct=25.0, base_slippage_bps=100)
+        self.assertEqual(slip_high, MAX_SLIPPAGE_BPS)
+
+    def test_17_jupiter_swap_with_fee_account(self):
+        """Test that swap transaction builder attaches developer feeAccount."""
+        from jupiter_engine import get_jupiter_quote, build_and_sign_swap_tx
+        from config import DEVELOPER_WALLET
+
+        quote = get_jupiter_quote(WSOL_MINT, USDC_MINT, 50_000_000, slippage_bps=100, with_fee=True)
+        self.assertIsNotNone(quote)
+
+        kp = get_user_keypair(self.test_user_id)
+        tx_bytes = build_and_sign_swap_tx(quote, kp, priority_fee_lamports=50_000)
+        self.assertIsNotNone(tx_bytes, "Signed transaction with feeAccount must be built")
+        self.assertGreater(len(tx_bytes), 300)
+
+    def test_18_sell_and_gas_i18n(self):
+        """Test bilingual localization for sell and priority gas settings."""
+        from i18n import t
+
+        # English
+        help_en = t("sell_syntax_help", "en")
+        self.assertIn("/sell", help_en)
+        gas_title_en = t("gas_title", "en")
+        self.assertIn("Priority Gas", gas_title_en)
+
+        # Arabic
+        help_ar = t("sell_syntax_help", "ar")
+        self.assertIn("/sell", help_ar)
+        gas_title_ar = t("gas_title", "ar")
+        self.assertIn("الغاز", gas_title_ar)
+
 
 if __name__ == "__main__":
     unittest.main()

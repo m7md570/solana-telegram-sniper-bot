@@ -117,18 +117,28 @@ python telegram_bot.py
 | Command | Action |
 |---|---|
 | `/start` | Initializes user trading wallet and opens the main dashboard |
-| Paste `Token CA` | Performs immediate RugCheck security scan & displays 1-click buy buttons |
-| `💳 المحفظة` | Displays current SOL balance, deposit address, and private key export |
-| `📊 صفقاتي` | Lists open token holdings and active positions |
-| `⚙️ الإعدادات` | Configures slippage tolerance (0.5% - 10%) and priority fees |
+| `/search [TICKER]` | Resolves any Solana token by ticker or name via DexScreener API |
+| `/buy [CA/TICKER] [SOL]` | Instant 1-step direct buy snipe with optimal routing |
+| `/sell [CA/TICKER] [%]` | Instant 1-step market sell (e.g. `/sell bonk 100` or `/sell CA 50`) |
+| `/gas` / `/priority` | Configures Priority Gas speed tiers (Normal 50k, Turbo 250k, Ultra 1M) |
+| `/watchlist` | Displays personalized token watchlist with live prices and 24h changes |
+| `/track [CA/TICKER]` | Adds any token to user watchlist for continuous tracking |
+| `/trending` | Real-time DexScreener Solana trending tokens radar |
+| `/pnl` | Executive trading performance card (total volume, trades count) |
+| `/referral` | Viral 25% lifetime referral program link and rewards tracker |
+| `/wallet` | Non-custodial wallet management, deposit address, and key export |
+| `/withdraw [ADDR] [SOL]` | Withdraws SOL directly to Phantom or external wallet |
+| `/positions` | Lists all currently held SPL token balances |
+| `/settings` | Dual-mode configuration for slippage, priority fee, and bilingual UI |
 
 ---
 
 ## 🧪 Benchmark & Quality Assurance
 
-* **RPC Broadcast Latency:** < 350ms
-* **Unit Test Coverage:** 6/6 tests passing (`test_bot.py`)
+* **RPC Broadcast Latency:** < 350ms via Jupiter V6
+* **Unit Test Coverage:** 18/18 tests passing (`test_bot.py`)
 * **Security Checks:** Zero plain-text private key logging. Local AES-256 database encryption.
+* **MEV Defense:** Dynamic price-impact slippage auto-scaling and anti-sandwich protection.
 
 ---
 

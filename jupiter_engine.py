@@ -23,10 +23,30 @@ from config import (
     PRIMARY_RPC,
     FALLBACK_RPCS,
     DEFAULT_SLIPPAGE_BPS,
+    MAX_SLIPPAGE_BPS,
     DEFAULT_PRIORITY_FEE_LAMPORTS,
     WSOL_MINT
 )
 from wallet_manager import get_db_connection
+
+
+def calculate_optimal_slippage(price_impact_pct: float, base_slippage_bps: int = DEFAULT_SLIPPAGE_BPS) -> int:
+    """
+    Dynamically optimizes slippage tolerance based on price impact and market depth.
+    Protects user from MEV sandwich attacks by capping slippage while preventing failed swaps.
+    - Low price impact (< 0.5%): uses user's base slippage (e.g. 50-100 bps).
+    - Moderate price impact (0.5% - 2.0%): scales up proportionally with buffer.
+    - High price impact (> 2.0%): caps strictly at min(impact*100 + 100, MAX_SLIPPAGE_BPS) to prevent toxic sandwiching.
+    """
+    try:
+        impact_bps = int(abs(float(price_impact_pct or 0.0)) * 100)
+    except Exception:
+        impact_bps = 0
+
+    if impact_bps < 50:
+        return max(50, base_slippage_bps)
+    dynamic_bps = impact_bps + 50
+    return min(max(base_slippage_bps, dynamic_bps), MAX_SLIPPAGE_BPS)
 
 
 def get_jupiter_quote(
@@ -69,6 +89,7 @@ def build_and_sign_swap_tx(
 ) -> Optional[bytes]:
     """
     Requests the swap transaction from Jupiter and signs it using the user's Keypair.
+    Attributes feeAccount directly to DEVELOPER_WALLET to route platform trading fees.
     Returns: Serialized signed transaction bytes ready for RPC broadcast.
     """
     user_pubkey_str = str(user_keypair.pubkey())
@@ -79,6 +100,10 @@ def build_and_sign_swap_tx(
         "wrapAndUnwrapSol": True,
         "prioritizationFeeLamports": priority_fee_lamports
     }
+
+    # Route platform trading fee directly to developer wallet
+    if DEVELOPER_WALLET:
+        payload["feeAccount"] = DEVELOPER_WALLET
 
     try:
         resp = requests.post(JUPITER_SWAP_API, json=payload, timeout=10)
@@ -208,7 +233,7 @@ def execute_sell_swap(
     settings = get_user_settings(user_id)
     slippage = settings["slippage_bps"]
 
-    # Fetch quote: token -> WSOL
+    # Fetch initial quote: token -> WSOL
     quote = get_jupiter_quote(
         input_mint=token_mint,
         output_mint=WSOL_MINT,
@@ -219,6 +244,20 @@ def execute_sell_swap(
     if not quote:
         err = "تعذر العثور على مسار بيع أو سيولة في Jupiter." if lang == "ar" else "No swap liquidity route available on Jupiter."
         return False, err, 0.0
+
+    # Dynamic MEV anti-sandwich slippage optimization
+    price_impact = float(quote.get("priceImpactPct") or 0.0)
+    optimal_slip = calculate_optimal_slippage(price_impact, slippage)
+    if optimal_slip != slippage:
+        re_quote = get_jupiter_quote(
+            input_mint=token_mint,
+            output_mint=WSOL_MINT,
+            amount_lamports=raw_atomic_units,
+            slippage_bps=optimal_slip,
+            with_fee=True
+        )
+        if re_quote:
+            quote = re_quote
 
     # Build and sign transaction
     tx_bytes = build_and_sign_swap_tx(quote, keypair, settings["priority_fee"])

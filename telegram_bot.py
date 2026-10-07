@@ -30,7 +30,7 @@ import asyncio
 import logging
 import datetime
 import html
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 
 from telegram import (
     Update,
@@ -61,6 +61,7 @@ from wallet_manager import (
     export_private_key_b58,
     get_user_settings,
     update_user_slippage,
+    update_user_priority_fee,
     get_token_accounts,
     withdraw_sol,
     record_referral,
@@ -86,7 +87,8 @@ from jupiter_engine import (
     build_and_sign_swap_tx,
     broadcast_transaction,
     record_trade_db,
-    execute_sell_swap
+    execute_sell_swap,
+    calculate_optimal_slippage
 )
 from trending_engine import get_trending_tokens, format_trending_list
 from i18n import t
@@ -171,6 +173,50 @@ def get_token_card_keyboard(mint: str, user_lang: str) -> InlineKeyboardMarkup:
             InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
         ]
     ])
+
+
+def build_settings_card(user_id: int, user_lang: str) -> Tuple[str, InlineKeyboardMarkup]:
+    """Constructs the unified trading settings interface with slippage and priority gas tiers."""
+    settings = get_user_settings(user_id)
+    current_slip = settings["slippage_bps"] / 100.0
+    gas_lamports = settings.get("priority_fee", 50000)
+    gas_sol = gas_lamports / 1e9
+    now_str = get_current_time_str()
+
+    tier_label = (
+        t("gas_tier_normal", user_lang) if gas_lamports <= 100000 else
+        (t("gas_tier_turbo", user_lang) if gas_lamports <= 500000 else t("gas_tier_ultra", user_lang))
+    )
+
+    title = t("settings_title", user_lang)
+    body = t("settings_body", user_lang, slippage=current_slip)
+    gas_info = (
+        f"\n\n⚡ <b>Priority Gas:</b> <code>{gas_sol:.5f} SOL</code> ({tier_label})\n"
+        f"Select speed or slippage tier below:"
+    ) if user_lang == "en" else (
+        f"\n\n⚡ <b>أولوية الغاز:</b> <code>{gas_sol:.5f} SOL</code> ({tier_label})\n"
+        f"اختر فئة السرعة أو نسبة الانزلاق أدناه:"
+    )
+    text = f"{title}\n━━━━━━━━━━━━━━━━━━━\n{body}{gas_info}\n🕒 <code>{now_str}</code>"
+
+    kb = [
+        [
+            InlineKeyboardButton("0.5%", callback_data="slip_50"),
+            InlineKeyboardButton("1.0%", callback_data="slip_100"),
+            InlineKeyboardButton("2.0%", callback_data="slip_200"),
+            InlineKeyboardButton("5.0%", callback_data="slip_500")
+        ],
+        [
+            InlineKeyboardButton("⚡ Normal (50k)", callback_data="gas_50000"),
+            InlineKeyboardButton("🚀 Turbo (250k)", callback_data="gas_250000"),
+            InlineKeyboardButton("🏎️ Ultra (1M)", callback_data="gas_1000000")
+        ],
+        [
+            InlineKeyboardButton(t("btn_lang_toggle", user_lang), callback_data="btn_toggle_lang")
+        ],
+        [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
+    ]
+    return text, InlineKeyboardMarkup(kb)
 
 
 
@@ -721,30 +767,24 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await safe_edit_text(query, text, reply_markup=InlineKeyboardMarkup(kb))
 
     elif data == "btn_settings":
-        settings = get_user_settings(user_id)
-        current_slip = settings["slippage_bps"] / 100.0
-        title = t("settings_title", user_lang)
-        body = t("settings_body", user_lang, slippage=current_slip)
-        text = f"{title}\n━━━━━━━━━━━━━━━━━━━\n{body}\n🕒 <code>{now_str}</code>"
-        kb = [
-            [
-                InlineKeyboardButton("0.5%", callback_data="slip_50"),
-                InlineKeyboardButton("1.0%", callback_data="slip_100"),
-                InlineKeyboardButton("2.0%", callback_data="slip_200"),
-                InlineKeyboardButton("5.0%", callback_data="slip_500")
-            ],
-            [
-                InlineKeyboardButton(t("btn_lang_toggle", user_lang), callback_data="btn_toggle_lang")
-            ],
-            [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
-        ]
-        await safe_edit_text(query, text, reply_markup=InlineKeyboardMarkup(kb))
+        text, kb = build_settings_card(user_id, user_lang)
+        await safe_edit_text(query, text, reply_markup=kb)
 
     elif data.startswith("slip_"):
         new_bps = int(data.split("_")[1])
         update_user_slippage(user_id, new_bps)
         ack = f"Slippage tolerance set to {new_bps/100.0}%" if user_lang == "en" else f"تم ضبط نسبة الانزلاق إلى {new_bps/100.0}%"
-        await safe_edit_text(query, f"✅ <b>{ack}</b>\n🕒 <code>{now_str}</code>", reply_markup=get_main_menu_keyboard(user_id, user_lang))
+        await query.answer(ack, show_alert=False)
+        text, kb = build_settings_card(user_id, user_lang)
+        await safe_edit_text(query, text, reply_markup=kb)
+
+    elif data.startswith("gas_"):
+        new_lamports = int(data.split("_")[1])
+        update_user_priority_fee(user_id, new_lamports)
+        ack = f"Priority fee set to {new_lamports/1e9:.5f} SOL" if user_lang == "en" else f"تم ضبط رسوم أولوية الغاز إلى {new_lamports/1e9:.5f} SOL"
+        await query.answer(ack, show_alert=False)
+        text, kb = build_settings_card(user_id, user_lang)
+        await safe_edit_text(query, text, reply_markup=kb)
 
     elif data == "btn_snipe_guide":
         title = t("snipe_guide_title", user_lang)
@@ -976,27 +1016,75 @@ async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler for /settings command."""
     user_id = update.effective_user.id
     user_lang = get_user_language(user_id)
-    settings = get_user_settings(user_id)
-    current_slip = settings["slippage_bps"] / 100.0
-    now_str = get_current_time_str()
+    text, kb = build_settings_card(user_id, user_lang)
+    await update.message.reply_text(text, parse_mode="HTML", reply_markup=kb)
 
-    title = t("settings_title", user_lang)
-    body = t("settings_body", user_lang, slippage=current_slip)
-    text = f"{title}\n━━━━━━━━━━━━━━━━━━━\n{body}\n🕒 <code>{now_str}</code>"
 
-    kb = [
-        [
-            InlineKeyboardButton("0.5%", callback_data="slip_50"),
-            InlineKeyboardButton("1.0%", callback_data="slip_100"),
-            InlineKeyboardButton("2.0%", callback_data="slip_200"),
-            InlineKeyboardButton("5.0%", callback_data="slip_500")
-        ],
-        [
-            InlineKeyboardButton(t("btn_lang_toggle", user_lang), callback_data="btn_toggle_lang")
-        ],
-        [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
-    ]
-    await update.message.reply_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
+async def gas_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for /gas and /priority command."""
+    user_id = update.effective_user.id
+    user_lang = get_user_language(user_id)
+    text, kb = build_settings_card(user_id, user_lang)
+    await update.message.reply_text(text, parse_mode="HTML", reply_markup=kb)
+
+
+async def sell_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for /sell command: /sell [CA_OR_TICKER] [PERCENT]"""
+    user = update.effective_user
+    user_id = user.id
+    user_lang = get_user_language(user_id)
+    args = context.args
+
+    if not args:
+        await update.message.reply_text(t("sell_syntax_help", user_lang), parse_mode="HTML")
+        return
+
+    raw_target = args[0].strip()
+    pct = 100
+    if len(args) >= 2:
+        try:
+            pct_val = int(args[1].strip().rstrip("%"))
+            if 1 <= pct_val <= 100:
+                pct = pct_val
+            else:
+                await update.message.reply_text(t("sell_invalid_pct", user_lang), parse_mode="HTML")
+                return
+        except ValueError:
+            await update.message.reply_text(t("sell_invalid_pct", user_lang), parse_mode="HTML")
+            return
+
+    mint = extract_token_mint(raw_target)
+    if not mint:
+        matched = search_solana_token(raw_target)
+        if matched:
+            mint = matched["mint"]
+        else:
+            err = f"❌ Could not resolve token: {html.escape(raw_target)}" if user_lang == "en" else f"❌ تعذر العثور على العملة: {html.escape(raw_target)}"
+            await update.message.reply_text(err, parse_mode="HTML")
+            return
+
+    prep_sell = f"⚡ <b>Executing {pct}% Sell Swap via Jupiter...</b>" if user_lang == "en" else f"⚡ <b>جاري تنفيذ بيع {pct}% من العملة عبر Jupiter...</b>"
+    status_msg = await update.message.reply_text(prep_sell, parse_mode="HTML")
+
+    success, sig_or_err, sol_received = execute_sell_swap(user_id, mint, pct, lang=user_lang)
+    if success:
+        if user_lang == "en":
+            text = (
+                f"🎉 <b>Sell Swap Executed Successfully!</b> 🔴\n"
+                f"━━━━━━━━━━━━━━━━━━━\n"
+                f"💰 Received: <code>{sol_received:.4f} SOL</code> in wallet\n\n"
+                f"🔗 <a href='https://solscan.io/tx/{sig_or_err}'>View Transaction on Solscan</a>"
+            )
+        else:
+            text = (
+                f"🎉 <b>تم تنفيذ صفقة البيع بنجاح!</b> 🔴\n"
+                f"━━━━━━━━━━━━━━━━━━━\n"
+                f"💰 تم استلام: <code>{sol_received:.4f} SOL</code> في محفظتك\n\n"
+                f"🔗 <a href='https://solscan.io/tx/{sig_or_err}'>عرض المعاملة على Solscan</a>"
+            )
+        await status_msg.edit_text(text, parse_mode="HTML", disable_web_page_preview=True)
+    else:
+        await status_msg.edit_text(f"❌ <b>Sell failed</b>: <code>{html.escape(sig_or_err)}</code>", parse_mode="HTML")
 
 
 async def pnl_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1231,7 +1319,10 @@ def build_application(token: str) -> Application:
     app.add_handler(CommandHandler("search", search_command))
     app.add_handler(CommandHandler("find", search_command))
     app.add_handler(CommandHandler("buy", buy_command))
+    app.add_handler(CommandHandler("sell", sell_command))
     app.add_handler(CommandHandler("pnl", pnl_command))
+    app.add_handler(CommandHandler("gas", gas_command))
+    app.add_handler(CommandHandler("priority", gas_command))
     app.add_handler(CommandHandler("referral", referral_command))
     app.add_handler(CommandHandler("wallet", wallet_command))
     app.add_handler(CommandHandler("withdraw", withdraw_command))

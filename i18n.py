@@ -108,21 +108,41 @@ MESSAGES = {
         "custom_buy_prompt": "✏️ <b>Enter custom SOL amount to buy for ${symbol}:</b>\n\nReply to this message with a number (e.g. <code>0.02</code>, <code>0.15</code>, <code>2.5</code>):",
         "refresh_toast": "✅ Balance updated to latest state!",
         "lang_switched_toast": "Language switched to English 🇬🇧",
+        "sell_syntax_help": (
+            "ℹ️ <b>Instant Sell Syntax</b>:\n"
+            "<code>/sell [CONTRACT_OR_TICKER] [PERCENT]</code>\n\n"
+            "<b>Examples:</b>\n"
+            "<code>/sell bonk 100</code> (Sell all BONK holdings)\n"
+            "<code>/sell DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263 50</code> (Sell 50%)"
+        ),
+        "sell_no_balance": "❌ <b>No token balance found to sell for:</b> <code>{target}</code>",
+        "sell_invalid_pct": "❌ Invalid percentage. Please specify between 1 and 100 (e.g. <code>50</code> or <code>100</code>).",
+        "gas_title": "⚡ <b>Priority Gas Fee Settings</b>",
+        "gas_body": (
+            "Current Priority Gas: <b>{gas_sol:.5f} SOL</b> (<code>{gas_lamports:,} lamports</code>)\n"
+            "Speed Tier: <b>{tier}</b>\n\n"
+            "Select speed tier to accelerate your transactions:"
+        ),
+        "gas_tier_normal": "⚡ Normal (0.00005 SOL)",
+        "gas_tier_turbo": "🚀 Turbo (0.00025 SOL)",
+        "gas_tier_ultra": "🏎️ Ultra (0.001 SOL)",
         "help_title": "❓ <b>Popcorn Solana Sniper & Trading Bot Guide</b> ⚡",
         "help_body": (
             "━━━━━━━━━━━━━━━━━━━\n"
             "• <code>/start</code> - Open Main Dashboard\n"
             "• <code>/search [TICKER]</code> - Search Token by Name or Symbol\n"
             "• <code>/buy [CA/TICKER] [AMOUNT]</code> - Instant Custom Buy Snipe\n"
+            "• <code>/sell [CA/TICKER] [PERCENT]</code> - Instant Market Sell (%)\n"
             "• <code>/watchlist</code> - View Tracked Tokens & Live Prices\n"
             "• <code>/track [CA/TICKER]</code> - Add Token to Watchlist\n"
             "• <code>/trending</code> - View Trending Solana Tokens\n"
             "• <code>/pnl</code> - View Your Trading PnL & Performance\n"
+            "• <code>/gas</code> - Configure Priority Gas & Speed Tiers\n"
             "• <code>/referral</code> - Affiliate Link & Rewards (25%)\n"
             "• <code>/wallet</code> - View Wallet, Deposit & Export Keys\n"
             "• <code>/withdraw [ADDRESS] [AMOUNT]</code> - Withdraw SOL\n"
             "• <code>/positions</code> - View Open Token Holdings\n"
-            "• <code>/settings</code> - Configure Slippage & Language\n\n"
+            "• <code>/settings</code> - Configure Slippage, Gas & Language\n\n"
             "💡 <b>To snipe a token</b>: Paste any CA, DexScreener link, or type a ticker (e.g. <code>BONK</code>) directly here!"
         )
     },
@@ -226,21 +246,41 @@ MESSAGES = {
         "custom_buy_prompt": "✏️ <b>أدخل مبلغ SOL المخصص لشراء ${symbol}:</b>\n\nقم بالرد برقم (مثال: <code>0.02</code> أو <code>0.15</code> أو <code>2.5</code>):",
         "refresh_toast": "✅ الرصيد محدّث لأحدث قيمة!",
         "lang_switched_toast": "تم تحويل اللغة إلى العربية 🇸🇦",
+        "sell_syntax_help": (
+            "ℹ️ <b>صيغة البيع الفوري</b>:\n"
+            "<code>/sell [العقد_أو_الرمز] [النسبة_المئوية]</code>\n\n"
+            "<b>أمثلة:</b>\n"
+            "<code>/sell bonk 100</code> (بيع 100% من رصيد العملة)\n"
+            "<code>/sell DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263 50</code> (بيع 50%)"
+        ),
+        "sell_no_balance": "❌ <b>لا تملك رصيداً من هذه العملة للبيع:</b> <code>{target}</code>",
+        "sell_invalid_pct": "❌ النسبة المئوية غير صحيحة. يرجى تحديد نسبة بين 1 و 100 (مثال: <code>50</code> أو <code>100</code>).",
+        "gas_title": "⚡ <b>إعدادات رسوم أولوية الغاز (Priority Fee)</b>",
+        "gas_body": (
+            "رسوم أولوية الغاز الحالية: <b>{gas_sol:.5f} SOL</b> (<code>{gas_lamports:,} lamports</code>)\n"
+            "فئة السرعة: <b>{tier}</b>\n\n"
+            "اختر فئة السرعة لتسريع تأكيد صفقاتك على شبكة سولانا:"
+        ),
+        "gas_tier_normal": "⚡ عادي (0.00005 SOL)",
+        "gas_tier_turbo": "🚀 سريع (0.00025 SOL)",
+        "gas_tier_ultra": "🏎️ فائق السرعة (0.001 SOL)",
         "help_title": "❓ <b>دليل استخدام بوت قنص وتداول سولانا</b> ⚡",
         "help_body": (
             "━━━━━━━━━━━━━━━━━━━\n"
             "• <code>/start</code> - فتح لوحة التحكم الرئيسية\n"
             "• <code>/search [الرمز/الاسم]</code> - البحث عن العملات بالاسم أو الرمز\n"
             "• <code>/buy [العقد/الرمز] [المبلغ]</code> - قنص وشراء فوري بمبلغ مخصص\n"
+            "• <code>/sell [العقد/الرمز] [النسبة]</code> - بيع فوري بنسبة مئوية (%)\n"
             "• <code>/watchlist</code> - عرض قائمة العملات المتابعة وأسعارها اللحظية\n"
             "• <code>/track [العقد/الرمز]</code> - إضافة عملة إلى قائمة المتابعة\n"
             "• <code>/trending</code> - عرض أكثر عملات سولانا رواجاً\n"
             "• <code>/pnl</code> - عرض بطاقة الأرباح وإحصائيات التداول\n"
+            "• <code>/gas</code> - ضبط رسوم الغاز وأولوية التنفيذ\n"
             "• <code>/referral</code> - رابط الإحالة ومكافآت دعوة الأصدقاء (25%)\n"
             "• <code>/wallet</code> - عرض المحفظة والإيداع وتصدير المفاتيح\n"
             "• <code>/withdraw [العنوان] [المبلغ]</code> - سحب رصيد SOL\n"
             "• <code>/positions</code> - عرض صفقاتك والعملات المفتوحة\n"
-            "• <code>/settings</code> - ضبط نسبة الانزلاق واللغة\n\n"
+            "• <code>/settings</code> - ضبط نسبة الانزلاق ورسوم الغاز واللغة\n\n"
             "💡 <b>للقنص الفوري</b>: الصق عنوان أي عملة أو رابط أو اكتب رمزها (مثل <code>BONK</code>) هنا مباشرة!"
         )
     }

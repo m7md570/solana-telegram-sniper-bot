@@ -258,6 +258,16 @@ def update_user_slippage(user_id: int, slippage_bps: int):
         conn.close()
 
 
+def update_user_priority_fee(user_id: int, priority_fee_lamports: int):
+    """Updates user transaction priority fee setting in lamports."""
+    conn = get_db_connection()
+    try:
+        conn.execute("UPDATE users SET priority_fee = ? WHERE user_id = ?", (priority_fee_lamports, user_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def get_token_accounts(public_key_str: str) -> List[Dict[str, Any]]:
     """Fetches all SPL token holdings for a given public key."""
     endpoints = [PRIMARY_RPC] + FALLBACK_RPCS

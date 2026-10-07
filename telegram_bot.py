@@ -1693,6 +1693,59 @@ async def render_presets_card(target, user_id: int, user_lang: str, is_edit: boo
         await target.reply_text(text, parse_mode="HTML", reply_markup=markup, disable_web_page_preview=True)
 
 
+async def render_pnl_card(target, user, user_id: int, user_lang: str, is_edit: bool = False, bot_username: str = "PopcornSniperBot"):
+    """Renders comprehensive user trading performance, PnL metrics, viral share buttons, and export actions."""
+    stats = get_user_trade_stats(user_id)
+    username = (user.username or user.first_name or ("Trader" if user_lang == "en" else "المتداول")) if user else ("Trader" if user_lang == "en" else "المتداول")
+    now_str = get_current_time_str()
+
+    pnl_body_text = t(
+        "pnl_body",
+        user_lang,
+        username=html.escape(username),
+        total_trades=stats["total_trades"],
+        total_vol=stats["total_volume_sol"],
+        total_fees=stats.get("total_fees_sol", 0.0)
+    )
+
+    ref_link = f"https://t.me/{bot_username}?start=ref_{user_id}"
+    tweet_msg = f"Sniping Solana memecoins with sub-400ms speed on @PopcornSniperBot! Traded {stats['total_volume_sol']:.3f} SOL. Start sniping: {ref_link}"
+    share_url = f"https://twitter.com/intent/tweet?text={urllib.parse.quote(tweet_msg)}"
+    tg_share_text = f"🚀 I'm sniping Solana memecoins with sub-400ms execution on @{bot_username}! Traded {stats['total_volume_sol']:.3f} SOL. Start sniping: {ref_link}"
+    tg_share_url = f"https://t.me/share/url?url={urllib.parse.quote(ref_link)}&text={urllib.parse.quote(tg_share_text)}"
+
+    text = f"{t('pnl_title', user_lang)}\n{pnl_body_text}\n🕒 <code>{now_str}</code>"
+    share_btn_text = "📢 " + ("Share PnL on X / Twitter" if user_lang == "en" else "مشاركة الأرباح على X")
+    tg_share_btn_text = "👥 " + ("Share on Telegram" if user_lang == "en" else "مشاركة على تيليجرام")
+    refresh_pnl_label = "🔄 تحديث الأرباح" if user_lang == "ar" else "🔄 Refresh PnL"
+    csv_label = "📥 Export CSV" if user_lang == "en" else "📥 تصدير السجل CSV"
+
+    kb = [
+        [
+            InlineKeyboardButton(share_btn_text, url=share_url),
+            InlineKeyboardButton(tg_share_btn_text, url=tg_share_url)
+        ],
+        [
+            InlineKeyboardButton(t("btn_history", user_lang), callback_data="btn_history"),
+            InlineKeyboardButton(csv_label, callback_data="btn_history_csv")
+        ],
+        [
+            InlineKeyboardButton(t("btn_positions", user_lang), callback_data="btn_positions"),
+            InlineKeyboardButton(t("btn_trending", user_lang), callback_data="btn_trending")
+        ],
+        [
+            InlineKeyboardButton(refresh_pnl_label, callback_data="btn_pnl"),
+            InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
+        ]
+    ]
+
+    markup = InlineKeyboardMarkup(kb)
+    if is_edit:
+        await safe_edit_text(target, text, reply_markup=markup)
+    else:
+        await target.reply_text(text, parse_mode="HTML", reply_markup=markup, disable_web_page_preview=True)
+
+
 async def render_panic_confirm(target, user_id: int, user_lang: str, is_edit: bool = False):
     """Renders the emergency panic sell-all confirmation warning card."""
     pubkey, _ = get_or_create_wallet(user_id)
@@ -2061,41 +2114,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text(prompt_text, parse_mode="HTML")
 
     elif data == "btn_pnl":
-        stats = get_user_trade_stats(user_id)
-        username = user.username or user.first_name or ("Trader" if user_lang == "en" else "المتداول")
-        pnl_body_text = t(
-            "pnl_body",
-            user_lang,
-            username=html.escape(username),
-            total_trades=stats["total_trades"],
-            total_vol=stats["total_volume_sol"],
-            total_fees=stats.get("total_fees_sol", 0.0)
-        )
-        bot_username = (context.bot.username if context and context.bot and context.bot.username else "PopcornSniperBot")
-        ref_link = f"https://t.me/{bot_username}?start=ref_{user_id}"
-        tweet_msg = f"Sniping Solana memecoins with sub-400ms speed on @PopcornSniperBot! Traded {stats['total_volume_sol']:.3f} SOL. Start sniping: {ref_link}"
-        share_url = f"https://twitter.com/intent/tweet?text={urllib.parse.quote(tweet_msg)}"
-
-        text = f"{t('pnl_title', user_lang)}\n{pnl_body_text}\n🕒 <code>{now_str}</code>"
-        share_btn_text = "📢 " + ("Share PnL on X / Twitter" if user_lang == "en" else "مشاركة الأرباح على X")
-        refresh_pnl_label = "🔄 تحديث الأرباح" if user_lang == "ar" else "🔄 Refresh PnL"
-        kb = [
-            [
-                InlineKeyboardButton(share_btn_text, url=share_url)
-            ],
-            [
-                InlineKeyboardButton(t("btn_history", user_lang), callback_data="btn_history"),
-                InlineKeyboardButton(t("btn_positions", user_lang), callback_data="btn_positions")
-            ],
-            [
-                InlineKeyboardButton(refresh_pnl_label, callback_data="btn_pnl"),
-                InlineKeyboardButton(t("btn_trending", user_lang), callback_data="btn_trending")
-            ],
-            [
-                InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
-            ]
-        ]
-        await safe_edit_text(query, text, reply_markup=InlineKeyboardMarkup(kb))
+        bot_uname = (context.bot.username if context and context.bot and context.bot.username else "PopcornSniperBot")
+        await render_pnl_card(query, user, user_id, user_lang, is_edit=True, bot_username=bot_uname)
 
     elif data == "btn_settings":
         text, kb = build_settings_card(user_id, user_lang)
@@ -2931,43 +2951,8 @@ async def pnl_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = user.id
     user_lang = get_user_language(user_id)
-    username = user.username or user.first_name or ("Trader" if user_lang == "en" else "المتداول")
-    now_str = get_current_time_str()
-
-    stats = get_user_trade_stats(user_id)
-    pnl_body_text = t(
-        "pnl_body",
-        user_lang,
-        username=html.escape(username),
-        total_trades=stats["total_trades"],
-        total_vol=stats["total_volume_sol"],
-        total_fees=stats.get("total_fees_sol", 0.0)
-    )
-    bot_username = (context.bot.username if context and context.bot and context.bot.username else "PopcornSniperBot")
-    ref_link = f"https://t.me/{bot_username}?start=ref_{user_id}"
-    tweet_msg = f"Sniping Solana memecoins with sub-400ms speed on @PopcornSniperBot! Traded {stats['total_volume_sol']:.3f} SOL. Start sniping: {ref_link}"
-    share_url = f"https://twitter.com/intent/tweet?text={urllib.parse.quote(tweet_msg)}"
-
-    text = f"{t('pnl_title', user_lang)}\n{pnl_body_text}\n🕒 <code>{now_str}</code>"
-    share_btn_text = "📢 " + ("Share PnL on X / Twitter" if user_lang == "en" else "مشاركة الأرباح على X")
-    refresh_pnl_label = "🔄 تحديث الأرباح" if user_lang == "ar" else "🔄 Refresh PnL"
-    kb = [
-        [
-            InlineKeyboardButton(share_btn_text, url=share_url)
-        ],
-        [
-            InlineKeyboardButton(t("btn_history", user_lang), callback_data="btn_history"),
-            InlineKeyboardButton(t("btn_positions", user_lang), callback_data="btn_positions")
-        ],
-        [
-            InlineKeyboardButton(refresh_pnl_label, callback_data="btn_pnl"),
-            InlineKeyboardButton(t("btn_trending", user_lang), callback_data="btn_trending")
-        ],
-        [
-            InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
-        ]
-    ]
-    await update.message.reply_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
+    bot_uname = (context.bot.username if context and context.bot and context.bot.username else "PopcornSniperBot")
+    await render_pnl_card(update.message, user, user_id, user_lang, is_edit=False, bot_username=bot_uname)
 
 
 async def ping_command(update: Update, context: ContextTypes.DEFAULT_TYPE):

@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.54.0", card_text)
+        self.assertIn("v3.55.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.54.0")
+        self.assertEqual(BOT_VERSION, "v3.55.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -3227,6 +3227,92 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertIn("presets", registered_commands)
         self.assertIn("preset", registered_commands)
         self.assertIn("quickbuy", registered_commands)
+
+    def test_79_pnl_card_unification_and_viral_actions(self):
+        """Test render_pnl_card unification, confirmed trade metrics, Telegram share intent, and CSV export action."""
+        from telegram_bot import render_pnl_card, pnl_command, callback_router
+        from wallet_manager import (
+            get_or_create_wallet,
+            record_trade_db,
+            get_user_trade_stats,
+            WSOL_MINT
+        )
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock
+
+        test_uid = 99223344
+        get_or_create_wallet(test_uid, "PnLUnifiedTester", initial_language="en")
+
+        # 1. Record 2 trades: 1 confirmed, 1 pending/failed
+        record_trade_db(
+            user_id=test_uid,
+            input_mint=WSOL_MINT,
+            output_mint="EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            amount_in=0.10,
+            amount_out=15.0,
+            fee_sol=0.001,
+            tx_sig="sig_conf_1",
+            status="CONFIRMED"
+        )
+        record_trade_db(
+            user_id=test_uid,
+            input_mint=WSOL_MINT,
+            output_mint="EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            amount_in=0.05,
+            amount_out=0.0,
+            fee_sol=0.0,
+            tx_sig="sig_fail_1",
+            status="FAILED"
+        )
+
+        stats = get_user_trade_stats(test_uid)
+        self.assertEqual(stats["total_trades"], 2)
+        self.assertEqual(stats["confirmed_trades"], 1)
+        self.assertEqual(stats["success_rate_pct"], 50.0)
+
+        # 2. Test render_pnl_card in English
+        mock_user = MagicMock()
+        mock_user.username = "PnLChamp"
+        mock_target = MagicMock()
+        mock_target.reply_text = AsyncMock()
+
+        asyncio.run(render_pnl_card(mock_target, mock_user, test_uid, "en", is_edit=False, bot_username="PopcornSniperBot"))
+        self.assertTrue(mock_target.reply_text.called)
+
+        card_text_en = mock_target.reply_text.call_args[0][0]
+        self.assertIn("Trading PnL & Performance", card_text_en)
+        self.assertIn("0.100 SOL", card_text_en)
+
+        kb = mock_target.reply_text.call_args[1]["reply_markup"]
+        all_btns = [b for row in kb.inline_keyboard for b in row]
+
+        # Verify X share button and Telegram share button
+        x_btn = next((b for b in all_btns if b.url and "twitter.com/intent/tweet" in b.url), None)
+        tg_btn = next((b for b in all_btns if b.url and "t.me/share/url" in b.url), None)
+        csv_btn = next((b for b in all_btns if b.callback_data == "btn_history_csv"), None)
+        refresh_btn = next((b for b in all_btns if b.callback_data == "btn_pnl"), None)
+        hist_btn = next((b for b in all_btns if b.callback_data == "btn_history"), None)
+        pos_btn = next((b for b in all_btns if b.callback_data == "btn_positions"), None)
+
+        self.assertIsNotNone(x_btn, "X share button must exist in PnL keyboard")
+        self.assertIsNotNone(tg_btn, "Telegram share button must exist in PnL keyboard")
+        self.assertIsNotNone(csv_btn, "CSV export button must exist in PnL keyboard")
+        self.assertIsNotNone(refresh_btn, "Live refresh button must exist in PnL keyboard")
+        self.assertIsNotNone(hist_btn)
+        self.assertIsNotNone(pos_btn)
+
+        # 3. Test render_pnl_card in Arabic
+        mock_target_ar = MagicMock()
+        mock_target_ar.reply_text = AsyncMock()
+        asyncio.run(render_pnl_card(mock_target_ar, mock_user, test_uid, "ar", is_edit=False, bot_username="PopcornSniperBot"))
+        card_text_ar = mock_target_ar.reply_text.call_args[0][0]
+        self.assertIn("بطاقة أداء وأرباح التداول", card_text_ar)
+
+        kb_ar = mock_target_ar.reply_text.call_args[1]["reply_markup"]
+        all_btns_ar = [b for row in kb_ar.inline_keyboard for b in row]
+        csv_btn_ar = next((b for b in all_btns_ar if b.callback_data == "btn_history_csv"), None)
+        self.assertIsNotNone(csv_btn_ar)
+        self.assertIn("تصدير", csv_btn_ar.text)
 
 
 if __name__ == "__main__":

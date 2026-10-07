@@ -639,8 +639,17 @@ def get_user_trade_stats(user_id: int) -> Dict[str, Any]:
             (user_id,)
         ).fetchone()[0]
 
+        confirmed_count = cursor.execute(
+            "SELECT COUNT(*) FROM trades WHERE user_id = ? AND status = 'CONFIRMED'",
+            (user_id,)
+        ).fetchone()[0]
+
+        rate = (confirmed_count / trade_count * 100.0) if trade_count > 0 else 100.0
+
         return {
             "total_trades": trade_count,
+            "confirmed_trades": confirmed_count,
+            "success_rate_pct": round(rate, 1),
             "total_volume_sol": float(total_volume or 0.0),
             "total_fees_sol": float(total_fees or 0.0),
             "recent_trades": [dict(r) for r in trades]

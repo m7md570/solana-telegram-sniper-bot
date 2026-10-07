@@ -70,7 +70,10 @@ from wallet_manager import (
     set_auto_buy_amount,
     get_user_language,
     set_user_language,
-    get_user_trade_stats
+    get_user_trade_stats,
+    add_to_watchlist,
+    remove_from_watchlist,
+    get_user_watchlist
 )
 from rugcheck_scanner import (
     scan_token_security,
@@ -116,10 +119,11 @@ def get_main_menu_keyboard(user_id: int, lang: str = "en") -> InlineKeyboardMark
             InlineKeyboardButton(t("btn_pnl", lang), callback_data="btn_pnl")
         ],
         [
-            InlineKeyboardButton(t("btn_wallet", lang), callback_data="btn_wallet"),
+            InlineKeyboardButton(t("btn_watchlist", lang), callback_data="btn_watchlist"),
             InlineKeyboardButton(t("btn_positions", lang), callback_data="btn_positions")
         ],
         [
+            InlineKeyboardButton(t("btn_wallet", lang), callback_data="btn_wallet"),
             InlineKeyboardButton(t("btn_referral", lang), callback_data="btn_referral")
         ],
         [
@@ -135,6 +139,39 @@ def get_main_menu_keyboard(user_id: int, lang: str = "en") -> InlineKeyboardMark
         ]
     ]
     return InlineKeyboardMarkup(keyboard)
+
+
+def get_token_card_keyboard(mint: str, user_lang: str) -> InlineKeyboardMarkup:
+    """Builds interactive inline keyboard for audited token card with custom buy and watchlist tracking."""
+    sell_prefix = "بيع" if user_lang == "ar" else "Sell"
+    track_btn_label = "⭐ " + t("btn_track", user_lang)
+    custom_buy_label = "✏️ " + t("btn_custom_buy", user_lang)
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("🟢 0.05 SOL", callback_data=f"buy_{mint}_0.05"),
+            InlineKeyboardButton("🟢 0.1 SOL", callback_data=f"buy_{mint}_0.1"),
+            InlineKeyboardButton("🟢 0.25 SOL", callback_data=f"buy_{mint}_0.25")
+        ],
+        [
+            InlineKeyboardButton("🟢 0.5 SOL", callback_data=f"buy_{mint}_0.5"),
+            InlineKeyboardButton("🟢 1.0 SOL", callback_data=f"buy_{mint}_1.0"),
+            InlineKeyboardButton(custom_buy_label, callback_data=f"custom_buy_{mint}")
+        ],
+        [
+            InlineKeyboardButton(f"🔴 {sell_prefix} 25%", callback_data=f"sell_{mint}_25"),
+            InlineKeyboardButton(f"🔴 {sell_prefix} 50%", callback_data=f"sell_{mint}_50"),
+            InlineKeyboardButton(f"🔴 {sell_prefix} 100%", callback_data=f"sell_{mint}_100")
+        ],
+        [
+            InlineKeyboardButton(track_btn_label, callback_data=f"track_{mint}"),
+            InlineKeyboardButton(t("btn_dexscreener", user_lang), url=f"https://dexscreener.com/solana/{mint}"),
+            InlineKeyboardButton(t("btn_rugcheck", user_lang), url=f"https://rugcheck.xyz/tokens/{mint}")
+        ],
+        [
+            InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
+        ]
+    ])
+
 
 
 def build_welcome_text(user, pubkey: str, balance: float, now_str: str, lang: str = "en") -> str:
@@ -250,10 +287,87 @@ async def referral_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Detects pasted token contract addresses or platform URLs and renders token card."""
+    """Detects pasted token contract addresses, custom buy amounts, or platform URLs."""
     user_id = update.effective_user.id
     user_lang = get_user_language(user_id)
     text = update.message.text.strip()
+
+    # 1. Check if user is replying with custom buy amount
+    custom_buy_mint = context.user_data.get("awaiting_custom_buy")
+    if custom_buy_mint:
+        try:
+            custom_amt = float(text)
+            if custom_amt > 0:
+                context.user_data.pop("awaiting_custom_buy", None)
+                pubkey, _ = get_or_create_wallet(user_id)
+                bal = get_sol_balance(pubkey)
+                if bal < (custom_amt + 0.005):
+                    err_text = (
+                        f"❌ <b>Insufficient SOL balance!</b>\n"
+                        f"Required: <code>{custom_amt} SOL</code> (+ gas fees)\n"
+                        f"Available: <code>{bal:.4f} SOL</code>\n\n"
+                        f"Deposit SOL to your trading wallet:\n<code>{pubkey}</code>"
+                    ) if user_lang == "en" else (
+                        f"❌ <b>رصيد SOL غير كافٍ!</b>\n"
+                        f"المطلوب: <code>{custom_amt} SOL</code> (+ رسوم الغاز)\n"
+                        f"الرصيد المتاح: <code>{bal:.4f} SOL</code>\n\n"
+                        f"يرجى إيداع SOL في محفظتك:\n<code>{pubkey}</code>"
+                    )
+                    await update.message.reply_text(err_text, parse_mode="HTML")
+                    return
+
+                prep_text = "⚡ <b>Routing best swap via Jupiter V6...</b>" if user_lang == "en" else "⚡ <b>جاري تحضير مسار الشراء عبر Jupiter...</b>"
+                status_msg = await update.message.reply_text(prep_text, parse_mode="HTML")
+
+                settings = get_user_settings(user_id)
+                slippage = settings["slippage_bps"]
+                amount_lamports = int(custom_amt * 1_000_000_000)
+
+                quote = get_jupiter_quote(WSOL_MINT, custom_buy_mint, amount_lamports, slippage, with_fee=True)
+                if not quote:
+                    fail_text = "❌ <b>No liquidity route discovered on Jupiter right now.</b>" if user_lang == "en" else "❌ <b>تعذر إيجاد مسار سيولة في Jupiter حالياً.</b>"
+                    await status_msg.edit_text(fail_text, parse_mode="HTML")
+                    return
+
+                keypair = get_user_keypair(user_id)
+                tx_bytes = build_and_sign_swap_tx(quote, keypair, settings["priority_fee"])
+                if not tx_bytes:
+                    sign_err = "❌ <b>Failed to build and sign transaction offline.</b>" if user_lang == "en" else "❌ <b>فشل في بناء وتوقيع المعاملة.</b>"
+                    await status_msg.edit_text(sign_err, parse_mode="HTML")
+                    return
+
+                bcast_text = "🚀 <b>Broadcasting to Solana cluster & confirming on-chain...</b>" if user_lang == "en" else "🚀 <b>جاري إرسال المعاملة إلى شبكة سولانا وتأكيد التنفيذ...</b>"
+                await status_msg.edit_text(bcast_text, parse_mode="HTML")
+                success, sig_or_err = broadcast_transaction(tx_bytes)
+
+                if success:
+                    out_amount = float(quote.get("outAmount", 0))
+                    fee_lamports = float(quote.get("platformFee", {}).get("amount", 0))
+                    record_trade_db(user_id, WSOL_MINT, custom_buy_mint, custom_amt, out_amount, fee_lamports/1e9, sig_or_err, "CONFIRMED")
+                    if user_lang == "en":
+                        success_text = (
+                            f"🎉 <b>Custom Buy Swap Executed Successfully!</b> 🟢\n"
+                            f"━━━━━━━━━━━━━━━━━━━\n"
+                            f"💸 Amount: <code>{custom_amt} SOL</code>\n"
+                            f"🛡️ Platform Fee (1%): <code>{fee_lamports/1e9:.6f} SOL</code>\n\n"
+                            f"🔗 <a href='https://solscan.io/tx/{sig_or_err}'>View Transaction on Solscan</a>"
+                        )
+                    else:
+                        success_text = (
+                            f"🎉 <b>تم تنفيذ صفقة الشراء المخصصة بنجاح!</b> 🟢\n"
+                            f"━━━━━━━━━━━━━━━━━━━\n"
+                            f"💸 القيمة: <code>{custom_amt} SOL</code>\n"
+                            f"🛡️ عمولة المنصة (1%): <code>{fee_lamports/1e9:.6f} SOL</code>\n\n"
+                            f"🔗 <a href='https://solscan.io/tx/{sig_or_err}'>عرض المعاملة على Solscan</a>"
+                        )
+                    await status_msg.edit_text(success_text, parse_mode="HTML", disable_web_page_preview=True)
+                    return
+                else:
+                    await status_msg.edit_text(f"❌ <b>Transaction failed</b>: <code>{html.escape(sig_or_err)}</code>", parse_mode="HTML")
+                    return
+        except ValueError:
+            pass  # Not a numeric reply, proceed to normal analysis
+
     mint = extract_token_mint(text)
 
     if mint:
@@ -301,34 +415,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                             await status_msg.edit_text(success_text, parse_mode="HTML", disable_web_page_preview=True)
                             return
 
-        # Inline action keyboard
-        sell_prefix = "بيع" if user_lang == "ar" else "Sell"
-        keyboard = [
-            [
-                InlineKeyboardButton("🟢 0.05 SOL", callback_data=f"buy_{mint}_0.05"),
-                InlineKeyboardButton("🟢 0.1 SOL", callback_data=f"buy_{mint}_0.1"),
-                InlineKeyboardButton("🟢 0.25 SOL", callback_data=f"buy_{mint}_0.25")
-            ],
-            [
-                InlineKeyboardButton("🟢 0.5 SOL", callback_data=f"buy_{mint}_0.5"),
-                InlineKeyboardButton("🟢 1.0 SOL", callback_data=f"buy_{mint}_1.0"),
-                InlineKeyboardButton("🟢 2.0 SOL", callback_data=f"buy_{mint}_2.0")
-            ],
-            [
-                InlineKeyboardButton(f"🔴 {sell_prefix} 25%", callback_data=f"sell_{mint}_25"),
-                InlineKeyboardButton(f"🔴 {sell_prefix} 50%", callback_data=f"sell_{mint}_50"),
-                InlineKeyboardButton(f"🔴 {sell_prefix} 100%", callback_data=f"sell_{mint}_100")
-            ],
-            [
-                InlineKeyboardButton(t("btn_dexscreener", user_lang), url=f"https://dexscreener.com/solana/{mint}"),
-                InlineKeyboardButton(t("btn_rugcheck", user_lang), url=f"https://rugcheck.xyz/tokens/{mint}")
-            ],
-            [
-                InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
-            ]
-        ]
-
-        await status_msg.edit_text(card_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard), disable_web_page_preview=True)
+        await status_msg.edit_text(card_text, parse_mode="HTML", reply_markup=get_token_card_keyboard(mint, user_lang), disable_web_page_preview=True)
     else:
         # Check if user sent a token ticker or name (e.g. BONK, $POPCAT, WIF)
         clean_text = text.strip().lstrip("$")
@@ -338,29 +425,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                 found_mint = matched_token["mint"]
                 scan = scan_token_security(found_mint)
                 card_text = format_token_card(scan, lang=user_lang)
-                sell_prefix = "بيع" if user_lang == "ar" else "Sell"
-                keyboard = [
-                    [
-                        InlineKeyboardButton("🟢 0.05 SOL", callback_data=f"buy_{found_mint}_0.05"),
-                        InlineKeyboardButton("🟢 0.1 SOL", callback_data=f"buy_{found_mint}_0.1"),
-                        InlineKeyboardButton("🟢 0.25 SOL", callback_data=f"buy_{found_mint}_0.25")
-                    ],
-                    [
-                        InlineKeyboardButton("🟢 0.5 SOL", callback_data=f"buy_{found_mint}_0.5"),
-                        InlineKeyboardButton("🟢 1.0 SOL", callback_data=f"buy_{found_mint}_1.0"),
-                        InlineKeyboardButton("🟢 2.0 SOL", callback_data=f"buy_{found_mint}_2.0")
-                    ],
-                    [
-                        InlineKeyboardButton(f"🔴 {sell_prefix} 50%", callback_data=f"sell_{found_mint}_50"),
-                        InlineKeyboardButton(f"🔴 {sell_prefix} 100%", callback_data=f"sell_{found_mint}_100")
-                    ],
-                    [
-                        InlineKeyboardButton(t("btn_dexscreener", user_lang), url=f"https://dexscreener.com/solana/{found_mint}"),
-                        InlineKeyboardButton(t("btn_rugcheck", user_lang), url=f"https://rugcheck.xyz/tokens/{found_mint}")
-                    ],
-                    [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
-                ]
-                await update.message.reply_text(card_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard), disable_web_page_preview=True)
+                await update.message.reply_text(card_text, parse_mode="HTML", reply_markup=get_token_card_keyboard(found_mint, user_lang), disable_web_page_preview=True)
                 return
 
         hint_text = (
@@ -371,6 +436,52 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             "مثال: <code>DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263</code> (BONK)"
         )
         await update.message.reply_text(hint_text, parse_mode="HTML")
+
+
+async def render_watchlist(target, user_id: int, user_lang: str, is_edit: bool = False):
+    """Renders the user's personal watchlist with real-time prices and 1-click buy buttons."""
+    watchlist = get_user_watchlist(user_id)
+    now_str = get_current_time_str()
+    if not watchlist:
+        empty_text = (
+            f"{t('watchlist_title', user_lang)}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"{t('watchlist_empty', user_lang)}\n\n"
+            f"🕒 <code>{now_str}</code>"
+        )
+        kb = [[InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]]
+        if is_edit:
+            await safe_edit_text(target, empty_text, reply_markup=InlineKeyboardMarkup(kb))
+        else:
+            await target.reply_text(empty_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
+        return
+
+    text_lines = [
+        f"{t('watchlist_title', user_lang)}",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    ]
+    kb = []
+    for item in watchlist[:8]:
+        sym = html.escape(item["symbol"])
+        mint = item["mint"]
+        scan = scan_token_security(mint)
+        p = scan.get("price_usd", 0.0)
+        c24 = scan.get("price_change_24h", 0.0)
+        emoji = "📈" if c24 >= 0 else "📉"
+        text_lines.append(f"• <b>${sym}</b>: <code>${p:.6f}</code> {emoji} <code>{c24:+.1f}%</code>")
+        text_lines.append(f"  📋 <code>{mint}</code>\n")
+        kb.append([
+            InlineKeyboardButton(f"🚀 Snipe ${sym}", callback_data=f"inspect_{mint}"),
+            InlineKeyboardButton("🗑️ Untrack", callback_data=f"untrack_{mint}")
+        ])
+    text_lines.append(f"🕒 <code>{now_str}</code>")
+    kb.append([InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")])
+
+    full_text = "\n".join(text_lines)
+    if is_edit:
+        await safe_edit_text(target, full_text, reply_markup=InlineKeyboardMarkup(kb))
+    else:
+        await target.reply_text(full_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
 
 
 async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -422,24 +533,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_chat_action("typing")
         scan = scan_token_security(mint)
         card_text = format_token_card(scan, lang=user_lang)
-        sell_prefix = "بيع" if user_lang == "ar" else "Sell"
-        keyboard = [
-            [
-                InlineKeyboardButton("🟢 0.1 SOL", callback_data=f"buy_{mint}_0.1"),
-                InlineKeyboardButton("🟢 0.5 SOL", callback_data=f"buy_{mint}_0.5"),
-                InlineKeyboardButton("🟢 1.0 SOL", callback_data=f"buy_{mint}_1.0")
-            ],
-            [
-                InlineKeyboardButton(f"🔴 {sell_prefix} 50%", callback_data=f"sell_{mint}_50"),
-                InlineKeyboardButton(f"🔴 {sell_prefix} 100%", callback_data=f"sell_{mint}_100")
-            ],
-            [
-                InlineKeyboardButton(t("btn_dexscreener", user_lang), url=f"https://dexscreener.com/solana/{mint}"),
-                InlineKeyboardButton(t("btn_rugcheck", user_lang), url=f"https://rugcheck.xyz/tokens/{mint}")
-            ],
-            [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_trending")]
-        ]
-        await safe_edit_text(query, card_text, reply_markup=InlineKeyboardMarkup(keyboard))
+        await safe_edit_text(query, card_text, reply_markup=get_token_card_keyboard(mint, user_lang))
 
     elif data == "btn_referral":
         bot_username = context.bot.username or "PopcornSniperBot"
@@ -581,6 +675,30 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text += f"\n🕒 <code>{now_str}</code>"
         kb = [[InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]]
         await safe_edit_text(query, text, reply_markup=InlineKeyboardMarkup(kb))
+
+    elif data == "btn_watchlist":
+        await render_watchlist(query, user_id, user_lang, is_edit=True)
+
+    elif data.startswith("track_"):
+        mint = data.replace("track_", "", 1)
+        scan = scan_token_security(mint)
+        sym = scan.get("symbol", "TOKEN")
+        add_to_watchlist(user_id, mint, sym)
+        await query.answer(t("watchlist_added", user_lang), show_alert=False)
+
+    elif data.startswith("untrack_"):
+        mint = data.replace("untrack_", "", 1)
+        remove_from_watchlist(user_id, mint)
+        await query.answer(t("watchlist_removed", user_lang), show_alert=False)
+        await render_watchlist(query, user_id, user_lang, is_edit=True)
+
+    elif data.startswith("custom_buy_"):
+        mint = data.replace("custom_buy_", "", 1)
+        context.user_data["awaiting_custom_buy"] = mint
+        scan = scan_token_security(mint)
+        sym = scan.get("symbol", "TOKEN")
+        prompt_text = t("custom_buy_prompt", user_lang, symbol=html.escape(sym))
+        await query.message.reply_text(prompt_text, parse_mode="HTML")
 
     elif data == "btn_pnl":
         stats = get_user_trade_stats(user_id)
@@ -958,30 +1076,43 @@ async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     mint = matched["mint"]
     scan = scan_token_security(mint)
     card_text = format_token_card(scan, lang=user_lang)
+    await status_msg.edit_text(card_text, parse_mode="HTML", reply_markup=get_token_card_keyboard(mint, user_lang), disable_web_page_preview=True)
 
-    sell_prefix = "بيع" if user_lang == "ar" else "Sell"
-    keyboard = [
-        [
-            InlineKeyboardButton("🟢 0.05 SOL", callback_data=f"buy_{mint}_0.05"),
-            InlineKeyboardButton("🟢 0.1 SOL", callback_data=f"buy_{mint}_0.1"),
-            InlineKeyboardButton("🟢 0.25 SOL", callback_data=f"buy_{mint}_0.25")
-        ],
-        [
-            InlineKeyboardButton("🟢 0.5 SOL", callback_data=f"buy_{mint}_0.5"),
-            InlineKeyboardButton("🟢 1.0 SOL", callback_data=f"buy_{mint}_1.0"),
-            InlineKeyboardButton("🟢 2.0 SOL", callback_data=f"buy_{mint}_2.0")
-        ],
-        [
-            InlineKeyboardButton(f"🔴 {sell_prefix} 50%", callback_data=f"sell_{mint}_50"),
-            InlineKeyboardButton(f"🔴 {sell_prefix} 100%", callback_data=f"sell_{mint}_100")
-        ],
-        [
-            InlineKeyboardButton(t("btn_dexscreener", user_lang), url=f"https://dexscreener.com/solana/{mint}"),
-            InlineKeyboardButton(t("btn_rugcheck", user_lang), url=f"https://rugcheck.xyz/tokens/{mint}")
-        ],
-        [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
-    ]
-    await status_msg.edit_text(card_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard), disable_web_page_preview=True)
+
+async def watchlist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for /watchlist command."""
+    user_id = update.effective_user.id
+    user_lang = get_user_language(user_id)
+    await render_watchlist(update.message, user_id, user_lang, is_edit=False)
+
+
+async def track_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for /track command to add a token to user's watchlist."""
+    user_id = update.effective_user.id
+    user_lang = get_user_language(user_id)
+    args = context.args
+    if not args:
+        hint = "ℹ️ <b>Usage</b>: <code>/track [CA_OR_TICKER]</code>\nExample: <code>/track bonk</code>" if user_lang == "en" else "ℹ️ <b>الاستخدام</b>: <code>/track [العقد_أو_الرمز]</code>\nمثال: <code>/track bonk</code>"
+        await update.message.reply_text(hint, parse_mode="HTML")
+        return
+    raw = args[0].strip()
+    mint = extract_token_mint(raw)
+    sym = "TOKEN"
+    if not mint:
+        matched = search_solana_token(raw)
+        if matched:
+            mint = matched["mint"]
+            sym = matched.get("symbol", "TOKEN")
+    if not mint:
+        err = f"❌ Could not find token: {html.escape(raw)}" if user_lang == "en" else f"❌ تعذر العثور على العملة: {html.escape(raw)}"
+        await update.message.reply_text(err, parse_mode="HTML")
+        return
+    if sym == "TOKEN":
+        scan = scan_token_security(mint)
+        sym = scan.get("symbol", "TOKEN")
+    add_to_watchlist(user_id, mint, sym)
+    ack = f"⭐ <b>Added ${html.escape(sym)} to your Watchlist!</b>" if user_lang == "en" else f"⭐ <b>تمت إضافة ${html.escape(sym)} إلى قائمة المتابعة!</b>"
+    await update.message.reply_text(ack, parse_mode="HTML")
 
 
 async def buy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1104,6 +1235,8 @@ def build_application(token: str) -> Application:
     app.add_handler(CommandHandler("referral", referral_command))
     app.add_handler(CommandHandler("wallet", wallet_command))
     app.add_handler(CommandHandler("withdraw", withdraw_command))
+    app.add_handler(CommandHandler("watchlist", watchlist_command))
+    app.add_handler(CommandHandler("track", track_command))
     app.add_handler(CommandHandler("positions", positions_command))
     app.add_handler(CommandHandler("settings", settings_command))
     app.add_handler(CommandHandler("help", help_command))

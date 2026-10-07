@@ -80,6 +80,17 @@ def init_database():
                 FOREIGN KEY (user_id) REFERENCES users(user_id)
             )
         """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS watchlist (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                token_mint TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, token_mint),
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            )
+        """)
         
         # Migration: Ensure all columns exist on older tables
         existing_cols = [r[1] for r in cursor.execute("PRAGMA table_info(users)").fetchall()]
@@ -477,4 +488,49 @@ def get_user_trade_stats(user_id: int) -> Dict[str, Any]:
         }
     finally:
         conn.close()
+
+
+def add_to_watchlist(user_id: int, token_mint: str, symbol: str) -> bool:
+    """Adds a token to user's personal watchlist."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT OR IGNORE INTO watchlist (user_id, token_mint, symbol) VALUES (?, ?, ?)",
+            (user_id, token_mint, symbol.upper())
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+    finally:
+        conn.close()
+
+
+def remove_from_watchlist(user_id: int, token_mint: str) -> bool:
+    """Removes a token from user's watchlist."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "DELETE FROM watchlist WHERE user_id = ? AND token_mint = ?",
+            (user_id, token_mint)
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+    finally:
+        conn.close()
+
+
+def get_user_watchlist(user_id: int) -> List[Dict[str, Any]]:
+    """Retrieves all tracked tokens for a user."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        rows = cursor.execute(
+            "SELECT token_mint, symbol, created_at FROM watchlist WHERE user_id = ? ORDER BY id DESC",
+            (user_id,)
+        ).fetchall()
+        return [{"mint": r["token_mint"], "symbol": r["symbol"], "created_at": r["created_at"]} for r in rows]
+    finally:
+        conn.close()
+
 

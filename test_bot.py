@@ -233,7 +233,33 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertFalse(ok_sell_ar)
         self.assertIn("لا تملك رصيداً", err_sell_ar)
 
+    def test_14_watchlist_crud(self):
+        """Test watchlist adding, retrieval, and removal."""
+        from wallet_manager import add_to_watchlist, get_user_watchlist, remove_from_watchlist
+        test_uid = 99988877
+        test_mint = "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"
+        test_sym = "BONK"
+
+        # Clean slate
+        remove_from_watchlist(test_uid, test_mint)
+
+        # Add to watchlist
+        self.assertTrue(add_to_watchlist(test_uid, test_mint, test_sym))
+        wl = get_user_watchlist(test_uid)
+        self.assertEqual(len(wl), 1)
+        self.assertEqual(wl[0]["mint"], test_mint)
+        self.assertEqual(wl[0]["symbol"], "BONK")
+
+        # Duplicate should be ignored safely
+        add_to_watchlist(test_uid, test_mint, test_sym)
+        self.assertEqual(len(get_user_watchlist(test_uid)), 1)
+
+        # Remove from watchlist
+        self.assertTrue(remove_from_watchlist(test_uid, test_mint))
+        self.assertEqual(len(get_user_watchlist(test_uid)), 0)
+
 
 if __name__ == "__main__":
     unittest.main()
+
 

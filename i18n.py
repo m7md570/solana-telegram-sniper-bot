@@ -98,6 +98,14 @@ MESSAGES = {
         "search_prompt": "🔍 <b>Searching DexScreener for:</b> <code>{query}</code>...",
         "search_not_found": "❌ <b>No Solana token found matching:</b> <code>{query}</code>\nTry sending the exact Contract Address (CA).",
         "search_found_header": "🔍 <b>Search Result:</b> <code>{name} (${symbol})</code>",
+        "btn_watchlist": "⭐ Watchlist",
+        "btn_track": "⭐ Track",
+        "btn_untrack": "🗑️ Untrack",
+        "watchlist_title": "⭐ <b>Your Token Watchlist</b> ⚡",
+        "watchlist_empty": "Your watchlist is empty!\nClick ⭐ on any token audit card or use <code>/track [CA_OR_TICKER]</code> to monitor tokens.",
+        "watchlist_added": "⭐ Added to your watchlist!",
+        "watchlist_removed": "🗑️ Removed from watchlist!",
+        "custom_buy_prompt": "✏️ <b>Enter custom SOL amount to buy for ${symbol}:</b>\n\nReply to this message with a number (e.g. <code>0.02</code>, <code>0.15</code>, <code>2.5</code>):",
         "refresh_toast": "✅ Balance updated to latest state!",
         "lang_switched_toast": "Language switched to English 🇬🇧",
         "help_title": "❓ <b>Popcorn Solana Sniper & Trading Bot Guide</b> ⚡",
@@ -106,6 +114,8 @@ MESSAGES = {
             "• <code>/start</code> - Open Main Dashboard\n"
             "• <code>/search [TICKER]</code> - Search Token by Name or Symbol\n"
             "• <code>/buy [CA/TICKER] [AMOUNT]</code> - Instant Custom Buy Snipe\n"
+            "• <code>/watchlist</code> - View Tracked Tokens & Live Prices\n"
+            "• <code>/track [CA/TICKER]</code> - Add Token to Watchlist\n"
             "• <code>/trending</code> - View Trending Solana Tokens\n"
             "• <code>/pnl</code> - View Your Trading PnL & Performance\n"
             "• <code>/referral</code> - Affiliate Link & Rewards (25%)\n"
@@ -206,6 +216,14 @@ MESSAGES = {
         "search_prompt": "🔍 <b>جاري البحث في DexScreener عن:</b> <code>{query}</code>...",
         "search_not_found": "❌ <b>لم يتم العثور على عملة سولانا مطابقة لـ:</b> <code>{query}</code>\nيرجى محاولة إرسال عنوان العقد الذكي (CA) مباشرة.",
         "search_found_header": "🔍 <b>نتيجة البحث:</b> <code>{name} (${symbol})</code>",
+        "btn_watchlist": "⭐ قائمة المتابعة",
+        "btn_track": "⭐ متابعة",
+        "btn_untrack": "🗑️ إلغاء المتابعة",
+        "watchlist_title": "⭐ <b>قائمة العملات المتابعة</b> ⚡",
+        "watchlist_empty": "قائمة المتابعة فارغة!\nاضغط ⭐ في بطاقة أي عملة أو استخدم <code>/track [العقد_أو_الرمز]</code> لمتابعتها.",
+        "watchlist_added": "⭐ تمت إضافة العملة إلى قائمة المتابعة!",
+        "watchlist_removed": "🗑️ تمت إزالة العملة من قائمة المتابعة!",
+        "custom_buy_prompt": "✏️ <b>أدخل مبلغ SOL المخصص لشراء ${symbol}:</b>\n\nقم بالرد برقم (مثال: <code>0.02</code> أو <code>0.15</code> أو <code>2.5</code>):",
         "refresh_toast": "✅ الرصيد محدّث لأحدث قيمة!",
         "lang_switched_toast": "تم تحويل اللغة إلى العربية 🇸🇦",
         "help_title": "❓ <b>دليل استخدام بوت قنص وتداول سولانا</b> ⚡",
@@ -214,6 +232,8 @@ MESSAGES = {
             "• <code>/start</code> - فتح لوحة التحكم الرئيسية\n"
             "• <code>/search [الرمز/الاسم]</code> - البحث عن العملات بالاسم أو الرمز\n"
             "• <code>/buy [العقد/الرمز] [المبلغ]</code> - قنص وشراء فوري بمبلغ مخصص\n"
+            "• <code>/watchlist</code> - عرض قائمة العملات المتابعة وأسعارها اللحظية\n"
+            "• <code>/track [العقد/الرمز]</code> - إضافة عملة إلى قائمة المتابعة\n"
             "• <code>/trending</code> - عرض أكثر عملات سولانا رواجاً\n"
             "• <code>/pnl</code> - عرض بطاقة الأرباح وإحصائيات التداول\n"
             "• <code>/referral</code> - رابط الإحالة ومكافآت دعوة الأصدقاء (25%)\n"

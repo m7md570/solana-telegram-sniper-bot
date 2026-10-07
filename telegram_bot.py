@@ -1325,7 +1325,10 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 [InlineKeyboardButton("📊 عرض الصفقات المفتوحة", callback_data="btn_positions")],
                 [InlineKeyboardButton("💸 سحب SOL إلى محفظتك الخارجية", callback_data="btn_withdraw_guide")],
                 [InlineKeyboardButton("🔑 إظهار المفتاح الخاص (Private Key)", callback_data="btn_export_key")],
-                [InlineKeyboardButton("🔙 العودة للرئيسية", callback_data="btn_refresh")]
+                [
+                    InlineKeyboardButton("🔄 تحديث الرصيد", callback_data="btn_wallet"),
+                    InlineKeyboardButton("🔙 العودة للرئيسية", callback_data="btn_refresh")
+                ]
             ]
         else:
             text = (
@@ -1344,7 +1347,10 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 [InlineKeyboardButton("📊 View Open Positions", callback_data="btn_positions")],
                 [InlineKeyboardButton("💸 Withdraw SOL to External Wallet", callback_data="btn_withdraw_guide")],
                 [InlineKeyboardButton("🔑 Export Private Key", callback_data="btn_export_key")],
-                [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
+                [
+                    InlineKeyboardButton("🔄 Refresh Balance", callback_data="btn_wallet"),
+                    InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
+                ]
             ]
         await safe_edit_text(query, text, reply_markup=InlineKeyboardMarkup(kb))
 
@@ -1515,10 +1521,20 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_lang,
             username=html.escape(username),
             total_trades=stats["total_trades"],
-            total_vol=stats["total_volume_sol"]
+            total_vol=stats["total_volume_sol"],
+            total_fees=stats.get("total_fees_sol", 0.0)
         )
+        bot_username = (context.bot.username if context and context.bot and context.bot.username else "PopcornSniperBot")
+        ref_link = f"https://t.me/{bot_username}?start=ref_{user_id}"
+        tweet_msg = f"Sniping Solana memecoins with sub-400ms speed on @PopcornSniperBot! Traded {stats['total_volume_sol']:.3f} SOL. Start sniping: {ref_link}"
+        share_url = f"https://twitter.com/intent/tweet?text={urllib.parse.quote(tweet_msg)}"
+
         text = f"{t('pnl_title', user_lang)}\n{pnl_body_text}\n🕒 <code>{now_str}</code>"
+        share_btn_text = "📢 " + ("Share PnL on X / Twitter" if user_lang == "en" else "مشاركة الأرباح على X")
         kb = [
+            [
+                InlineKeyboardButton(share_btn_text, url=share_url)
+            ],
             [
                 InlineKeyboardButton(t("btn_history", user_lang), callback_data="btn_history"),
                 InlineKeyboardButton(t("btn_positions", user_lang), callback_data="btn_positions")
@@ -1817,7 +1833,10 @@ async def wallet_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("📊 عرض الصفقات المفتوحة", callback_data="btn_positions")],
             [InlineKeyboardButton("💸 سحب SOL للخارج", callback_data="btn_withdraw_guide")],
             [InlineKeyboardButton("🔑 إظهار المفتاح الخاص", callback_data="btn_export_key")],
-            [InlineKeyboardButton("🔄 تحديث الرصيد", callback_data="btn_wallet")]
+            [
+                InlineKeyboardButton("🔄 تحديث الرصيد", callback_data="btn_wallet"),
+                InlineKeyboardButton("🔙 العودة للرئيسية", callback_data="btn_refresh")
+            ]
         ]
     else:
         text = (
@@ -1836,7 +1855,10 @@ async def wallet_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("📊 View Open Positions", callback_data="btn_positions")],
             [InlineKeyboardButton("💸 Withdraw SOL to External Wallet", callback_data="btn_withdraw_guide")],
             [InlineKeyboardButton("🔑 Export Private Key", callback_data="btn_export_key")],
-            [InlineKeyboardButton("🔄 Refresh Balance", callback_data="btn_wallet")]
+            [
+                InlineKeyboardButton("🔄 Refresh Balance", callback_data="btn_wallet"),
+                InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
+            ]
         ]
     await update.message.reply_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb), disable_web_page_preview=True)
 

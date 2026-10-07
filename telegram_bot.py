@@ -81,6 +81,7 @@ from wallet_manager import (
     add_to_watchlist,
     remove_from_watchlist,
     get_user_watchlist,
+    is_token_in_watchlist,
     toggle_price_alerts,
     get_price_alerts_status,
     set_price_alerts_status,
@@ -185,11 +186,19 @@ def get_main_menu_keyboard(user_id: int, lang: str = "en") -> InlineKeyboardMark
 
 
 def get_token_card_keyboard(mint: str, user_lang: str, user_id: int = 0, symbol: str = "TOKEN") -> InlineKeyboardMarkup:
-    """Builds interactive inline keyboard for audited token card with custom buy, watchlist tracking, and viral share."""
+    """Builds interactive inline keyboard for audited token card with custom buy, watchlist tracking, X share, and live refresh."""
     sell_prefix = "بيع" if user_lang == "ar" else "Sell"
-    track_btn_label = "⭐ " + t("btn_track", user_lang)
     custom_buy_label = "✏️ " + t("btn_custom_buy", user_lang)
     custom_sell_label = t("btn_custom_sell", user_lang)
+
+    # Dynamic watchlist tracking state
+    is_tracked = is_token_in_watchlist(user_id, mint) if user_id else False
+    if is_tracked:
+        track_btn_label = "⭐ " + ("Untrack" if user_lang == "en" else "إزالة من المتابعة")
+        track_cb = f"untrack_{mint}"
+    else:
+        track_btn_label = "⭐ " + t("btn_track", user_lang)
+        track_cb = f"track_{mint}"
 
     # Pre-generate viral sharing link with user's referral parameter
     ref_param = f"?start=ref_{user_id}" if user_id else ""
@@ -202,6 +211,14 @@ def get_token_card_keyboard(mint: str, user_lang: str, user_id: int = 0, symbol:
     import urllib.parse
     tg_share_link = f"https://t.me/share/url?url={share_bot_url}&text={urllib.parse.quote(share_msg)}"
     share_btn_label = "📤 " + ("Share Signal" if user_lang == "en" else "مشاركة التوصية")
+
+    x_intent_text = (
+        f"Sniping ${symbol} on Solana with @PopcornSniperBot! 🍿⚡\n\n"
+        f"Contract: {mint}\n\n"
+        f"Trade now: {share_bot_url}"
+    )
+    x_share_link = f"https://twitter.com/intent/tweet?text={urllib.parse.quote(x_intent_text)}"
+    refresh_quote_label = "🔄 Refresh Quote" if user_lang == "en" else "🔄 تحديث السعر والتدقيق"
 
     return InlineKeyboardMarkup([
         [
@@ -221,12 +238,16 @@ def get_token_card_keyboard(mint: str, user_lang: str, user_id: int = 0, symbol:
             InlineKeyboardButton(custom_sell_label, callback_data=f"custom_sell_{mint}")
         ],
         [
-            InlineKeyboardButton(track_btn_label, callback_data=f"track_{mint}"),
+            InlineKeyboardButton(track_btn_label, callback_data=track_cb),
             InlineKeyboardButton(share_btn_label, url=tg_share_link),
-            InlineKeyboardButton(t("btn_dexscreener", user_lang), url=f"https://dexscreener.com/solana/{mint}")
+            InlineKeyboardButton("📢 Share on X", url=x_share_link)
         ],
         [
-            InlineKeyboardButton(t("btn_rugcheck", user_lang), url=f"https://rugcheck.xyz/tokens/{mint}"),
+            InlineKeyboardButton(t("btn_dexscreener", user_lang), url=f"https://dexscreener.com/solana/{mint}"),
+            InlineKeyboardButton(t("btn_rugcheck", user_lang), url=f"https://rugcheck.xyz/tokens/{mint}")
+        ],
+        [
+            InlineKeyboardButton(refresh_quote_label, callback_data=f"inspect_{mint}"),
             InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
         ]
     ])
@@ -661,8 +682,12 @@ async def render_watchlist(target, user_id: int, user_lang: str, is_edit: bool =
             f"🕒 <code>{now_str}</code>"
         )
         trending_btn = "🔥 Explore Trending" if user_lang == "en" else "🔥 استكشاف العملات الرائجة"
+        alerts_btn = "🔔 Alert Radar" if user_lang == "en" else "🔔 رادار التنبيهات"
         kb = [
-            [InlineKeyboardButton(trending_btn, callback_data="btn_trending")],
+            [
+                InlineKeyboardButton(trending_btn, callback_data="btn_trending"),
+                InlineKeyboardButton(alerts_btn, callback_data="btn_alerts")
+            ],
             [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
         ]
         if is_edit:
@@ -695,10 +720,12 @@ async def render_watchlist(target, user_id: int, user_lang: str, is_edit: bool =
         ])
     text_lines.append(f"🕒 <code>{now_str}</code>")
     refresh_btn_text = "🔄 " + ("Refresh Prices" if user_lang == "en" else "تحديث الأسعار")
+    alerts_btn_text = "🔔 " + ("Alert Radar" if user_lang == "en" else "رادار التنبيهات")
     kb.append([
         InlineKeyboardButton(refresh_btn_text, callback_data="btn_watchlist"),
-        InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
+        InlineKeyboardButton(alerts_btn_text, callback_data="btn_alerts")
     ])
+    kb.append([InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")])
 
     full_text = "\n".join(text_lines)
     if is_edit:

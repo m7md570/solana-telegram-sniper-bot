@@ -654,6 +654,20 @@ def remove_from_watchlist(user_id: int, token_mint: str) -> bool:
         conn.close()
 
 
+def is_token_in_watchlist(user_id: int, token_mint: str) -> bool:
+    """Returns True if the token is currently saved in user's watchlist."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        row = cursor.execute(
+            "SELECT 1 FROM watchlist WHERE user_id = ? AND token_mint = ?",
+            (user_id, token_mint)
+        ).fetchone()
+        return bool(row)
+    finally:
+        conn.close()
+
+
 def get_user_watchlist(user_id: int) -> List[Dict[str, Any]]:
     """Retrieves all tracked tokens for a user with price history."""
     conn = get_db_connection()

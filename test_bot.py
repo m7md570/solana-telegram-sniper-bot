@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.49.0", card_text)
+        self.assertIn("v3.50.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.49.0")
+        self.assertEqual(BOT_VERSION, "v3.50.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -2840,6 +2840,67 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
             self.assertIn("toggle_alerts", cb_datas)
             self.assertIn("alert_pct_50", cb_datas)
             self.assertIn("btn_alerts", cb_datas)
+
+    def test_74_token_card_interactive_state_and_x_sharing(self):
+        """Test get_token_card_keyboard dynamic tracking state, X sharing link, live refresh, and watchlist alert button."""
+        from telegram_bot import get_token_card_keyboard, render_watchlist
+        from wallet_manager import (
+            get_or_create_wallet,
+            add_to_watchlist,
+            remove_from_watchlist,
+            is_token_in_watchlist
+        )
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock
+
+        test_uid = 77889900
+        test_mint = "Token11111111111111111111111111111111111111"
+        get_or_create_wallet(test_uid, "InteractiveCardTester", initial_language="en")
+
+        # 1. When token is not in watchlist, keyboard shows Track button
+        remove_from_watchlist(test_uid, test_mint)
+        self.assertFalse(is_token_in_watchlist(test_uid, test_mint))
+
+        kb_untracked = get_token_card_keyboard(test_mint, user_lang="en", user_id=test_uid, symbol="TEST")
+        all_btns_untracked = [b for row in kb_untracked.inline_keyboard for b in row]
+
+        track_btn = next((b for b in all_btns_untracked if b.callback_data == f"track_{test_mint}"), None)
+        self.assertIsNotNone(track_btn)
+        self.assertIn("Track", track_btn.text)
+
+        # Verify X / Twitter share button
+        x_btn = next((b for b in all_btns_untracked if b.url and "twitter.com/intent/tweet" in b.url), None)
+        self.assertIsNotNone(x_btn)
+        self.assertIn("Share on X", x_btn.text)
+        self.assertIn(test_mint, x_btn.url)
+
+        # Verify Refresh Quote button
+        refresh_quote_btn = next((b for b in all_btns_untracked if b.callback_data == f"inspect_{test_mint}"), None)
+        self.assertIsNotNone(refresh_quote_btn)
+        self.assertIn("Refresh", refresh_quote_btn.text)
+
+        # 2. When token is tracked in watchlist, keyboard dynamically switches to Untrack
+        add_to_watchlist(test_uid, test_mint, "TEST", current_price=1.25)
+        self.assertTrue(is_token_in_watchlist(test_uid, test_mint))
+
+        kb_tracked = get_token_card_keyboard(test_mint, user_lang="en", user_id=test_uid, symbol="TEST")
+        all_btns_tracked = [b for row in kb_tracked.inline_keyboard for b in row]
+
+        untrack_btn = next((b for b in all_btns_tracked if b.callback_data == f"untrack_{test_mint}"), None)
+        self.assertIsNotNone(untrack_btn)
+        self.assertIn("Untrack", untrack_btn.text)
+
+        # 3. Test render_watchlist embeds btn_alerts in populated view
+        mock_target = MagicMock()
+        mock_target.reply_text = AsyncMock()
+
+        asyncio.run(render_watchlist(mock_target, test_uid, user_lang="en", is_edit=False))
+        self.assertTrue(mock_target.reply_text.called)
+        wl_kb = mock_target.reply_text.call_args[1]["reply_markup"]
+        all_wl_btns = [b for row in wl_kb.inline_keyboard for b in row]
+        alert_radar_btn = next((b for b in all_wl_btns if b.callback_data == "btn_alerts"), None)
+        self.assertIsNotNone(alert_radar_btn)
+        self.assertIn("Alert Radar", alert_radar_btn.text)
 
 
 if __name__ == "__main__":

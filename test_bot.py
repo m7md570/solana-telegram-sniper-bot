@@ -1497,6 +1497,45 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertIn("/reset", t("help_body", "en"))
         self.assertIn("/reset", t("help_body", "ar"))
 
+    def test_50_aliases_and_dex_url_patterns(self):
+        """Test URL parsing for Axiom, DexTools, Solview, RugCheck, Jupiter, and trending aliases."""
+        from rugcheck_scanner import extract_token_mint
+        from telegram_bot import build_application
+        from telegram.ext import CommandHandler
+
+        test_mint = "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"
+
+        # 1. Test multi-DEX URL parsing
+        axiom_url = f"https://axiom.trade/trade/{test_mint}"
+        axiom_short = f"https://axiom.trade/t/{test_mint}"
+        dextools_url = f"https://www.dextools.io/app/en/solana/pair-explorer/{test_mint}"
+        solview_url = f"https://solview.app/token/{test_mint}"
+        rugcheck_url = f"https://rugcheck.xyz/tokens/{test_mint}"
+        jup_url = f"https://jup.ag/swap/SOL-{test_mint}"
+
+        self.assertEqual(extract_token_mint(axiom_url), test_mint)
+        self.assertEqual(extract_token_mint(axiom_short), test_mint)
+        self.assertEqual(extract_token_mint(dextools_url), test_mint)
+        self.assertEqual(extract_token_mint(solview_url), test_mint)
+        self.assertEqual(extract_token_mint(rugcheck_url), test_mint)
+        self.assertEqual(extract_token_mint(jup_url), test_mint)
+
+        # 2. Test CommandHandler registration for aliases
+        app = build_application("8935718262:AAGZc-RLQplBfx6cWzTtk2zyorXo5o74NqE")
+        command_handlers = [h for h in app.handlers[0] if isinstance(h, CommandHandler)]
+        registered_commands = set()
+        for h in command_handlers:
+            registered_commands.update(h.commands)
+
+        self.assertIn("trending", registered_commands)
+        self.assertIn("tokens", registered_commands)
+        self.assertIn("coins", registered_commands)
+        self.assertIn("hot", registered_commands)
+        self.assertIn("reset", registered_commands)
+        self.assertIn("defaults", registered_commands)
+        self.assertIn("export", registered_commands)
+        self.assertIn("backup", registered_commands)
+
 
 if __name__ == "__main__":
     unittest.main()

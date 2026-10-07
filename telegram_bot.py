@@ -37,6 +37,7 @@ from telegram import (
     Update,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    BotCommand,
 )
 from telegram.error import BadRequest, TelegramError
 from telegram.ext import (
@@ -2765,6 +2766,24 @@ async def bot_post_init(app: Application):
         short_en = "⚡ Ultra-fast Solana Sniper & Trading Bot via Jupiter V6 & RugCheck. Sub-400ms 1-click swaps & auto-audit."
         await app.bot.set_my_description(desc_en, language_code="")
         await app.bot.set_my_short_description(short_en, language_code="")
+
+        commands = [
+            BotCommand("start", "Launch Popcorn trading cockpit"),
+            BotCommand("trending", "Top Solana trending memecoins radar"),
+            BotCommand("surge", "Top 24h gainers & breakout tokens"),
+            BotCommand("wallet", "View balance & deposit address"),
+            BotCommand("buy", "Execute instant 1-click token buy"),
+            BotCommand("sell", "Sell open token positions"),
+            BotCommand("pnl", "Live trading performance & PnL card"),
+            BotCommand("positions", "Track active token holdings"),
+            BotCommand("watchlist", "Monitor target tokens"),
+            BotCommand("alerts", "Price alert notifications"),
+            BotCommand("referral", "25% revenue share affiliate link"),
+            BotCommand("export", "Non-custodial private key export"),
+            BotCommand("settings", "Customize slippage & gas fees"),
+            BotCommand("help", "All bot commands and guide")
+        ]
+        await app.bot.set_my_commands(commands)
     except Exception as e:
         logger.warning(f"Could not sync bot descriptions: {e}")
 
@@ -2776,6 +2795,9 @@ def build_application(token: str) -> Application:
     app.add_handler(CommandHandler("tour", tour_command))
     app.add_handler(CommandHandler("guide", tour_command))
     app.add_handler(CommandHandler("trending", trending_command))
+    app.add_handler(CommandHandler("tokens", trending_command))
+    app.add_handler(CommandHandler("coins", trending_command))
+    app.add_handler(CommandHandler("hot", trending_command))
 
     app.add_handler(CommandHandler("surge", surge_command))
     app.add_handler(CommandHandler("gainers", surge_command))

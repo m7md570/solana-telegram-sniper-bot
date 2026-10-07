@@ -135,7 +135,12 @@ def extract_token_mint(text: str) -> Optional[str]:
         r"gmgn\.ai/sol/token/([1-9A-HJ-NP-Za-km-z]{32,44})",
         r"bullx\.io/terminal\?.*(?:address|token)=([1-9A-HJ-NP-Za-km-z]{32,44})",
         r"photon-sol\.tinyastro\.io/.*(?:token|r/@)([1-9A-HJ-NP-Za-km-z]{32,44})",
-        r"raydium\.io/swap/\?.*outputMint=([1-9A-HJ-NP-Za-km-z]{32,44})"
+        r"raydium\.io/swap/\?.*outputMint=([1-9A-HJ-NP-Za-km-z]{32,44})",
+        r"axiom\.trade/(?:t|trade)/([1-9A-HJ-NP-Za-km-z]{32,44})",
+        r"dextools\.io/app/(?:[a-zA-Z0-9_\-]+/)?solana/pair-explorer/([1-9A-HJ-NP-Za-km-z]{32,44})",
+        r"solview\.app/token/([1-9A-HJ-NP-Za-km-z]{32,44})",
+        r"rugcheck\.xyz/tokens/([1-9A-HJ-NP-Za-km-z]{32,44})",
+        r"jup\.ag/(?:swap|tokens)/(?:[^\s/]+-)?([1-9A-HJ-NP-Za-km-z]{32,44})"
     ]
     for pat in patterns:
         m = re.search(pat, text, re.I)

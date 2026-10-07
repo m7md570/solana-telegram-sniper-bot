@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.50.0", card_text)
+        self.assertIn("v3.51.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.50.0")
+        self.assertEqual(BOT_VERSION, "v3.51.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -2901,6 +2901,87 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         alert_radar_btn = next((b for b in all_wl_btns if b.callback_data == "btn_alerts"), None)
         self.assertIsNotNone(alert_radar_btn)
         self.assertIn("Alert Radar", alert_radar_btn.text)
+
+    def test_75_trade_history_csv_export_and_cli(self):
+        """Test full trade history retrieval, RFC 4180 CSV generation, and /history csv export dispatch."""
+        from telegram_bot import render_trade_history, send_trades_csv_export, history_command
+        from wallet_manager import (
+            get_or_create_wallet,
+            record_trade,
+            get_all_user_trades,
+            generate_trades_csv_bytes
+        )
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock
+
+        test_uid = 99881122
+        get_or_create_wallet(test_uid, "CSVExportTester", initial_language="en")
+
+        # 1. Record 2 sample trades
+        record_trade(
+            user_id=test_uid,
+            input_mint="So11111111111111111111111111111111111111112",
+            output_mint="EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            amount_in=1.5,
+            amount_out=210.0,
+            platform_fee_sol=0.015,
+            tx_signature="sig_buy_test_123"
+        )
+        record_trade(
+            user_id=test_uid,
+            input_mint="EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            output_mint="So11111111111111111111111111111111111111112",
+            amount_in=210.0,
+            amount_out=1.8,
+            platform_fee_sol=0.018,
+            tx_signature="sig_sell_test_456"
+        )
+
+        all_trades = get_all_user_trades(test_uid)
+        self.assertGreaterEqual(len(all_trades), 2)
+
+        # 2. Test generate_trades_csv_bytes produces valid RFC 4180 CSV
+        csv_bytes = generate_trades_csv_bytes(test_uid)
+        self.assertTrue(csv_bytes.startswith(b'\xef\xbb\xbf'))  # UTF-8 BOM
+        csv_text = csv_bytes.decode("utf-8-sig")
+        self.assertIn("Trade ID,Timestamp (UTC),Type,Input Mint,Output Mint,Amount In,Amount Out,Platform Fee (SOL),Status,Tx Signature,Solscan URL", csv_text)
+        self.assertIn("BUY", csv_text)
+        self.assertIn("SELL", csv_text)
+        self.assertIn("sig_buy_test_123", csv_text)
+        self.assertIn("https://solscan.io/tx/sig_buy_test_123", csv_text)
+
+        # 3. Test render_trade_history embeds btn_export_trades_csv
+        mock_target = MagicMock()
+        mock_target.reply_text = AsyncMock()
+
+        asyncio.run(render_trade_history(mock_target, test_uid, user_lang="en", is_edit=False))
+        self.assertTrue(mock_target.reply_text.called)
+        card_kb = mock_target.reply_text.call_args[1]["reply_markup"]
+        all_card_btns = [b for row in card_kb.inline_keyboard for b in row]
+        export_btn = next((b for b in all_card_btns if b.callback_data == "btn_export_trades_csv"), None)
+        self.assertIsNotNone(export_btn)
+        self.assertIn("Export", export_btn.text)
+
+        # 4. Test send_trades_csv_export dispatches document
+        mock_doc_target = MagicMock()
+        mock_doc_target.reply_document = AsyncMock()
+
+        asyncio.run(send_trades_csv_export(mock_doc_target, test_uid, user_lang="en"))
+        self.assertTrue(mock_doc_target.reply_document.called)
+        call_kwargs = mock_doc_target.reply_document.call_args[1]
+        self.assertTrue(call_kwargs["filename"].startswith(f"popcorn_trades_{test_uid}"))
+        self.assertIn(".csv", call_kwargs["filename"])
+        self.assertIn("Trade History Export Ready", call_kwargs["caption"])
+
+        # 5. Test history_command with args=['csv']
+        mock_cmd_update = MagicMock()
+        mock_cmd_update.effective_user.id = test_uid
+        mock_cmd_update.message.reply_document = AsyncMock()
+        mock_cmd_context = MagicMock()
+        mock_cmd_context.args = ["csv"]
+
+        asyncio.run(history_command(mock_cmd_update, mock_cmd_context))
+        self.assertTrue(mock_cmd_update.message.reply_document.called)
 
 
 if __name__ == "__main__":

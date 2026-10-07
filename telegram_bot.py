@@ -78,6 +78,8 @@ from wallet_manager import (
     get_user_language,
     set_user_language,
     get_user_trade_stats,
+    get_all_user_trades,
+    generate_trades_csv_bytes,
     add_to_watchlist,
     remove_from_watchlist,
     get_user_watchlist,
@@ -784,17 +786,55 @@ async def render_trade_history(target, user_id: int, user_lang: str, is_edit: bo
 
     text_lines.append(f"🕒 <code>{now_str}</code>")
     refresh_btn_text = "🔄 " + ("Refresh History" if user_lang == "en" else "تحديث السجل")
+    export_btn_text = t("btn_export_trades", user_lang)
     kb = [
         [
             InlineKeyboardButton(refresh_btn_text, callback_data="btn_history"),
-            InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
-        ]
+            InlineKeyboardButton(export_btn_text, callback_data="btn_export_trades_csv")
+        ],
+        [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
     ]
     full_text = "\n".join(text_lines)
     if is_edit:
         await safe_edit_text(target, full_text, reply_markup=InlineKeyboardMarkup(kb))
     else:
         await target.reply_text(full_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb), disable_web_page_preview=True)
+
+
+async def send_trades_csv_export(target, user_id: int, user_lang: str):
+    """Generates and uploads an RFC 4180 CSV document of user's complete trade history."""
+    import io
+    from datetime import datetime, timezone
+    trades = get_all_user_trades(user_id)
+    if not trades:
+        empty_msg = t("trades_csv_empty", user_lang)
+        if hasattr(target, "reply_text"):
+            await target.reply_text(empty_msg, parse_mode="HTML")
+        elif hasattr(target, "message") and hasattr(target.message, "reply_text"):
+            await target.message.reply_text(empty_msg, parse_mode="HTML")
+        return
+
+    csv_data = generate_trades_csv_bytes(user_id)
+    bio = io.BytesIO(csv_data)
+    now_str = get_current_time_str()
+    timestamp_suffix = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    bio.name = f"popcorn_trades_{user_id}_{timestamp_suffix}.csv"
+
+    caption = t("trades_csv_caption", user_lang, count=len(trades), time=now_str)
+    if hasattr(target, "reply_document"):
+        await target.reply_document(
+            document=bio,
+            filename=bio.name,
+            caption=caption,
+            parse_mode="HTML"
+        )
+    elif hasattr(target, "message") and hasattr(target.message, "reply_document"):
+        await target.message.reply_document(
+            document=bio,
+            filename=bio.name,
+            caption=caption,
+            parse_mode="HTML"
+        )
 
 
 async def render_surge_radar(target, user_id: int, user_lang: str, is_edit: bool = False):
@@ -1820,6 +1860,10 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "btn_history":
         await render_trade_history(query, user_id, user_lang, is_edit=True)
 
+    elif data == "btn_export_trades_csv":
+        await query.answer()
+        await send_trades_csv_export(query, user_id, user_lang)
+
     elif data == "btn_ping":
         await query.message.reply_chat_action("typing")
         await render_network_ping(query, user_id, user_lang, is_edit=True)
@@ -2791,9 +2835,12 @@ async def audit_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def history_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler for /history and /trades command."""
+    """Handler for /history and /trades command: /history [csv|export]."""
     user_id = update.effective_user.id
     user_lang = get_user_language(user_id)
+    if context.args and context.args[0].lower() in ["csv", "export", "file"]:
+        await send_trades_csv_export(update.message, user_id, user_lang)
+        return
     await render_trade_history(update.message, user_id, user_lang, is_edit=False)
 
 

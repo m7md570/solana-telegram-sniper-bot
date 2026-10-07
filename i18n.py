@@ -132,8 +132,20 @@ MESSAGES = {
         "gas_tier_turbo": "🚀 Turbo (0.00025 SOL)",
         "gas_tier_ultra": "🏎️ Ultra (0.001 SOL)",
         "btn_history": "📜 Trade History",
+        "btn_export_trades": "📥 Export CSV",
         "trades_history_title": "📜 <b>Recent Trade History</b> ⚡",
         "trades_no_history": "No trades executed yet. Paste a token CA or send a ticker to snipe your first memecoin!",
+        "trades_csv_caption": (
+            "📊 <b>Trade History Export Ready</b> ⚡\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "Total Records: <code>{count}</code>\n"
+            "Format: <code>Standard RFC 4180 CSV</code>\n"
+            "Generated: <code>{time}</code>\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "Compatible with Excel, Numbers, and Tax Audits."
+        ),
+        "trades_csv_empty": "ℹ️ <b>No trade records found to export.</b> Execute trades to generate history.",
+        "trades_syntax_help": "💡 <b>Trade History Syntax</b>: <code>/history</code> to view recent or <code>/history csv</code> to export full file.",
         "btn_surge": "🚀 Surge & Gainers",
         "surge_title": "🚀 <b>Solana High-Velocity Gainers & Surge Radar</b> ⚡",
         "surge_empty": "No high-velocity gainers detected at the moment. Please try again shortly.",
@@ -380,8 +392,20 @@ MESSAGES = {
         "gas_tier_turbo": "🚀 سريع (0.00025 SOL)",
         "gas_tier_ultra": "🏎️ فائق السرعة (0.001 SOL)",
         "btn_history": "📜 سجل الصفقات",
+        "btn_export_trades": "📥 تصدير السجل (CSV)",
         "trades_history_title": "📜 <b>سجل الصفقات المنفذة</b> ⚡",
         "trades_no_history": "لم يتم تنفيذ أي صفقات بعد. الصق عنوان أي عملة للبدء في قنص العملات فورياً!",
+        "trades_csv_caption": (
+            "📊 <b>تقرير سجل الصفقات جاهز</b> ⚡\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "إجمالي السجلات: <code>{count}</code>\n"
+            "الصيغة: <code>Standard RFC 4180 CSV</code>\n"
+            "وقت التصدير: <code>{time}</code>\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "متوافق تماماً مع Excel و Google Sheets وحسابات الضرائب والأرباح."
+        ),
+        "trades_csv_empty": "ℹ️ <b>لا توجد أي صفقات مسجلة بعد لتصديرها.</b> نفذ صفقات أولاً لبناء سجلك المالي.",
+        "trades_syntax_help": "💡 <b>صيغة سجل الصفقات</b>: <code>/history</code> لعرض السجل أو <code>/history csv</code> لتصدير كامل الصفقات كملف.",
         "btn_surge": "🚀 العملات الأكثر صعوداً (Surge)",
         "surge_title": "🚀 <b>رادار العملات الأكثر صعوداً وزخماً (Surge)</b> ⚡",
         "surge_empty": "لم يتم رصد عملات صاعدة بزخم كافٍ حالياً. يرجى المحاولة بعد قليل.",

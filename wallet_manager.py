@@ -618,6 +618,96 @@ def get_user_trade_stats(user_id: int) -> Dict[str, Any]:
         conn.close()
 
 
+def record_trade(
+    user_id: int,
+    input_mint: str,
+    output_mint: str,
+    amount_in: float,
+    amount_out: float,
+    fee_sol: float = 0.0,
+    tx_sig: str = "",
+    status: str = "CONFIRMED",
+    platform_fee_sol: float = None,
+    tx_signature: str = None
+) -> bool:
+    """Logs the executed trade into SQLite database for PnL, audits, and CSV export."""
+    actual_fee = platform_fee_sol if platform_fee_sol is not None else fee_sol
+    actual_sig = tx_signature if tx_signature is not None else tx_sig
+    conn = get_db_connection()
+    try:
+        conn.execute("""
+            INSERT INTO trades (
+                user_id, input_mint, output_mint, amount_in,
+                amount_out, platform_fee_sol, tx_signature, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (user_id, input_mint, output_mint, amount_in, amount_out, actual_fee, actual_sig, status))
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+
+record_trade_db = record_trade
+
+
+def get_all_user_trades(user_id: int) -> List[Dict[str, Any]]:
+    """Retrieves all historical trade executions for a user ordered newest to oldest."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        rows = cursor.execute(
+            "SELECT id, input_mint, output_mint, amount_in, amount_out, platform_fee_sol, tx_signature, status, created_at "
+            "FROM trades WHERE user_id = ? ORDER BY id DESC",
+            (user_id,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def generate_trades_csv_bytes(user_id: int) -> bytes:
+    """Generates standard RFC 4180 CSV bytes (UTF-8 with BOM) containing all trade records."""
+    import csv
+    import io
+
+    trades = get_all_user_trades(user_id)
+    output = io.StringIO()
+    writer = csv.writer(output, lineterminator="\n")
+    writer.writerow([
+        "Trade ID",
+        "Timestamp (UTC)",
+        "Type",
+        "Input Mint",
+        "Output Mint",
+        "Amount In",
+        "Amount Out",
+        "Platform Fee (SOL)",
+        "Status",
+        "Tx Signature",
+        "Solscan URL"
+    ])
+    for tr in trades:
+        in_m = tr.get("input_mint", "")
+        out_m = tr.get("output_mint", "")
+        trade_type = "BUY" if in_m == WSOL_MINT else "SELL"
+        sig = tr.get("tx_signature") or ""
+        solscan_url = f"https://solscan.io/tx/{sig}" if sig else ""
+        writer.writerow([
+            tr.get("id"),
+            tr.get("created_at"),
+            trade_type,
+            in_m,
+            out_m,
+            tr.get("amount_in"),
+            tr.get("amount_out"),
+            tr.get("platform_fee_sol"),
+            tr.get("status"),
+            sig,
+            solscan_url
+        ])
+    return output.getvalue().encode("utf-8-sig")
+
+
 def add_to_watchlist(user_id: int, token_mint: str, symbol: str, current_price: float = 0.0) -> bool:
     """Adds a token to user's personal watchlist with initial tracking price and user's threshold."""
     conn = get_db_connection()

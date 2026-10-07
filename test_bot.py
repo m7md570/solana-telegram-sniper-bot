@@ -1181,6 +1181,22 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         res = gibwork_executor.execute_best_task(dry_run=True)
         self.assertIn("success", res)
 
+    def test_41_i18n_help_commands_completeness(self):
+        """Test that /status, /fees, /tour, and /qr commands are documented in both English and Arabic help cards."""
+        from i18n import t
+
+        help_en = t("help_body", "en")
+        self.assertIn("/status", help_en)
+        self.assertIn("/fees", help_en)
+        self.assertIn("/tour", help_en)
+        self.assertIn("/qr", help_en)
+
+        help_ar = t("help_body", "ar")
+        self.assertIn("/status", help_ar)
+        self.assertIn("/fees", help_ar)
+        self.assertIn("/tour", help_ar)
+        self.assertIn("/qr", help_ar)
+
 
 if __name__ == "__main__":
     unittest.main()

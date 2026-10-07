@@ -373,6 +373,40 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertIn("Trade History", title_en)
         self.assertIn("سجل الصفقات", title_ar)
 
+    def test_21_top_gainers_and_surge_radar(self):
+        """Test top gainers calculation, ranking, format card, and i18n keys."""
+        from trending_engine import get_top_gainers, format_gainers_list
+        from i18n import t
+
+        # Fetch gainers
+        gainers = get_top_gainers(limit=3)
+        self.assertIsInstance(gainers, list)
+
+        # Test format card
+        mock_gainers = [
+            {
+                "mint": self.bonk_mint,
+                "symbol": "BONK",
+                "name": "Bonk",
+                "price_usd": 0.000025,
+                "change_1h": 12.5,
+                "change_24h": 45.2,
+                "volume_24h": 5000000.0,
+                "liquidity": 1200000.0,
+                "fdv": 1500000000.0
+            }
+        ]
+        card_en = format_gainers_list(mock_gainers, lang="en")
+        card_ar = format_gainers_list(mock_gainers, lang="ar")
+        self.assertIn("Surge Radar", card_en)
+        self.assertIn("رادار العملات الأكثر صعوداً", card_ar)
+        self.assertIn("BONK", card_en)
+        self.assertIn("BONK", card_ar)
+
+        # Verify i18n keys
+        self.assertIn("Surge", t("btn_surge", "en"))
+        self.assertIn("Surge", t("btn_surge", "ar"))
+
 
 if __name__ == "__main__":
     unittest.main()

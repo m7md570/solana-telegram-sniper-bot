@@ -156,3 +156,77 @@ def format_trending_list(tokens: List[Dict[str, Any]], lang: str = "en") -> str:
         ])
 
     return "\n".join(lines)
+
+
+def get_top_gainers(limit: int = 5) -> List[Dict[str, Any]]:
+    """
+    Scans trending Solana tokens and ranks them by highest short-term momentum (change_1h / change_24h).
+    Filters out tokens with negligible liquidity (< $10,000) to ensure tradeability.
+    """
+    tokens = get_trending_tokens(limit=15)
+    liquid_tokens = [t for t in tokens if t.get("liquidity", 0.0) >= 10_000]
+    # Sort by 1h momentum first, then 24h momentum
+    sorted_gainers = sorted(liquid_tokens, key=lambda x: (x.get("change_1h", 0.0), x.get("change_24h", 0.0)), reverse=True)
+    return sorted_gainers[:limit]
+
+
+def format_gainers_list(tokens: List[Dict[str, Any]], lang: str = "en") -> str:
+    """Formats an executive card of the highest velocity gainers on Solana."""
+    import html
+    if not tokens:
+        if lang == "ar":
+            return "⚠️ <b>لم يتم رصد عملات صاعدة بزخم كافٍ حالياً. يرجى المحاولة بعد قليل.</b>"
+        return "⚠️ <b>No high-velocity gainers detected at the moment. Please try again shortly.</b>"
+
+    if lang == "ar":
+        lines = [
+            "🚀 <b>رادار العملات الأكثر صعوداً وزخماً (Top Gainers & Surge)</b> ⚡",
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        ]
+        for idx, t in enumerate(tokens, 1):
+            sym = html.escape(t["symbol"])
+            mint = t["mint"]
+            price = t["price_usd"]
+            c24 = t["change_24h"]
+            c1 = t["change_1h"]
+            vol = t["volume_24h"]
+            liq = t["liquidity"]
+
+            lines.extend([
+                f"{idx}. <b>${sym}</b> 🟢 <code>{c1:+.1f}% (1h)</code> | <code>{c24:+.1f}% (24h)</code>",
+                f"   💵 السعر: <code>${price:.8f}</code> | السيولة: <code>${liq:,.0f}</code>",
+                f"   📊 حجم 24h: <code>${vol:,.0f}</code>",
+                f"   📋 العقد: <code>{mint}</code>",
+                ""
+            ])
+        lines.extend([
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            "💡 <i>اقتنص الصعود اللحظي بنقرة واحدة عبر الأزرار أدناه!</i> 👇"
+        ])
+    else:
+        lines = [
+            "🚀 <b>Solana High-Velocity Gainers & Surge Radar</b> ⚡",
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        ]
+        for idx, t in enumerate(tokens, 1):
+            sym = html.escape(t["symbol"])
+            mint = t["mint"]
+            price = t["price_usd"]
+            c24 = t["change_24h"]
+            c1 = t["change_1h"]
+            vol = t["volume_24h"]
+            liq = t["liquidity"]
+
+            lines.extend([
+                f"{idx}. <b>${sym}</b> 🟢 <code>{c1:+.1f}% (1h)</code> | <code>{c24:+.1f}% (24h)</code>",
+                f"   💵 Price: <code>${price:.8f}</code> | Liq: <code>${liq:,.0f}</code>",
+                f"   📊 24h Vol: <code>${vol:,.0f}</code>",
+                f"   📋 CA: <code>{mint}</code>",
+                ""
+            ])
+        lines.extend([
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            "💡 <i>Ride the momentum! Tap below to inspect security & instant-snipe!</i> 👇"
+        ])
+
+    return "\n".join(lines)

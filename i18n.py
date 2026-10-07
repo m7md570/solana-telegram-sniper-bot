@@ -129,6 +129,9 @@ MESSAGES = {
         "btn_history": "📜 Trade History",
         "trades_history_title": "📜 <b>Recent Trade History</b> ⚡",
         "trades_no_history": "No trades executed yet. Paste a token CA or send a ticker to snipe your first memecoin!",
+        "btn_surge": "🚀 Surge & Gainers",
+        "surge_title": "🚀 <b>Solana High-Velocity Gainers & Surge Radar</b> ⚡",
+        "surge_empty": "No high-velocity gainers detected at the moment. Please try again shortly.",
         "help_title": "❓ <b>Popcorn Solana Sniper & Trading Bot Guide</b> ⚡",
         "help_body": (
             "━━━━━━━━━━━━━━━━━━━\n"
@@ -136,6 +139,7 @@ MESSAGES = {
             "• <code>/search [TICKER]</code> - Search Token by Name or Symbol\n"
             "• <code>/buy [CA/TICKER] [AMOUNT]</code> - Instant Custom Buy Snipe\n"
             "• <code>/sell [CA/TICKER] [PERCENT]</code> - Instant Market Sell (%)\n"
+            "• <code>/surge</code> - View Explosive High-Velocity Gainers (1h/24h)\n"
             "• <code>/history</code> - View Recent Trade History & Solscan Links\n"
             "• <code>/watchlist</code> - View Tracked Tokens & Live Prices\n"
             "• <code>/track [CA/TICKER]</code> - Add Token to Watchlist\n"
@@ -271,6 +275,9 @@ MESSAGES = {
         "btn_history": "📜 سجل الصفقات",
         "trades_history_title": "📜 <b>سجل الصفقات المنفذة</b> ⚡",
         "trades_no_history": "لم يتم تنفيذ أي صفقات بعد. الصق عنوان أي عملة للبدء في قنص العملات فورياً!",
+        "btn_surge": "🚀 العملات الأكثر صعوداً (Surge)",
+        "surge_title": "🚀 <b>رادار العملات الأكثر صعوداً وزخماً (Surge)</b> ⚡",
+        "surge_empty": "لم يتم رصد عملات صاعدة بزخم كافٍ حالياً. يرجى المحاولة بعد قليل.",
         "help_title": "❓ <b>دليل استخدام بوت قنص وتداول سولانا</b> ⚡",
         "help_body": (
             "━━━━━━━━━━━━━━━━━━━\n"
@@ -278,6 +285,7 @@ MESSAGES = {
             "• <code>/search [الرمز/الاسم]</code> - البحث عن العملات بالاسم أو الرمز\n"
             "• <code>/buy [العقد/الرمز] [المبلغ]</code> - قنص وشراء فوري بمبلغ مخصص\n"
             "• <code>/sell [العقد/الرمز] [النسبة]</code> - بيع فوري بنسبة مئوية (%)\n"
+            "• <code>/surge</code> - رادار العملات المتفجرة الأكثر صعوداً (1h/24h)\n"
             "• <code>/history</code> - عرض سجل الصفقات المنفذة وروابط Solscan\n"
             "• <code>/watchlist</code> - عرض قائمة العملات المتابعة وأسعارها اللحظية\n"
             "• <code>/track [العقد/الرمز]</code> - إضافة عملة إلى قائمة المتابعة\n"

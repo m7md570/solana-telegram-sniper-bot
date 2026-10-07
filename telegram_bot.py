@@ -90,7 +90,12 @@ from jupiter_engine import (
     execute_sell_swap,
     calculate_optimal_slippage
 )
-from trending_engine import get_trending_tokens, format_trending_list
+from trending_engine import (
+    get_trending_tokens,
+    format_trending_list,
+    get_top_gainers,
+    format_gainers_list
+)
 from i18n import t
 
 # Logging configuration
@@ -118,7 +123,7 @@ def get_main_menu_keyboard(user_id: int, lang: str = "en") -> InlineKeyboardMark
         ],
         [
             InlineKeyboardButton(t("btn_trending", lang), callback_data="btn_trending"),
-            InlineKeyboardButton(t("btn_pnl", lang), callback_data="btn_pnl")
+            InlineKeyboardButton(t("btn_surge", lang), callback_data="btn_surge")
         ],
         [
             InlineKeyboardButton(t("btn_watchlist", lang), callback_data="btn_watchlist"),
@@ -126,14 +131,17 @@ def get_main_menu_keyboard(user_id: int, lang: str = "en") -> InlineKeyboardMark
         ],
         [
             InlineKeyboardButton(t("btn_history", lang), callback_data="btn_history"),
-            InlineKeyboardButton(t("btn_referral", lang), callback_data="btn_referral")
+            InlineKeyboardButton(t("btn_pnl", lang), callback_data="btn_pnl")
         ],
         [
             InlineKeyboardButton(t("btn_wallet", lang), callback_data="btn_wallet"),
-            InlineKeyboardButton(t("btn_settings", lang), callback_data="btn_settings")
+            InlineKeyboardButton(t("btn_referral", lang), callback_data="btn_referral")
         ],
         [
             InlineKeyboardButton(f"{t('btn_autobuy', lang)} ({auto_badge})", callback_data="btn_autobuy_settings"),
+            InlineKeyboardButton(t("btn_settings", lang), callback_data="btn_settings")
+        ],
+        [
             InlineKeyboardButton(lang_toggle_btn, callback_data="btn_toggle_lang")
         ],
         [
@@ -323,6 +331,13 @@ async def trending_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard.append([InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")])
 
     await status_msg.edit_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard), disable_web_page_preview=True)
+
+
+async def surge_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for /surge, /gainers, and /pump command."""
+    user_id = update.effective_user.id
+    user_lang = get_user_language(user_id)
+    await render_surge_radar(update.message, user_id, user_lang, is_edit=False)
 
 
 async def referral_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -612,6 +627,29 @@ async def render_trade_history(target, user_id: int, user_lang: str, is_edit: bo
         await target.reply_text(full_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb), disable_web_page_preview=True)
 
 
+async def render_surge_radar(target, user_id: int, user_lang: str, is_edit: bool = False):
+    """Renders the top explosive gainers on Solana with 1-click snipe buttons."""
+    tokens = get_top_gainers(limit=5)
+    text = format_gainers_list(tokens, lang=user_lang)
+    keyboard = []
+    for tkn in tokens:
+        sym = html.escape(tkn["symbol"])
+        mint = tkn["mint"]
+        btn_label = f"🚀 قنص ${sym} ({tkn['change_1h']:+.1f}%)" if user_lang == "ar" else f"🚀 Snipe ${sym} ({tkn['change_1h']:+.1f}%)"
+        keyboard.append([
+            InlineKeyboardButton(btn_label, callback_data=f"inspect_{mint}")
+        ])
+    refresh_label = "🔄 " + ("Refresh Gainers" if user_lang == "en" else "تحديث القائمة")
+    keyboard.append([
+        InlineKeyboardButton(refresh_label, callback_data="btn_surge"),
+        InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
+    ])
+    if is_edit:
+        await safe_edit_text(target, text, reply_markup=InlineKeyboardMarkup(keyboard))
+    else:
+        await target.reply_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard), disable_web_page_preview=True)
+
+
 async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handles all inline button clicks with bilingual localization."""
     query = update.callback_query
@@ -655,6 +693,10 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ])
         keyboard.append([InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")])
         await safe_edit_text(query, text, reply_markup=InlineKeyboardMarkup(keyboard))
+
+    elif data == "btn_surge":
+        await query.message.reply_chat_action("typing")
+        await render_surge_radar(query, user_id, user_lang, is_edit=True)
 
     elif data.startswith("inspect_"):
         mint = data.split("_")[1]
@@ -1414,6 +1456,9 @@ def build_application(token: str) -> Application:
     app = Application.builder().token(token).build()
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("trending", trending_command))
+    app.add_handler(CommandHandler("surge", surge_command))
+    app.add_handler(CommandHandler("gainers", surge_command))
+    app.add_handler(CommandHandler("pump", surge_command))
     app.add_handler(CommandHandler("search", search_command))
     app.add_handler(CommandHandler("find", search_command))
     app.add_handler(CommandHandler("buy", buy_command))

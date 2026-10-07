@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.56.0", card_text)
+        self.assertIn("v3.57.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.56.0")
+        self.assertEqual(BOT_VERSION, "v3.57.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -3414,6 +3414,62 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
 
         self.assertIn("clearwatchlist", registered_commands)
         self.assertIn("purge", registered_commands)
+
+    def test_81_positions_pnl_shortcut_and_direct_panic_cli(self):
+        """Test render_positions PnL shortcut button, commands hint, and direct /panic now CLI execution."""
+        from telegram_bot import render_positions, panic_command, execute_panic_sell_all
+        from wallet_manager import get_or_create_wallet
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        test_uid = 99445566
+        get_or_create_wallet(test_uid, "PositionsTester", initial_language="en")
+
+        mock_tokens = [
+            {"mint": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", "amount": 500000.0, "decimals": 5}
+        ]
+
+        # 1. Test render_positions contains btn_pnl shortcut button and commands hint
+        mock_target = MagicMock()
+        mock_target.reply_text = AsyncMock()
+        with patch("telegram_bot.get_token_accounts", return_value=mock_tokens):
+            asyncio.run(render_positions(mock_target, test_uid, "en", is_edit=False))
+            self.assertTrue(mock_target.reply_text.called)
+
+            pos_text = mock_target.reply_text.call_args[0][0]
+            self.assertIn("/panic", pos_text)
+            self.assertIn("/pnl", pos_text)
+
+            kb = mock_target.reply_text.call_args[1]["reply_markup"]
+            all_btns = [b for row in kb.inline_keyboard for b in row]
+
+            pnl_btn = next((b for b in all_btns if b.callback_data == "btn_pnl"), None)
+            panic_btn = next((b for b in all_btns if b.callback_data == "btn_panic_confirm"), None)
+            refresh_btn = next((b for b in all_btns if b.callback_data == "btn_positions"), None)
+
+            self.assertIsNotNone(pnl_btn, "btn_pnl shortcut must exist in positions keyboard")
+            self.assertIsNotNone(panic_btn)
+            self.assertIsNotNone(refresh_btn)
+            self.assertIn("PnL", pnl_btn.text)
+
+        # 2. Test panic_command with no args shows confirmation warning card
+        mock_cmd_update = MagicMock()
+        mock_cmd_update.effective_user.id = test_uid
+        mock_cmd_update.message.reply_text = AsyncMock()
+        mock_cmd_ctx = MagicMock()
+        mock_cmd_ctx.args = []
+
+        with patch("telegram_bot.get_token_accounts", return_value=mock_tokens):
+            asyncio.run(panic_command(mock_cmd_update, mock_cmd_ctx))
+            self.assertTrue(mock_cmd_update.message.reply_text.called)
+            warn_text = mock_cmd_update.message.reply_text.call_args[0][0]
+            self.assertIn("PANIC", warn_text)
+
+        # 3. Test panic_command with 'now' arg executes immediate liquidation directly
+        mock_cmd_ctx.args = ["now"]
+        with patch("telegram_bot.execute_panic_sell_all", new_callable=AsyncMock) as mock_panic_exec:
+            asyncio.run(panic_command(mock_cmd_update, mock_cmd_ctx))
+            mock_panic_exec.assert_called_once_with(mock_cmd_update.message, test_uid, "en")
 
 
 if __name__ == "__main__":

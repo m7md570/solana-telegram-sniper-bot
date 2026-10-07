@@ -989,13 +989,23 @@ async def render_positions(target, user_id: int, user_lang: str, is_edit: bool =
         text_lines.append(f"💼 <b>Total Estimated Value</b>: <code>${total_usd:,.2f}</code> (<code>~{total_sol_equiv:.4f} SOL</code>)")
         refresh_label = "🔄 Refresh Portfolio"
 
+    tip_text = (
+        "💡 <b>Commands:</b> <code>/sell [TOKEN] [PERCENT]</code> • <code>/panic</code> • <code>/pnl</code>\n"
+        if user_lang == "en" else
+        "💡 <b>الأوامر المتاحة:</b> <code>/sell [العملة] [النسبة]</code> • <code>/panic</code> • <code>/pnl</code>\n"
+    )
+    text_lines.append(tip_text)
     text_lines.append(f"🕒 <code>{now_str}</code>")
 
+    pnl_btn = "📊 " + ("Trading PnL" if user_lang == "en" else "تقرير الأرباح")
     kb.append([
         InlineKeyboardButton(t("btn_panic_confirm", user_lang), callback_data="btn_panic_confirm")
     ])
     kb.append([
         InlineKeyboardButton(refresh_label, callback_data="btn_positions"),
+        InlineKeyboardButton(pnl_btn, callback_data="btn_pnl")
+    ])
+    kb.append([
         InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
     ])
 
@@ -1806,7 +1816,10 @@ async def execute_panic_sell_all(target, user_id: int, user_lang: str):
             f"🕒 <code>{now_str}</code>"
         )
         kb = [[InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_positions")]]
-        await safe_edit_text(target, empty_text, reply_markup=InlineKeyboardMarkup(kb))
+        if hasattr(target, "edit_message_text") or hasattr(target, "edit_text"):
+            await safe_edit_text(target, empty_text, reply_markup=InlineKeyboardMarkup(kb))
+        else:
+            await target.reply_text(empty_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
         return
 
     progress_msg = (
@@ -1814,7 +1827,11 @@ async def execute_panic_sell_all(target, user_id: int, user_lang: str):
         if user_lang == "ar" else
         "🚨 <b>Executing Emergency Panic Liquidation across all open positions...</b>\n<i>Please hold while all tokens are swapped back into SOL via Jupiter.</i>"
     )
-    await safe_edit_text(target, progress_msg)
+    if hasattr(target, "edit_message_text") or hasattr(target, "edit_text"):
+        await safe_edit_text(target, progress_msg)
+        status_handle = target
+    else:
+        status_handle = await target.reply_text(progress_msg, parse_mode="HTML")
 
     success_cnt = 0
     total_reclaimed_sol = 0.0
@@ -1839,7 +1856,7 @@ async def execute_panic_sell_all(target, user_id: int, user_lang: str):
         [InlineKeyboardButton(t("btn_positions", user_lang), callback_data="btn_positions")],
         [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
     ]
-    await safe_edit_text(target, full_text, reply_markup=InlineKeyboardMarkup(kb))
+    await safe_edit_text(status_handle, full_text, reply_markup=InlineKeyboardMarkup(kb))
 
 
 async def render_help_card(target, user_id: int, user_lang: str, is_edit: bool = False):
@@ -2578,9 +2595,15 @@ async def positions_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def panic_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler for /panic and /sellall command."""
+    """Handler for /panic and /sellall command: /panic [now|confirm]"""
     user_id = update.effective_user.id
     user_lang = get_user_language(user_id)
+    args = context.args
+
+    if args and args[0].lower().strip() in ("now", "confirm", "instant", "force"):
+        await execute_panic_sell_all(update.message, user_id, user_lang)
+        return
+
     await render_panic_confirm(update.message, user_id, user_lang, is_edit=False)
 
 

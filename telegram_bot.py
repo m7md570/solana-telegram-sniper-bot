@@ -298,19 +298,25 @@ def build_settings_card(user_id: int, user_lang: str) -> Tuple[str, InlineKeyboa
 def build_welcome_text(user, pubkey: str, balance: float, now_str: str, lang: str = "en") -> str:
     """Constructs the executive dashboard card in user's preferred language."""
     username = user.username or user.first_name or ("Trader" if lang == "en" else "المتداول")
+    if balance > 0.0001:
+        bal_status = " 🟢 " + ("(Ready to snipe!)" if lang == "en" else "(جاهز للقنص الفوري!)")
+    else:
+        bal_status = " 💡 " + ("(Tap [📲 Deposit QR] below to start)" if lang == "en" else "(اضغط [📲 رمز QR للإيداع] للبدء)")
+
     return (
         f"{t('welcome_title', lang)}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"{t('trader', lang)}: @{html.escape(username)}\n"
         f"{t('wallet_dedicated', lang)}:\n"
         f"<code>{pubkey}</code>\n\n"
-        f"{t('current_balance', lang)}: <code>{balance:.4f} SOL</code>\n"
+        f"{t('current_balance', lang)}: <code>{balance:.4f} SOL</code>{bal_status}\n"
         f"{t('platform_fee', lang)}\n"
         f"{t('updated_at', lang)}: <code>{now_str}</code>\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"{t('how_to_start_title', lang)}\n"
         f"{t('how_to_start_steps', lang)}\n"
     )
+
 
 
 async def safe_edit_text(query, text: str, reply_markup=None):
@@ -2613,6 +2619,8 @@ def build_application(token: str) -> Application:
     app.add_handler(CommandHandler("check", audit_command))
     app.add_handler(CommandHandler("referral", referral_command))
     app.add_handler(CommandHandler("wallet", wallet_command))
+    app.add_handler(CommandHandler("balance", wallet_command))
+    app.add_handler(CommandHandler("bal", wallet_command))
     app.add_handler(CommandHandler("qr", qr_command))
     app.add_handler(CommandHandler("deposit", qr_command))
     app.add_handler(CommandHandler("withdraw", withdraw_command))
@@ -2622,6 +2630,9 @@ def build_application(token: str) -> Application:
     app.add_handler(CommandHandler("untrack", untrack_command))
     app.add_handler(CommandHandler("remove", untrack_command))
     app.add_handler(CommandHandler("positions", positions_command))
+    app.add_handler(CommandHandler("portfolio", positions_command))
+    app.add_handler(CommandHandler("holdings", positions_command))
+
     app.add_handler(CommandHandler("panic", panic_command))
     app.add_handler(CommandHandler("sellall", panic_command))
     app.add_handler(CommandHandler("history", history_command))

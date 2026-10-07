@@ -1087,9 +1087,33 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertIn("btn_tour", all_callbacks_ar)
         self.assertIn("btn_show_qr", all_callbacks_ar)
 
+    def test_38_command_aliases_and_balance_badges(self):
+        """Test build_welcome_text balance status badges for funded and empty states."""
+        from unittest.mock import MagicMock
+        from telegram_bot import build_welcome_text
+
+        mock_user = MagicMock()
+        mock_user.username = "TestTrader"
+        mock_user.first_name = "Test"
+
+        # 1. Zero balance state (should have deposit guidance)
+        card_empty = build_welcome_text(mock_user, "7kz1mcQcaZhYzFUHBFHH6s5tGrDHc7gNhN5WAUyXyq5r", 0.0, "2026-10-07 18:00:00", lang="en")
+        self.assertIn("0.0000 SOL", card_empty)
+        self.assertIn("Tap [📲 Deposit QR] below", card_empty)
+
+        card_empty_ar = build_welcome_text(mock_user, "7kz1mcQcaZhYzFUHBFHH6s5tGrDHc7gNhN5WAUyXyq5r", 0.0, "2026-10-07 18:00:00", lang="ar")
+        self.assertIn("0.0000 SOL", card_empty_ar)
+        self.assertIn("اضغط [📲 رمز QR للإيداع]", card_empty_ar)
+
+        # 2. Funded state (should have ready badge)
+        card_funded = build_welcome_text(mock_user, "7kz1mcQcaZhYzFUHBFHH6s5tGrDHc7gNhN5WAUyXyq5r", 0.5, "2026-10-07 18:00:00", lang="en")
+        self.assertIn("0.5000 SOL", card_funded)
+        self.assertIn("Ready to snipe!", card_funded)
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
 
 

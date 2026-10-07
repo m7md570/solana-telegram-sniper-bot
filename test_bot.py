@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.36.0", card_text)
+        self.assertIn("v3.37.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.36.0")
+        self.assertEqual(BOT_VERSION, "v3.37.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -2059,6 +2059,48 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
             self.assertIn("btn_watchlist", cb_list)
             self.assertIn(f"inspect_{self.bonk_mint}", cb_list)
             self.assertIn("btn_refresh", cb_list)
+
+    def test_61_status_card_release_url_button(self):
+        """Test render_status_card embeds direct GitHub release link button and bilingual labels."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock
+        from telegram_bot import render_status_card
+        from config import BOT_VERSION
+
+        mock_target = MagicMock()
+        mock_target.reply_text = AsyncMock()
+        test_uid = 99881122
+
+        # 1. Test English status card
+        asyncio.run(render_status_card(mock_target, test_uid, user_lang="en", is_edit=False))
+        self.assertTrue(mock_target.reply_text.called)
+        call_args = mock_target.reply_text.call_args
+        card_text_en = call_args[0][0]
+        self.assertIn("Cluster Status & Bot Telemetry", card_text_en)
+        self.assertIn(BOT_VERSION, card_text_en)
+
+        kb_en = call_args[1]["reply_markup"]
+        all_btns_en = [btn for row in kb_en.inline_keyboard for btn in row]
+        rel_btn_en = next((b for b in all_btns_en if b.url and f"releases/tag/{BOT_VERSION}" in b.url), None)
+        self.assertIsNotNone(rel_btn_en, "Release URL button must exist in English status keyboard")
+        self.assertIn(BOT_VERSION, rel_btn_en.text)
+        self.assertIn("Release", rel_btn_en.text)
+
+        # 2. Test Arabic status card
+        mock_target.reply_text.reset_mock()
+        asyncio.run(render_status_card(mock_target, test_uid, user_lang="ar", is_edit=False))
+        self.assertTrue(mock_target.reply_text.called)
+        call_args_ar = mock_target.reply_text.call_args
+        card_text_ar = call_args_ar[0][0]
+        self.assertIn("حالة الشبكة والمنظومة", card_text_ar)
+        self.assertIn(BOT_VERSION, card_text_ar)
+
+        kb_ar = call_args_ar[1]["reply_markup"]
+        all_btns_ar = [btn for row in kb_ar.inline_keyboard for btn in row]
+        rel_btn_ar = next((b for b in all_btns_ar if b.url and f"releases/tag/{BOT_VERSION}" in b.url), None)
+        self.assertIsNotNone(rel_btn_ar, "Release URL button must exist in Arabic status keyboard")
+        self.assertIn(BOT_VERSION, rel_btn_ar.text)
+        self.assertIn("الإصدار", rel_btn_ar.text)
 
 
 if __name__ == "__main__":

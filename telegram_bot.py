@@ -1015,6 +1015,7 @@ async def render_status_card(target, user_id: int, user_lang: str, is_edit: bool
         )
         refresh_label = "🔄 تحديث الحالة"
         fees_label = "💰 تفاصيل الرسوم"
+        release_label = f"📦 الإصدار {telem['bot_version']}"
         tour_label = "🚀 الجولة السريعة"
     else:
         card = (
@@ -1032,7 +1033,10 @@ async def render_status_card(target, user_id: int, user_lang: str, is_edit: bool
         )
         refresh_label = "🔄 Refresh Status"
         fees_label = "💰 Fee Schedule"
+        release_label = f"📦 Release {telem['bot_version']}"
         tour_label = "🚀 Quick Tour"
+
+    release_url = f"https://github.com/m7md570/solana-telegram-sniper-bot/releases/tag/{telem['bot_version']}"
 
     kb = [
         [
@@ -1040,7 +1044,10 @@ async def render_status_card(target, user_id: int, user_lang: str, is_edit: bool
             InlineKeyboardButton(fees_label, callback_data="btn_fee_info")
         ],
         [
-            InlineKeyboardButton(tour_label, callback_data="btn_tour"),
+            InlineKeyboardButton(release_label, url=release_url),
+            InlineKeyboardButton(tour_label, callback_data="btn_tour")
+        ],
+        [
             InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
         ]
     ]

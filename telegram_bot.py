@@ -131,12 +131,18 @@ def get_main_menu_keyboard(user_id: int, lang: str = "en") -> InlineKeyboardMark
 
     keyboard = [
         [
-            InlineKeyboardButton(t("btn_snipe_guide", lang), callback_data="btn_snipe_guide")
+            InlineKeyboardButton(t("btn_snipe_guide", lang), callback_data="btn_snipe_guide"),
+            InlineKeyboardButton(t("btn_tour", lang), callback_data="btn_tour")
+        ],
+        [
+            InlineKeyboardButton(t("btn_show_qr", lang), callback_data="btn_show_qr"),
+            InlineKeyboardButton(t("btn_gas_radar", lang), callback_data="btn_gas_fees")
         ],
         [
             InlineKeyboardButton(t("btn_trending", lang), callback_data="btn_trending"),
             InlineKeyboardButton(t("btn_surge", lang), callback_data="btn_surge")
         ],
+
         [
             InlineKeyboardButton(t("btn_watchlist", lang), callback_data="btn_watchlist"),
             InlineKeyboardButton(t("btn_positions", lang), callback_data="btn_positions")
@@ -1373,6 +1379,46 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
         ]
         await safe_edit_text(query, text, reply_markup=InlineKeyboardMarkup(kb))
+
+    elif data == "btn_tour":
+        if user_lang == "ar":
+            tour_text = (
+                "🚀 <b>جولة سريعة: كيف تقتنص وتربح عبر البوت في 3 خطوات!</b> ⚡\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                "1️⃣ <b>الخطوة الأولى - الإيداع السريع:</b>\n"
+                "استخدم الأمر <code>/qr</code> أو <code>/wallet</code> وانسخ عنوان محفظتك المخصصة أو امسح الرمز عبر تطبيق Phantom أو منصتك المفضلة لإيداع رصيد من SOL.\n\n"
+                "2️⃣ <b>الخطوة الثانية - القنص الفوري:</b>\n"
+                "بمجرد رؤيتك لأي عملة جديدة على X أو DexScreener أو Pump.fun، انسخ عنوان العقد (CA) والصقه هنا مباشرة في المحادثة. سيقوم البوت بفحص أمان العملة تلقائياً عبر RugCheck وتوفير أزرار شراء بنقرة واحدة فائقة السرعة.\n\n"
+                "3️⃣ <b>الخطوة الثالثة - جني الأرباح والتأمين:</b>\n"
+                "استعرض صفقاتك المفتوحة فورياً عبر <code>/positions</code> أو اضبط أهداف الربح التلقائية عبر <code>/tp 50</code> ووقف الخسارة عبر <code>/sl 25</code>.\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                "💡 <i>المحفظة غير احتجازية ومفتاحك الخاص مشفر بالكامل بـ AES-256!</i>"
+            )
+            tour_kb = [
+                [InlineKeyboardButton("📲 إيداع الآن (QR)", callback_data="btn_show_qr")],
+                [InlineKeyboardButton("🔥 تريند سولانا اللحظي", callback_data="btn_trending")],
+                [InlineKeyboardButton("🔙 العودة للرئيسية", callback_data="btn_refresh")]
+            ]
+        else:
+            tour_text = (
+                "🚀 <b>Quick Tour: How to Snipe & Profit in 3 Simple Steps!</b> ⚡\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                "1️⃣ <b>Step 1 — Instant Deposit:</b>\n"
+                "Type <code>/qr</code> or <code>/wallet</code> to copy your dedicated deposit address or scan the QR code from Phantom / Solflare to fund your balance with SOL.\n\n"
+                "2️⃣ <b>Step 2 — 1-Click Fast Sniping:</b>\n"
+                "Whenever you spot an alpha token on X, DexScreener, or Pump.fun, paste the Contract Address (CA) directly into this chat. The bot audits honeypot safety via RugCheck and provides instant sub-400ms buy buttons.\n\n"
+                "3️⃣ <b>Step 3 — Take Profit & Secure Capital:</b>\n"
+                "View live token holdings with <code>/positions</code> or configure automatic Take-Profit (<code>/tp 50</code>) and Stop-Loss (<code>/sl 25</code>).\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                "💡 <i>Non-custodial security: Your keys remain strictly encrypted with AES-256!</i>"
+            )
+            tour_kb = [
+                [InlineKeyboardButton("📲 Deposit Now (QR)", callback_data="btn_show_qr")],
+                [InlineKeyboardButton("🔥 Solana Trending Radar", callback_data="btn_trending")],
+                [InlineKeyboardButton("🔙 Back to Dashboard", callback_data="btn_refresh")]
+            ]
+        await safe_edit_text(query, tour_text, reply_markup=InlineKeyboardMarkup(tour_kb))
+
 
 
     elif data.startswith("buy_"):

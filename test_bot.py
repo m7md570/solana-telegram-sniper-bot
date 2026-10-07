@@ -1072,9 +1072,25 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertIn("Step 3", text_arg)
         self.assertIsNotNone(kb_arg)
 
+    def test_37_main_menu_keyboard_features(self):
+        """Test main menu dashboard keyboard contains 1-tap QR deposit and tour buttons."""
+        from telegram_bot import get_main_menu_keyboard
+        kb_en = get_main_menu_keyboard(88812345, lang="en")
+        all_callbacks = [btn.callback_data for row in kb_en.inline_keyboard for btn in row if btn.callback_data]
+        self.assertIn("btn_tour", all_callbacks)
+        self.assertIn("btn_show_qr", all_callbacks)
+        self.assertIn("btn_gas_fees", all_callbacks)
+        self.assertIn("btn_snipe_guide", all_callbacks)
+
+        kb_ar = get_main_menu_keyboard(88812345, lang="ar")
+        all_callbacks_ar = [btn.callback_data for row in kb_ar.inline_keyboard for btn in row if btn.callback_data]
+        self.assertIn("btn_tour", all_callbacks_ar)
+        self.assertIn("btn_show_qr", all_callbacks_ar)
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
 
 

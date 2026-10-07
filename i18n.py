@@ -22,7 +22,9 @@ MESSAGES = {
             "3. The bot will instantly audit the token (RugCheck) and provide 1-click buy buttons!"
         ),
         "btn_snipe_guide": "⚡ Instant Sniper (Send CA / Link)",
+        "btn_tour": "🚀 Quick Tour (3 Steps)",
         "btn_trending": "🔥 Trending Radar",
+
         "btn_wallet": "💳 Wallet & Deposit",
         "btn_referral": "🤝 Referrals & Rewards (25%)",
         "btn_positions": "📊 Open Positions",
@@ -260,7 +262,9 @@ MESSAGES = {
             "3. سيقوم البوت بفحص أمان العملة (RugCheck) وإظهار أزرار الشراء بنقرة واحدة!"
         ),
         "btn_snipe_guide": "⚡ قنص فوري (أرسل العقد أو الرابط)",
+        "btn_tour": "🚀 جولة سريعة (3 خطوات)",
         "btn_trending": "🔥 تريند سولانا اللحظي",
+
         "btn_wallet": "💳 المحفظة والإيداع",
         "btn_referral": "🤝 نظام الإحالات والأرباح",
         "btn_positions": "📊 صفقاتي المفتوحة",

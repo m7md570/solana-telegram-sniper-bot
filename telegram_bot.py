@@ -2215,6 +2215,11 @@ async def sell_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args
 
     if not args:
+        pubkey, _ = get_or_create_wallet(user_id)
+        tokens = get_token_accounts(pubkey)
+        if tokens:
+            await render_positions(update.message, user_id, user_lang, is_edit=False)
+            return
         await update.message.reply_text(t("sell_syntax_help", user_lang), parse_mode="HTML")
         return
 
@@ -2714,7 +2719,15 @@ async def buy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"الرصيد المتاح: <code>{bal:.4f} SOL</code>\n\n"
             f"يرجى إيداع SOL في محفظتك:\n<code>{pubkey}</code>"
         )
-        await update.message.reply_text(err_text, parse_mode="HTML")
+        deposit_btn_text = "💳 Deposit QR" if user_lang == "en" else "💳 رمز الإيداع QR"
+        refresh_btn_text = "🔄 Refresh" if user_lang == "en" else "🔄 تحديث"
+        kb = [
+            [
+                InlineKeyboardButton(deposit_btn_text, callback_data="btn_qr"),
+                InlineKeyboardButton(refresh_btn_text, callback_data="btn_refresh")
+            ]
+        ]
+        await update.message.reply_text(err_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
         return
 
     prep_text = "⚡ <b>Routing best swap via Jupiter V6...</b>" if user_lang == "en" else "⚡ <b>جاري تحضير مسار الشراء عبر Jupiter...</b>"

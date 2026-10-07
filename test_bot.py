@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.29.0", card_text)
+        self.assertIn("v3.30.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.29.0")
+        self.assertEqual(BOT_VERSION, "v3.30.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -1715,6 +1715,55 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         x_btn = next((b for b in all_btns if b.url and "twitter.com/intent/tweet" in b.url), None)
         self.assertIsNotNone(x_btn, "Share on X button must be present in /referral card")
         self.assertIn(f"ref_{referrer_uid}", x_btn.url)
+
+    def test_54_smart_sell_portfolio_fallback_and_buy_deposit_keyboard(self):
+        """Test smart /sell empty args renders open positions and /buy insufficient SOL attaches deposit QR keyboard."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock, patch
+        from telegram_bot import sell_command, buy_command
+        from wallet_manager import get_or_create_wallet, set_user_language
+
+        test_uid = 77112233
+        get_or_create_wallet(test_uid, "SmartTrader", initial_language="en")
+        set_user_language(test_uid, "en")
+
+        # 1. Test /sell without args when user holds tokens -> renders positions portfolio
+        mock_update = MagicMock()
+        mock_update.effective_user.id = test_uid
+        mock_update.message.reply_text = AsyncMock()
+        mock_context = MagicMock()
+        mock_context.args = []
+
+        fake_holdings = [{"mint": "TokenMintAddress123", "amount": 1000.0, "program": "Tokenkeg"}]
+        with patch("telegram_bot.get_token_accounts", return_value=fake_holdings), \
+             patch("telegram_bot.render_positions", new_callable=AsyncMock) as mock_render:
+            asyncio.run(sell_command(mock_update, mock_context))
+            mock_render.assert_called_once_with(mock_update.message, test_uid, "en", is_edit=False)
+
+        # 2. Test /sell without args when user has 0 tokens -> shows syntax help
+        with patch("telegram_bot.get_token_accounts", return_value=[]):
+            asyncio.run(sell_command(mock_update, mock_context))
+            self.assertTrue(mock_update.message.reply_text.called)
+            syntax_text = mock_update.message.reply_text.call_args[0][0]
+            self.assertIn("/sell [CONTRACT_OR_TICKER]", syntax_text)
+
+        # 3. Test /buy with insufficient SOL balance attaches deposit keyboard
+        mock_update_buy = MagicMock()
+        mock_update_buy.effective_user.id = test_uid
+        mock_update_buy.message.reply_text = AsyncMock()
+        mock_context_buy = MagicMock()
+        mock_context_buy.args = ["0.1", self.bonk_mint]
+
+        with patch("telegram_bot.get_sol_balance", return_value=0.0):
+            asyncio.run(buy_command(mock_update_buy, mock_context_buy))
+            self.assertTrue(mock_update_buy.message.reply_text.called)
+            kwargs = mock_update_buy.message.reply_text.call_args[1]
+            self.assertIn("reply_markup", kwargs)
+            kb = kwargs["reply_markup"]
+            buttons = [b for row in kb.inline_keyboard for b in row]
+            callback_datas = [b.callback_data for b in buttons]
+            self.assertIn("btn_qr", callback_datas)
+            self.assertIn("btn_refresh", callback_datas)
 
 
 if __name__ == "__main__":

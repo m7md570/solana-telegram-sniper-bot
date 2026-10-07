@@ -531,6 +531,48 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertIn("ENABLED", t("alerts_toggled", "en", status="ENABLED"))
         self.assertIn("مفعلة", t("alerts_toggled", "ar", status="مفعلة"))
 
+    def test_25_render_positions_portfolio(self):
+        """Test interactive positions portfolio card generation, valuations, and 1-click Sell buttons."""
+        import asyncio
+        from unittest.mock import AsyncMock, patch
+        from telegram_bot import render_positions
+
+        test_uid = 99881122
+        get_or_create_wallet(test_uid, "PortfolioTester")
+
+        mock_target = AsyncMock()
+
+        # 1. Test empty portfolio
+        asyncio.run(render_positions(mock_target, test_uid, user_lang="en", is_edit=False))
+        self.assertTrue(mock_target.reply_text.called)
+        empty_msg = mock_target.reply_text.call_args[0][0]
+        self.assertIn("Open Token Positions", empty_msg)
+        self.assertIn("No open token holdings found", empty_msg)
+
+        # 2. Test populated portfolio with mock SPL holdings
+        mock_target.reset_mock()
+        mock_tokens = [
+            {"mint": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", "amount": 1000000.0, "decimals": 5}
+        ]
+        with patch("telegram_bot.get_token_accounts", return_value=mock_tokens):
+            asyncio.run(render_positions(mock_target, test_uid, user_lang="en", is_edit=False))
+            self.assertTrue(mock_target.reply_text.called)
+            pop_msg = mock_target.reply_text.call_args[0][0]
+            reply_markup = mock_target.reply_text.call_args[1]["reply_markup"]
+
+            self.assertIn("1,000,000.00", pop_msg)
+            self.assertIn("Total Estimated Value", pop_msg)
+
+            # Verify 1-click sell buttons in keyboard
+            all_buttons = [btn for row in reply_markup.inline_keyboard for btn in row]
+            sell_50 = next((b for b in all_buttons if b.callback_data == "sell_DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263_50"), None)
+            sell_100 = next((b for b in all_buttons if b.callback_data == "sell_DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263_100"), None)
+            inspect_btn = next((b for b in all_buttons if b.callback_data == "inspect_DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"), None)
+
+            self.assertIsNotNone(sell_50, "Sell 50% button must be generated")
+            self.assertIsNotNone(sell_100, "Sell 100% button must be generated")
+            self.assertIsNotNone(inspect_btn, "Inspect button must be generated")
+
 
 if __name__ == "__main__":
     unittest.main()

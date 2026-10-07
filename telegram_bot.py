@@ -685,6 +685,87 @@ async def render_surge_radar(target, user_id: int, user_lang: str, is_edit: bool
         await target.reply_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard), disable_web_page_preview=True)
 
 
+async def render_positions(target, user_id: int, user_lang: str, is_edit: bool = False):
+    """Renders the executive interactive portfolio card with real-time valuations and 1-click Sell buttons."""
+    pubkey, _ = get_or_create_wallet(user_id)
+    tokens = get_token_accounts(pubkey)
+    now_str = get_current_time_str()
+    title = t("positions_title", user_lang)
+
+    if not tokens:
+        empty_text = (
+            f"{title}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"{t('no_positions', user_lang)}\n\n"
+            f"🕒 <code>{now_str}</code>"
+        )
+        kb = [[InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]]
+        if is_edit:
+            await safe_edit_text(target, empty_text, reply_markup=InlineKeyboardMarkup(kb))
+        else:
+            await target.reply_text(empty_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
+        return
+
+    mints = [tkn["mint"] for tkn in tokens]
+    batch_prices = get_batch_token_prices(mints)
+
+    total_usd = 0.0
+    text_lines = [
+        f"{title} ⚡",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    ]
+    kb = []
+
+    for tkn in tokens[:6]:
+        mint = tkn["mint"]
+        amt = tkn["amount"]
+        price_info = batch_prices.get(mint, {})
+        sym = price_info.get("symbol") or f"{mint[:4]}..{mint[-4:]}"
+        sym_escaped = html.escape(sym)
+        price = price_info.get("price_usd", 0.0)
+        c24 = price_info.get("change_24h", 0.0)
+        val_usd = amt * price
+        total_usd += val_usd
+        emoji = "📈" if c24 >= 0 else "📉"
+
+        text_lines.append(f"• <b>${sym_escaped}</b>: <code>{amt:,.2f}</code>")
+        if price > 0:
+            text_lines.append(f"  💵 <code>${val_usd:,.2f}</code> (<code>${price:.6f}</code>) {emoji} <code>{c24:+.1f}%</code>")
+        text_lines.append(f"  📋 <code>{mint}</code>\n")
+
+        kb.append([
+            InlineKeyboardButton(f"🔴 Sell 50% ${sym_escaped}", callback_data=f"sell_{mint}_50"),
+            InlineKeyboardButton(f"🚨 Sell 100% ${sym_escaped}", callback_data=f"sell_{mint}_100")
+        ])
+        kb.append([
+            InlineKeyboardButton(f"🔍 Inspect ${sym_escaped}", callback_data=f"inspect_{mint}"),
+            InlineKeyboardButton("📈 DexScreener", url=f"https://dexscreener.com/solana/{mint}")
+        ])
+
+    sol_price_usd = batch_prices.get("So11111111111111111111111111111111111111112", {}).get("price_usd", 150.0)
+    total_sol_equiv = (total_usd / sol_price_usd) if sol_price_usd > 0 else 0.0
+
+    if user_lang == "ar":
+        text_lines.append(f"💼 <b>إجمالي القيمة التقديرية</b>: <code>${total_usd:,.2f}</code> (<code>~{total_sol_equiv:.4f} SOL</code>)")
+        refresh_label = "🔄 تحديث الصفقات"
+    else:
+        text_lines.append(f"💼 <b>Total Estimated Value</b>: <code>${total_usd:,.2f}</code> (<code>~{total_sol_equiv:.4f} SOL</code>)")
+        refresh_label = "🔄 Refresh Portfolio"
+
+    text_lines.append(f"🕒 <code>{now_str}</code>")
+
+    kb.append([
+        InlineKeyboardButton(refresh_label, callback_data="btn_positions"),
+        InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
+    ])
+
+    full_text = "\n".join(text_lines)
+    if is_edit:
+        await safe_edit_text(target, full_text, reply_markup=InlineKeyboardMarkup(kb))
+    else:
+        await target.reply_text(full_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb), disable_web_page_preview=True)
+
+
 async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handles all inline button clicks with bilingual localization."""
     query = update.callback_query
@@ -868,18 +949,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await safe_edit_text(query, text, reply_markup=InlineKeyboardMarkup(kb))
 
     elif data == "btn_positions":
-        pubkey, _ = get_or_create_wallet(user_id)
-        tokens = get_token_accounts(pubkey)
-        if not tokens:
-            text = f"{t('positions_title', user_lang)}\n━━━━━━━━━━━━━━━━━━━\n{t('no_positions', user_lang)}\n🕒 <code>{now_str}</code>"
-        else:
-            header = "الرموز المفتوحة في محفظتك" if user_lang == "ar" else "Open Token Holdings in Wallet"
-            text = f"📊 <b>{header}</b>:\n━━━━━━━━━━━━━━━━━━━\n"
-            for tkn in tokens:
-                text += f"• <code>{tkn['mint'][:6]}...{tkn['mint'][-4:]}</code>: <b>{tkn['amount']:,.2f}</b>\n"
-            text += f"\n🕒 <code>{now_str}</code>"
-        kb = [[InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]]
-        await safe_edit_text(query, text, reply_markup=InlineKeyboardMarkup(kb))
+        await render_positions(query, user_id, user_lang, is_edit=True)
 
     elif data == "btn_watchlist":
         await render_watchlist(query, user_id, user_lang, is_edit=True)
@@ -1187,19 +1257,7 @@ async def positions_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler for /positions command."""
     user_id = update.effective_user.id
     user_lang = get_user_language(user_id)
-    pubkey, _ = get_or_create_wallet(user_id)
-    tokens = get_token_accounts(pubkey)
-    now_str = get_current_time_str()
-
-    if not tokens:
-        text = f"{t('positions_title', user_lang)}\n━━━━━━━━━━━━━━━━━━━\n{t('no_positions', user_lang)}\n🕒 <code>{now_str}</code>"
-    else:
-        header = "الرموز المفتوحة في محفظتك" if user_lang == "ar" else "Open Token Holdings in Wallet"
-        text = f"📊 <b>{header}</b>:\n━━━━━━━━━━━━━━━━━━━\n"
-        for tkn in tokens:
-            text += f"• <code>{tkn['mint'][:6]}...{tkn['mint'][-4:]}</code>: <b>{tkn['amount']:,.2f}</b>\n"
-        text += f"\n🕒 <code>{now_str}</code>"
-    await update.message.reply_text(text, parse_mode="HTML")
+    await render_positions(update.message, user_id, user_lang, is_edit=False)
 
 
 async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):

@@ -2386,7 +2386,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "btn_history":
         await render_trade_history(query, user_id, user_lang, is_edit=True)
 
-    elif data == "btn_export_trades_csv":
+    elif data in ("btn_export_trades_csv", "btn_history_csv"):
         await query.answer()
         await send_trades_csv_export(query, user_id, user_lang)
 
@@ -3422,6 +3422,13 @@ async def history_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await render_trade_history(update.message, user_id, user_lang, is_edit=False)
 
 
+async def csv_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Direct handler for /csv and /tradescsv: instantly exports user's trade history as CSV."""
+    user_id = update.effective_user.id
+    user_lang = get_user_language(user_id)
+    await send_trades_csv_export(update.message, user_id, user_lang)
+
+
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler for /help command with interactive quick-action navigation keyboard."""
     user_id = update.effective_user.id
@@ -4025,6 +4032,8 @@ def build_application(token: str) -> Application:
     app.add_handler(CommandHandler("sellall", panic_command))
     app.add_handler(CommandHandler("history", history_command))
     app.add_handler(CommandHandler("trades", history_command))
+    app.add_handler(CommandHandler("csv", csv_command))
+    app.add_handler(CommandHandler("tradescsv", csv_command))
     app.add_handler(CommandHandler("settings", settings_command))
     app.add_handler(CommandHandler("reset", reset_command))
     app.add_handler(CommandHandler("defaults", reset_command))

@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.66.0", card_text)
+        self.assertIn("v3.67.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.66.0")
+        self.assertEqual(BOT_VERSION, "v3.67.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -4082,6 +4082,62 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
             self.assertIn("معدل نجاح التنفيذ", msg_ar)
             self.assertIn("100.0%", msg_ar)
             self.assertIn("btn_watchlist", cbs_ar)
+
+    def test_91_csv_export_callback_and_command_parity(self):
+        """Test v3.67.0 CSV export callback parity across /pnl and /history, and dedicated /csv slash command."""
+        import asyncio
+        from unittest.mock import patch, MagicMock, AsyncMock
+        from telegram_bot import csv_command, callback_router, build_application
+        from telegram.ext import CommandHandler
+
+        test_uid = 99881191
+
+        # 1. Test dedicated /csv slash command calls send_trades_csv_export
+        mock_update = MagicMock()
+        mock_update.effective_user.id = test_uid
+        mock_update.message = AsyncMock()
+        mock_context = MagicMock()
+
+        with patch("telegram_bot.send_trades_csv_export", new_callable=AsyncMock) as mock_send:
+            asyncio.run(csv_command(mock_update, mock_context))
+            self.assertTrue(mock_send.called)
+            self.assertEqual(mock_send.call_args[0][1], test_uid)
+
+        # 2. Test callback_router routing with btn_history_csv (from PnL card)
+        mock_query_pnl = MagicMock()
+        mock_query_pnl.from_user.id = test_uid
+        mock_query_pnl.data = "btn_history_csv"
+        mock_query_pnl.answer = AsyncMock()
+        mock_update_pnl = MagicMock(callback_query=mock_query_pnl)
+
+        with patch("telegram_bot.send_trades_csv_export", new_callable=AsyncMock) as mock_send_pnl:
+            asyncio.run(callback_router(mock_update_pnl, mock_context))
+            self.assertTrue(mock_query_pnl.answer.called)
+            self.assertTrue(mock_send_pnl.called)
+            self.assertEqual(mock_send_pnl.call_args[0][1], test_uid)
+
+        # 3. Test callback_router routing with btn_export_trades_csv (from History card)
+        mock_query_hist = MagicMock()
+        mock_query_hist.from_user.id = test_uid
+        mock_query_hist.data = "btn_export_trades_csv"
+        mock_query_hist.answer = AsyncMock()
+        mock_update_hist = MagicMock(callback_query=mock_query_hist)
+
+        with patch("telegram_bot.send_trades_csv_export", new_callable=AsyncMock) as mock_send_hist:
+            asyncio.run(callback_router(mock_update_hist, mock_context))
+            self.assertTrue(mock_query_hist.answer.called)
+            self.assertTrue(mock_send_hist.called)
+            self.assertEqual(mock_send_hist.call_args[0][1], test_uid)
+
+        # 4. Verify /csv and /tradescsv are registered commands in build_application
+        app = build_application("8935718262:AAGZc-RLQplBfx6cWzTtk2zyorXo5o74NqE")
+        command_handlers = [h for h in app.handlers[0] if isinstance(h, CommandHandler)]
+        registered_commands = set()
+        for h in command_handlers:
+            registered_commands.update(h.commands)
+
+        self.assertIn("csv", registered_commands)
+        self.assertIn("tradescsv", registered_commands)
 
 
 if __name__ == "__main__":

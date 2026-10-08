@@ -4679,6 +4679,63 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertIn("إمكانية طباعة عملات جديدة (Mint Authority) مفعلة!", card_ar_risky)
         self.assertIn("إمكانية تجميد المحافظ (Freeze Authority) مفعلة!", card_ar_risky)
 
+    def test_101_pump_fun_bonding_curve_graduation_telemetry(self):
+        """Test v3.79.0 Pump.fun bonding curve progress calculation and PumpSwap graduation status."""
+        from rugcheck_scanner import format_token_card
+
+        pump_mint = "61V8vBaqAGMpgDQi4Jcgoc1vSEKqTY4WbRC26EkDpump"
+
+        # 1. Active bonding curve token ($34,500 mcap = 50.0% filled)
+        curve_scan = {
+            "mint": pump_mint,
+            "symbol": "PIPPIN",
+            "name": "Pippin",
+            "price_usd": 0.0000345,
+            "status": "SAFE",
+            "rug_score": 15,
+            "mcap": 34_500.0,
+            "liquidity": 12_000.0,
+            "dex": "PumpSwap",
+        }
+        card_en = format_token_card(curve_scan, lang="en")
+        self.assertIn("🍼 Bonding Curve (50.0%)", card_en)
+
+        card_ar = format_token_card(curve_scan, lang="ar")
+        self.assertIn("🍼 على منحنى السيولة (50.0%)", card_ar)
+
+        # 2. Graduated token ($120,000 mcap >= $69k)
+        graduated_scan = {
+            "mint": pump_mint,
+            "symbol": "PIPPIN",
+            "name": "Pippin",
+            "price_usd": 0.00012,
+            "status": "SAFE",
+            "rug_score": 15,
+            "mcap": 120_000.0,
+            "liquidity": 45_000.0,
+            "dex": "PumpSwap",
+        }
+        card_en_grad = format_token_card(graduated_scan, lang="en")
+        self.assertIn("🎓 Graduated (PumpSwap)", card_en_grad)
+
+        card_ar_grad = format_token_card(graduated_scan, lang="ar")
+        self.assertIn("🎓 متخرجة إلى PumpSwap", card_ar_grad)
+
+        # 3. Meteora DLMM venue detection
+        meteora_scan = {
+            "mint": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
+            "symbol": "BONK",
+            "name": "Bonk",
+            "price_usd": 0.000025,
+            "status": "SAFE",
+            "rug_score": 10,
+            "mcap": 1_000_000.0,
+            "liquidity": 100_000.0,
+            "dex": "meteora",
+        }
+        card_en_met = format_token_card(meteora_scan, lang="en")
+        self.assertIn("Meteora DLMM", card_en_met)
+
 
 if __name__ == "__main__":
     unittest.main()

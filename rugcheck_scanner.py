@@ -185,6 +185,8 @@ def format_token_card(scan: Dict[str, Any], lang: str = "en") -> str:
         dex = f"PumpSwap / {dex}"
     elif dex.lower() in ("pumpswap", "pumpfun"):
         dex = "PumpSwap (Pump.fun)"
+    elif "meteora" in dex.lower():
+        dex = "Meteora DLMM"
     mcap = float(scan.get("mcap") or scan.get("market_cap") or 0.0)
     liq = float(scan.get("liquidity_usd") or scan.get("liquidity") or 0.0)
     change = float(scan.get("price_change_24h") or 0.0)
@@ -206,6 +208,20 @@ def format_token_card(scan: Dict[str, Any], lang: str = "en") -> str:
             liq_ratio_str = f" ({ratio:.1f}%)"
             liq_ratio_str_ar = f" ({ratio:.1f}%)"
 
+    bonding_curve_str = ""
+    bonding_curve_str_ar = ""
+    if mint.lower().endswith("pump"):
+        if mcap >= 69_000.0 or scan.get("graduated"):
+            bonding_curve_str = "🎓 Graduated (PumpSwap)"
+            bonding_curve_str_ar = "🎓 متخرجة إلى PumpSwap"
+        elif mcap > 0:
+            pct = min(100.0, (mcap / 69_000.0) * 100.0)
+            bonding_curve_str = f"🍼 Bonding Curve ({pct:.1f}%)"
+            bonding_curve_str_ar = f"🍼 على منحنى السيولة ({pct:.1f}%)"
+        else:
+            bonding_curve_str = "🍼 Bonding Curve (Active)"
+            bonding_curve_str_ar = "🍼 منحنى سيولة نشط"
+
     if lang == "ar":
         if status == "SAFE":
             badge = f"🟢 آمن (درجة الخطر: {score})"
@@ -224,12 +240,16 @@ def format_token_card(scan: Dict[str, Any], lang: str = "en") -> str:
             f"💵 <b>السعر الحالي</b>: <code>${price:.8f}</code>{price_sol_str}",
             f"{change_emoji} <b>التغير اللحظي</b>: <code>{change:+.2f}% (24h)</code> | <code>{change_1h:+.2f}% (1h)</code>",
             f"🏛️ <b>المنصة المضيفة (DEX)</b>: <code>{dex}</code>",
+        ]
+        if bonding_curve_str_ar:
+            lines.append(f"💊 <b>حالة المنحنى</b>: <code>{bonding_curve_str_ar}</code>")
+        lines.extend([
             f"💎 <b>القيمة السوقية (MCap)</b>: <code>${mcap:,.0f}</code>",
             f"💧 <b>السيولة المتوفرة</b>: <code>${liq:,.0f}</code>{liq_ratio_str_ar}",
             f"",
             f"🛡️ <b>فحص الأمان والتحقق</b>:",
             f"• تقييم الأمان: {badge}",
-        ]
+        ])
 
         if status in ("SAFE", "WARNING", "DANGER"):
             if scan.get("mint_authority"):
@@ -277,12 +297,16 @@ def format_token_card(scan: Dict[str, Any], lang: str = "en") -> str:
             f"💵 <b>Current Price</b>: <code>${price:.8f}</code>{price_sol_str}",
             f"{change_emoji} <b>Price Momentum</b>: <code>{change:+.2f}% (24h)</code> | <code>{change_1h:+.2f}% (1h)</code>",
             f"🏛️ <b>DEX Venue</b>: <code>{dex}</code>",
+        ]
+        if bonding_curve_str:
+            lines.append(f"💊 <b>Curve Status</b>: <code>{bonding_curve_str}</code>")
+        lines.extend([
             f"💎 <b>Market Cap (MCap)</b>: <code>${mcap:,.0f}</code>",
             f"💧 <b>Liquidity</b>: <code>${liq:,.0f}</code>{liq_ratio_str}",
             f"",
             f"🛡️ <b>Security & RugCheck Audit</b>:",
             f"• Risk Assessment: {badge}",
-        ]
+        ])
 
         if status in ("SAFE", "WARNING", "DANGER"):
             if scan.get("mint_authority"):

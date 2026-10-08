@@ -372,7 +372,13 @@ def build_settings_card(user_id: int, user_lang: str) -> Tuple[str, InlineKeyboa
 
 def build_welcome_text(user, pubkey: str, balance: float, now_str: str, lang: str = "en") -> str:
     """Constructs the executive dashboard card in user's preferred language."""
-    username = user.username or user.first_name or ("Trader" if lang == "en" else "المتداول")
+    if getattr(user, "username", None) and user.username.strip():
+        display_user = f"@{html.escape(user.username.strip())}"
+    elif getattr(user, "first_name", None) and user.first_name.strip() and user.first_name.strip() != ".":
+        display_user = html.escape(user.first_name.strip())
+    else:
+        display_user = "Trader" if lang == "en" else "المتداول"
+
     if balance > 0.0001:
         bal_status = " 🟢 " + ("(Ready to snipe!)" if lang == "en" else "(جاهز للقنص الفوري!)")
     else:
@@ -381,7 +387,7 @@ def build_welcome_text(user, pubkey: str, balance: float, now_str: str, lang: st
     return (
         f"{t('welcome_title', lang)}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"{t('trader', lang)}: @{html.escape(username)}\n"
+        f"{t('trader', lang)}: <b>{display_user}</b>\n"
         f"{t('wallet_dedicated', lang)}:\n"
         f"<code>{pubkey}</code>\n\n"
         f"{t('current_balance', lang)}: <code>{balance:.4f} SOL</code>{bal_status}\n"

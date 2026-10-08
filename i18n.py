@@ -21,7 +21,7 @@ MESSAGES = {
             "2. Paste any Solana Contract Address (CA) or DexScreener/Pump.fun link directly here.\n"
             "3. The bot will instantly audit the token (RugCheck) and provide 1-click buy buttons!"
         ),
-        "btn_snipe_guide": "⚡ Instant Sniper (Send CA / Link)",
+        "btn_snipe_guide": "⚡ Instant Sniper",
         "btn_tour": "🚀 Quick Tour (3 Steps)",
         "btn_trending": "🔥 Trending Radar",
 
@@ -288,7 +288,7 @@ MESSAGES = {
             "2. الصق أي رابط أو عنوان عقد (CA) هنا مباشرة.\n"
             "3. سيقوم البوت بفحص أمان العملة (RugCheck) وإظهار أزرار الشراء بنقرة واحدة!"
         ),
-        "btn_snipe_guide": "⚡ قنص فوري (أرسل العقد أو الرابط)",
+        "btn_snipe_guide": "⚡ القنص الفوري",
         "btn_tour": "🚀 جولة سريعة (3 خطوات)",
         "btn_trending": "🔥 تريند سولانا اللحظي",
 

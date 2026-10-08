@@ -854,13 +854,17 @@ async def render_price_card(target, user_id: int, user_lang: str, mint: str, is_
     import urllib.parse
     x_share_link = f"https://twitter.com/intent/tweet?text={urllib.parse.quote(x_intent_text)}"
 
+    quote_sim_label = "💱 " + ("Sim Quote" if user_lang == "en" else "محاكاة الصفقة")
     kb = [
         [
             InlineKeyboardButton(quick_buy_label, callback_data=f"buy_{mint}_{default_buy_amt}"),
-            InlineKeyboardButton(snipe_label, callback_data=f"inspect_{mint}")
+            InlineKeyboardButton(quote_sim_label, callback_data=f"quote_{mint}_{default_buy_amt}")
         ],
         [
-            InlineKeyboardButton(track_label, callback_data=track_cb),
+            InlineKeyboardButton(snipe_label, callback_data=f"inspect_{mint}"),
+            InlineKeyboardButton(track_label, callback_data=track_cb)
+        ],
+        [
             InlineKeyboardButton("📊 DexScreener", url=f"https://dexscreener.com/solana/{mint}"),
             InlineKeyboardButton("🛡️ RugCheck", url=f"https://rugcheck.xyz/tokens/{mint}")
         ],
@@ -1009,14 +1013,23 @@ async def render_quote_card(target, user_id: int, user_lang: str, mint: str, amo
         track_label = "⭐ " + t("btn_track", user_lang)
         track_cb = f"track_{mint}"
 
+    # Interactive quick swap size tiers (e.g. 0.05, 0.1, 0.5, 1.0 SOL)
+    amt_row = []
+    for tier in [0.05, 0.1, 0.5, 1.0]:
+        is_sel = abs(amount_sol - tier) < 0.001
+        tier_lbl = f"🟢 {tier} SOL" if is_sel else f"{tier} SOL"
+        amt_row.append(InlineKeyboardButton(tier_lbl, callback_data=f"quote_{mint}_{tier}"))
+
     kb = [
+        amt_row,
         [
             InlineKeyboardButton(exec_label, callback_data=f"buy_{mint}_{amount_sol}"),
             InlineKeyboardButton("💵 Price Radar", callback_data=f"price_{mint}")
         ],
         [
             InlineKeyboardButton(track_label, callback_data=track_cb),
-            InlineKeyboardButton("📊 DexScreener", url=f"https://dexscreener.com/solana/{mint}")
+            InlineKeyboardButton("🛡️ RugCheck", callback_data=f"inspect_{mint}"),
+            InlineKeyboardButton("📊 Dex", url=f"https://dexscreener.com/solana/{mint}")
         ],
         [
             InlineKeyboardButton(refresh_label, callback_data=f"quote_{mint}_{amount_sol}"),
@@ -1228,8 +1241,10 @@ async def render_positions(target, user_id: int, user_lang: str, is_edit: bool =
             InlineKeyboardButton(f"🚨 Sell 100% ${sym_escaped}", callback_data=f"sell_{mint}_100")
         ])
         kb.append([
-            InlineKeyboardButton(f"🔍 Inspect ${sym_escaped}", callback_data=f"inspect_{mint}"),
-            InlineKeyboardButton("📈 DexScreener", url=f"https://dexscreener.com/solana/{mint}")
+            InlineKeyboardButton("💱 Quote", callback_data=f"quote_{mint}"),
+            InlineKeyboardButton("💵 Price", callback_data=f"price_{mint}"),
+            InlineKeyboardButton(f"🔍 Inspect", callback_data=f"inspect_{mint}"),
+            InlineKeyboardButton("📈 Dex", url=f"https://dexscreener.com/solana/{mint}")
         ])
 
     sol_price_usd = batch_prices.get("So11111111111111111111111111111111111111112", {}).get("price_usd", 150.0)
@@ -3085,8 +3100,14 @@ async def quote_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         amount_sol = float(args[0].strip())
         target_token = args[1].strip() if len(args) > 1 else ""
     except ValueError:
-        amount_sol = default_buy
         target_token = args[0].strip()
+        if len(args) > 1:
+            try:
+                amount_sol = float(args[1].strip())
+            except ValueError:
+                amount_sol = default_buy
+        else:
+            amount_sol = default_buy
 
     if not target_token:
         err = "❌ Please specify a token ticker or CA. Example: <code>/quote 0.1 bonk</code>" if user_lang == "en" else "❌ يرجى تحديد رمز أو عقد العملة. مثال: <code>/quote 0.1 bonk</code>"

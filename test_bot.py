@@ -5070,9 +5070,38 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
             scout_github_smart_contracts(max_repos=1)
             self.assertTrue(mock_sleep.called, "Must throttle and sleep when remaining rate limit <= 3")
 
+    def test_114_meteora_dlmm_fee_adapter(self):
+        """Test v3.93.0 Meteora DLMM Pro dynamic fee detection and slippage adaptation."""
+        from jupiter_engine import is_dlmm_or_dynamic_route, calculate_optimal_slippage
+
+        # 1. Test is_dlmm_or_dynamic_route detects Meteora DLMM in routePlan
+        dlmm_quote = {
+            "routePlan": [
+                {"swapInfo": {"label": "Meteora DLMM", "inAmount": "1000", "outAmount": "2000"}}
+            ]
+        }
+        self.assertTrue(is_dlmm_or_dynamic_route(dlmm_quote))
+
+        # 2. Test is_dlmm_or_dynamic_route returns False for standard Raydium route
+        standard_quote = {
+            "routePlan": [
+                {"swapInfo": {"label": "Raydium CPMM", "inAmount": "1000", "outAmount": "2000"}}
+            ]
+        }
+        self.assertFalse(is_dlmm_or_dynamic_route(standard_quote))
+        self.assertFalse(is_dlmm_or_dynamic_route(None))
+
+        # 3. Test calculate_optimal_slippage adds 75 bps buffer when is_dlmm=True
+        base_slip = 100
+        normal_slip = calculate_optimal_slippage(price_impact_pct=0.1, base_slippage_bps=base_slip, is_dlmm=False)
+        dlmm_slip = calculate_optimal_slippage(price_impact_pct=0.1, base_slippage_bps=base_slip, is_dlmm=True)
+        self.assertEqual(normal_slip, 100)
+        self.assertEqual(dlmm_slip, 125)  # max(50+75, 100) = 125 bps
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
 
 

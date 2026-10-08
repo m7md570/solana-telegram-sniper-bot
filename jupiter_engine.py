@@ -38,22 +38,45 @@ _SESSION.headers.update({
 })
 
 
-def calculate_optimal_slippage(price_impact_pct: float, base_slippage_bps: int = DEFAULT_SLIPPAGE_BPS) -> int:
+def is_dlmm_or_dynamic_route(quote: Optional[Dict[str, Any]]) -> bool:
     """
-    Dynamically optimizes slippage tolerance based on price impact and market depth.
+    Detects whether the Jupiter route traverses Meteora DLMM Pro or dynamic bonding curve pools.
+    Meteora DLMM Pro pools implement dynamic launch fees in October 2026.
+    """
+    if not quote or not isinstance(quote, dict):
+        return False
+    route_plan = quote.get("routePlan") or []
+    for step in route_plan:
+        swap_info = step.get("swapInfo") or {}
+        label = str(swap_info.get("label") or "").lower()
+        if any(k in label for k in ["meteora", "dlmm", "dbc", "bonding"]):
+            return True
+    return False
+
+
+def calculate_optimal_slippage(
+    price_impact_pct: float,
+    base_slippage_bps: int = DEFAULT_SLIPPAGE_BPS,
+    is_dlmm: bool = False
+) -> int:
+    """
+    Dynamically optimizes slippage tolerance based on price impact, market depth,
+    and Meteora DLMM Pro dynamic fee tiers (October 2026).
     Protects user from MEV sandwich attacks by capping slippage while preventing failed swaps.
     - Low price impact (< 0.5%): uses user's base slippage (e.g. 50-100 bps).
     - Moderate price impact (0.5% - 2.0%): scales up proportionally with buffer.
-    - High price impact (> 2.0%): caps strictly at min(impact*100 + 100, MAX_SLIPPAGE_BPS) to prevent toxic sandwiching.
+    - High price impact (> 2.0%): caps strictly at min(impact*100 + 100, MAX_SLIPPAGE_BPS).
+    - DLMM Pro dynamic fee buffer: adds 75 bps buffer if pool uses dynamic fee decay.
     """
     try:
         impact_bps = int(abs(float(price_impact_pct or 0.0)) * 100)
     except Exception:
         impact_bps = 0
 
+    dlmm_buffer = 75 if is_dlmm else 0
     if impact_bps < 50:
-        return max(50, base_slippage_bps)
-    dynamic_bps = impact_bps + 50
+        return max(50 + dlmm_buffer, base_slippage_bps)
+    dynamic_bps = impact_bps + 50 + dlmm_buffer
     return min(max(base_slippage_bps, dynamic_bps), MAX_SLIPPAGE_BPS)
 
 
@@ -266,9 +289,10 @@ def execute_buy_swap(
         err = "تعذر العثور على مسار سيولة في Jupiter حالياً." if lang == "ar" else "No swap liquidity route discovered on Jupiter right now."
         return False, err, 0.0, 0.0
 
-    # 2. Dynamic MEV anti-sandwich slippage optimization
+    # 2. Dynamic MEV anti-sandwich & Meteora DLMM fee optimization
     price_impact = float(quote.get("priceImpactPct") or 0.0)
-    optimal_slip = calculate_optimal_slippage(price_impact, slippage)
+    is_dlmm = is_dlmm_or_dynamic_route(quote)
+    optimal_slip = calculate_optimal_slippage(price_impact, slippage, is_dlmm=is_dlmm)
     if optimal_slip != slippage:
         re_quote = get_jupiter_quote(
             input_mint=WSOL_MINT,
@@ -360,9 +384,10 @@ def execute_sell_swap(
         err = "تعذر العثور على مسار بيع أو سيولة في Jupiter." if lang == "ar" else "No swap liquidity route available on Jupiter."
         return False, err, 0.0
 
-    # Dynamic MEV anti-sandwich slippage optimization
+    # Dynamic MEV anti-sandwich & Meteora DLMM fee optimization
     price_impact = float(quote.get("priceImpactPct") or 0.0)
-    optimal_slip = calculate_optimal_slippage(price_impact, slippage)
+    is_dlmm = is_dlmm_or_dynamic_route(quote)
+    optimal_slip = calculate_optimal_slippage(price_impact, slippage, is_dlmm=is_dlmm)
     if optimal_slip != slippage:
         re_quote = get_jupiter_quote(
             input_mint=token_mint,

@@ -19,7 +19,7 @@ logger = logging.getLogger("LocalAICoprocessor")
 
 DEFAULT_LOCAL_ENDPOINT = "http://127.0.0.1:45645/v1/chat/completions"
 DEFAULT_MODEL_NAME = "qwen3.8-27b-heretic-abliterated-uncensored"
-LOCAL_REQUEST_TIMEOUT = 35  # seconds (allows sufficient budget for 27B reasoning)
+LOCAL_REQUEST_TIMEOUT = 75  # seconds (allows sufficient budget for 27B deep reasoning)
 
 
 def is_local_model_online(endpoint: str = DEFAULT_LOCAL_ENDPOINT) -> bool:

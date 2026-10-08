@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.65.0", card_text)
+        self.assertIn("v3.66.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.65.0")
+        self.assertEqual(BOT_VERSION, "v3.66.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -4027,6 +4027,61 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
             asyncio.run(track_command(t_update, t_ctx))
             mock_search.assert_called_with("doge 2.0")
             self.assertTrue(mock_add.called)
+
+    def test_90_pnl_success_rate_metric_and_watchlist_button(self):
+        """Test v3.66.0 render_pnl_card execution success rate metric and watchlist button integration."""
+        import asyncio
+        from unittest.mock import patch, MagicMock, AsyncMock
+        from telegram_bot import render_pnl_card
+
+        test_uid = 99881190
+        mock_user = MagicMock()
+        mock_user.username = "alpha_trader"
+        mock_user.first_name = "Alpha"
+
+        # 1. Test English render_pnl_card with custom stats (87.5% success rate)
+        mock_target_en = AsyncMock()
+        custom_stats = {
+            "total_trades": 8,
+            "confirmed_trades": 7,
+            "success_rate_pct": 87.5,
+            "total_volume_sol": 12.345,
+            "total_fees_sol": 0.12345,
+            "recent_trades": []
+        }
+        with patch("telegram_bot.get_user_trade_stats", return_value=custom_stats):
+            asyncio.run(render_pnl_card(mock_target_en, mock_user, test_uid, "en", is_edit=False))
+            self.assertTrue(mock_target_en.reply_text.called)
+            msg_en = mock_target_en.reply_text.call_args[0][0]
+            kb_en = mock_target_en.reply_text.call_args[1]["reply_markup"]
+            cbs_en = [b.callback_data for row in kb_en.inline_keyboard for b in row if b.callback_data]
+
+            self.assertIn("Execution Success Rate", msg_en)
+            self.assertIn("87.5%", msg_en)
+            self.assertIn("btn_watchlist", cbs_en)
+            self.assertIn("btn_positions", cbs_en)
+            self.assertIn("btn_trending", cbs_en)
+
+        # 2. Test Arabic render_pnl_card with default stats (100.0% success rate)
+        mock_target_ar = AsyncMock()
+        default_stats = {
+            "total_trades": 0,
+            "confirmed_trades": 0,
+            "success_rate_pct": 100.0,
+            "total_volume_sol": 0.0,
+            "total_fees_sol": 0.0,
+            "recent_trades": []
+        }
+        with patch("telegram_bot.get_user_trade_stats", return_value=default_stats):
+            asyncio.run(render_pnl_card(mock_target_ar, mock_user, test_uid, "ar", is_edit=False))
+            self.assertTrue(mock_target_ar.reply_text.called)
+            msg_ar = mock_target_ar.reply_text.call_args[0][0]
+            kb_ar = mock_target_ar.reply_text.call_args[1]["reply_markup"]
+            cbs_ar = [b.callback_data for row in kb_ar.inline_keyboard for b in row if b.callback_data]
+
+            self.assertIn("معدل نجاح التنفيذ", msg_ar)
+            self.assertIn("100.0%", msg_ar)
+            self.assertIn("btn_watchlist", cbs_ar)
 
 
 if __name__ == "__main__":

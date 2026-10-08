@@ -2065,6 +2065,7 @@ async def render_pnl_card(target, user, user_id: int, user_lang: str, is_edit: b
         user_lang,
         username=html.escape(username),
         total_trades=stats["total_trades"],
+        success_rate=stats.get("success_rate_pct", 100.0),
         total_vol=stats["total_volume_sol"],
         total_fees=stats.get("total_fees_sol", 0.0)
     )
@@ -2092,6 +2093,7 @@ async def render_pnl_card(target, user, user_id: int, user_lang: str, is_edit: b
         ],
         [
             InlineKeyboardButton(t("btn_positions", user_lang), callback_data="btn_positions"),
+            InlineKeyboardButton(t("btn_watchlist", user_lang), callback_data="btn_watchlist"),
             InlineKeyboardButton(t("btn_trending", user_lang), callback_data="btn_trending")
         ],
         [

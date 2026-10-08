@@ -90,10 +90,10 @@ def generate_marketing_post() -> tuple:
         f"📈 24h: {change_24h:+.1f}% | Vol: ${vol_m:.1f}{vol_unit}",
         f"🛡️ RugCheck: {emoji} {status_label} ({rug_score})",
         f"",
-        f"⚡ 1-Click Fast Sniper (Sub-400ms):",
-        f"👉 https://t.me/PopcornSniperBot",
+        f"⚡ Instant 1-Click Sniper:",
+        f"👉 https://t.me/PopcornSniperBot?start=token_{mint}",
         f"",
-        f"#Solana #{symbol} #SOL"
+        f"#Solana #{symbol} #Crypto"
     ]
 
     post_text = "\n".join(post_lines)

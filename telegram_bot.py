@@ -30,6 +30,7 @@ import asyncio
 import logging
 import datetime
 import html
+import re
 import urllib.parse
 from typing import Optional, Dict, Any, List, Tuple
 
@@ -425,15 +426,19 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     pubkey, is_new = get_or_create_wallet(user_id, username, initial_language=initial_lang)
     user_lang = get_user_language(user_id)
 
-    # Process Referral Code
-    if context.args and is_new:
-        ref_arg = context.args[0]
-        if ref_arg.startswith("ref_"):
+    target_token_mint = None
+
+    # Process Referral Code & Deep-Link Parameters
+    if context.args:
+        raw_arg = context.args[0].strip()
+
+        # 1. Compound referral + token: e.g. ref_12345_token_MINT or ref_12345_MINT
+        ref_match = re.match(r"^ref_(\d+)(?:_(?:token_|buy_|snipe_)?([1-9A-HJ-NP-Za-km-z]{32,44}))?$", raw_arg)
+        if ref_match:
             try:
-                referrer_id = int(ref_arg.replace("ref_", ""))
-                if record_referral(user_id, referrer_id):
+                referrer_id = int(ref_match.group(1))
+                if is_new and record_referral(user_id, referrer_id):
                     logger.info(f"User {user_id} referred by {referrer_id}")
-                    # Dispatch instant notification to referrer
                     try:
                         ref_lang = get_user_language(referrer_id)
                         ref_username = f"@{username}" if username else f"User {user_id}"
@@ -464,6 +469,37 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         logger.warning(f"Failed to send referral notification to {referrer_id}: {ref_err}")
             except Exception as e:
                 logger.warning(f"Referral parsing error: {e}")
+
+            if ref_match.group(2):
+                target_token_mint = ref_match.group(2)
+
+        # 2. Token deep-link prefix: token_<mint>, buy_<mint>, snipe_<mint>
+        elif any(raw_arg.startswith(pfx) for pfx in ("token_", "buy_", "snipe_")):
+            potential = raw_arg.split("_", 1)[1]
+            extracted = extract_token_mint(potential)
+            if extracted:
+                target_token_mint = extracted
+            else:
+                matched = search_solana_token(potential)
+                if matched:
+                    target_token_mint = matched["mint"]
+
+        # 3. Direct token CA (32-44 base58 characters)
+        elif extract_token_mint(raw_arg):
+            target_token_mint = extract_token_mint(raw_arg)
+
+    # If deep-link points to a specific token, immediately open audited token card with 1-click buy buttons
+    if target_token_mint:
+        scan = scan_token_security(target_token_mint)
+        card_text = format_token_card(scan, lang=user_lang)
+        kb = get_token_card_keyboard(target_token_mint, user_lang, user_id=user_id, symbol=scan.get("symbol", "TOKEN"))
+        await update.message.reply_text(
+            card_text,
+            parse_mode="HTML",
+            reply_markup=kb,
+            disable_web_page_preview=True
+        )
+        return
 
     balance = get_sol_balance(pubkey)
     now_str = get_current_time_str()
@@ -4001,6 +4037,8 @@ def build_application(token: str) -> Application:
     app.add_handler(CommandHandler("audit", audit_command))
     app.add_handler(CommandHandler("check", audit_command))
     app.add_handler(CommandHandler("scan", audit_command))
+    app.add_handler(CommandHandler("snipe", audit_command))
+    app.add_handler(CommandHandler("token", audit_command))
     app.add_handler(CommandHandler("status", status_command))
     app.add_handler(CommandHandler("cluster", status_command))
     app.add_handler(CommandHandler("info", status_command))

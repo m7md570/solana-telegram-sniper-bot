@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.70.0", card_text)
+        self.assertIn("v3.71.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.70.0")
+        self.assertEqual(BOT_VERSION, "v3.71.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -4367,6 +4367,86 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
              patch("telegram_bot.scan_token_security", return_value={"symbol": "BONK", "price_usd": 0.00003, "mint": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"}):
             asyncio.run(render_quote_card(mock_target, test_uid, "en", "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", 0.1, is_edit=False))
             self.assertTrue(mock_target.reply_text.called)
+
+    def test_95_start_deep_link_token_and_compound_referral(self):
+        """Test v3.71.0 /start token deep-links, compound referral+token, and /snipe alias."""
+        import asyncio
+        from unittest.mock import patch, MagicMock, AsyncMock
+        from telegram_bot import start_command, build_application
+        from telegram.ext import CommandHandler
+        from wallet_manager import get_referral_stats
+
+        test_mint = "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"
+        fake_scan = {
+            "mint": test_mint,
+            "symbol": "BONK",
+            "name": "Bonk",
+            "price_usd": 0.00003,
+            "mcap": 2000000000,
+            "liquidity_usd": 15000000,
+            "price_change_24h": 12.5,
+            "price_change_1h": 2.1,
+            "status": "SAFE",
+            "rug_score": 0,
+            "risks": []
+        }
+
+        # 1. Test /start token_<mint>
+        mock_update = MagicMock()
+        mock_update.effective_user.id = 99881195
+        mock_update.effective_user.username = "trader_deep"
+        mock_update.effective_user.first_name = "Trader"
+        mock_update.effective_user.language_code = "en"
+        mock_update.message.reply_text = AsyncMock()
+
+        mock_context = MagicMock()
+        mock_context.args = [f"token_{test_mint}"]
+
+        with patch("telegram_bot.scan_token_security", return_value=fake_scan):
+            asyncio.run(start_command(mock_update, mock_context))
+            self.assertTrue(mock_update.message.reply_text.called)
+            sent_text = mock_update.message.reply_text.call_args[0][0]
+            self.assertIn("$BONK", sent_text)
+            self.assertIn("DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", sent_text)
+            kb = mock_update.message.reply_text.call_args[1]["reply_markup"]
+            all_cbs = [b.callback_data for row in kb.inline_keyboard for b in row if b.callback_data]
+            self.assertIn(f"buy_{test_mint}_0.05", all_cbs)
+            self.assertIn(f"buy_{test_mint}_0.1", all_cbs)
+
+        # 2. Test compound /start ref_<id>_token_<mint>
+        mock_update2 = MagicMock()
+        ref_uid = 99881196
+        mock_update2.effective_user.id = ref_uid
+        mock_update2.effective_user.username = "trader_ref"
+        mock_update2.effective_user.first_name = "ReferredTrader"
+        mock_update2.effective_user.language_code = "en"
+        mock_update2.message.reply_text = AsyncMock()
+
+        from wallet_manager import get_referral_stats, get_or_create_wallet
+
+        referrer_id = 77112233
+        get_or_create_wallet(referrer_id, "referrer_boss")
+        mock_context2 = MagicMock()
+        mock_context2.args = [f"ref_{referrer_id}_token_{test_mint}"]
+        mock_context2.bot.send_message = AsyncMock()
+
+        with patch("telegram_bot.scan_token_security", return_value=fake_scan):
+            asyncio.run(start_command(mock_update2, mock_context2))
+            self.assertTrue(mock_update2.message.reply_text.called)
+            sent_text2 = mock_update2.message.reply_text.call_args[0][0]
+            self.assertIn("$BONK", sent_text2)
+            # Verify referral was attributed
+            ref_stats = get_referral_stats(referrer_id)
+            self.assertGreaterEqual(ref_stats["total_referrals"], 1)
+
+        # 3. Test /snipe and /token command handler registration
+        app = build_application("8935718262:AAGZc-RLQplBfx6cWzTtk2zyorXo5o74NqE")
+        command_handlers = [h for h in app.handlers[0] if isinstance(h, CommandHandler)]
+        registered_commands = set()
+        for h in command_handlers:
+            registered_commands.update(h.commands)
+        self.assertIn("snipe", registered_commands)
+        self.assertIn("token", registered_commands)
 
 
 if __name__ == "__main__":

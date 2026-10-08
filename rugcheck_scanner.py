@@ -189,6 +189,7 @@ def format_token_card(scan: Dict[str, Any], lang: str = "en") -> str:
         dex = "Meteora DLMM"
     mcap = float(scan.get("mcap") or scan.get("market_cap") or 0.0)
     liq = float(scan.get("liquidity_usd") or scan.get("liquidity") or 0.0)
+    vol = float(scan.get("volume_24h") or scan.get("volume") or 0.0)
     change = float(scan.get("price_change_24h") or 0.0)
     change_1h = float(scan.get("price_change_1h") or 0.0)
     score = int(scan.get("rug_score") or 0)
@@ -246,6 +247,10 @@ def format_token_card(scan: Dict[str, Any], lang: str = "en") -> str:
         lines.extend([
             f"💎 <b>القيمة السوقية (MCap)</b>: <code>${mcap:,.0f}</code>",
             f"💧 <b>السيولة المتوفرة</b>: <code>${liq:,.0f}</code>{liq_ratio_str_ar}",
+        ])
+        if vol > 0:
+            lines.append(f"📊 <b>حجم التداول (24h)</b>: <code>${vol:,.0f}</code>")
+        lines.extend([
             f"",
             f"🛡️ <b>فحص الأمان والتحقق</b>:",
             f"• تقييم الأمان: {badge}",
@@ -303,6 +308,10 @@ def format_token_card(scan: Dict[str, Any], lang: str = "en") -> str:
         lines.extend([
             f"💎 <b>Market Cap (MCap)</b>: <code>${mcap:,.0f}</code>",
             f"💧 <b>Liquidity</b>: <code>${liq:,.0f}</code>{liq_ratio_str}",
+        ])
+        if vol > 0:
+            lines.append(f"📊 <b>24h Volume</b>: <code>${vol:,.0f}</code>")
+        lines.extend([
             f"",
             f"🛡️ <b>Security & RugCheck Audit</b>:",
             f"• Risk Assessment: {badge}",

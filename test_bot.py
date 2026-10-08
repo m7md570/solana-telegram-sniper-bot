@@ -4736,6 +4736,44 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         card_en_met = format_token_card(meteora_scan, lang="en")
         self.assertIn("Meteora DLMM", card_en_met)
 
+    def test_102_token_card_24h_volume_telemetry(self):
+        """Test v3.80.0 24h trading volume telemetry display on English and Arabic token cards."""
+        from rugcheck_scanner import format_token_card
+
+        test_scan = {
+            "mint": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
+            "symbol": "BONK",
+            "name": "Bonk",
+            "price_usd": 0.000025,
+            "status": "SAFE",
+            "rug_score": 10,
+            "mcap": 1_000_000.0,
+            "liquidity": 150_000.0,
+            "volume_24h": 4_500_000.0,
+            "dex": "Raydium",
+        }
+        card_en = format_token_card(test_scan, lang="en")
+        self.assertIn("📊 <b>24h Volume</b>: <code>$4,500,000</code>", card_en)
+
+        card_ar = format_token_card(test_scan, lang="ar")
+        self.assertIn("📊 <b>حجم التداول (24h)</b>: <code>$4,500,000</code>", card_ar)
+
+        # Zero volume token does not append volume line
+        zero_vol_scan = {
+            "mint": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
+            "symbol": "BONK",
+            "name": "Bonk",
+            "price_usd": 0.000025,
+            "status": "SAFE",
+            "rug_score": 10,
+            "mcap": 1_000_000.0,
+            "liquidity": 150_000.0,
+            "volume_24h": 0.0,
+            "dex": "Raydium",
+        }
+        card_en_zero = format_token_card(zero_vol_scan, lang="en")
+        self.assertNotIn("24h Volume", card_en_zero)
+
 
 if __name__ == "__main__":
     unittest.main()

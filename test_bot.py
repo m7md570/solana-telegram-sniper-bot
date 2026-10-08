@@ -4915,6 +4915,27 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertIn("✅", sl75_btn.text)
         self.assertIn("-75%", sl75_btn.text)
 
+    def test_110_local_ai_coprocessor_client_and_auditor(self):
+        """Test v3.88.0 local AI coprocessor client, token alpha verdict, and code auditor fallbacks."""
+        from local_model_client import get_token_ai_verdict, generate_viral_alpha_tweet, audit_code_with_local_ai
+        from unittest.mock import patch
+
+        # 1. Test token alpha verdict fallback and structure
+        verdict = get_token_ai_verdict("BONK", 15.5, 25_000_000.0, 5_000_000.0, 10, "SAFE")
+        self.assertIsInstance(verdict, str)
+        self.assertTrue(len(verdict) > 10)
+
+        # 2. Test viral alpha tweet fallback with character constraints
+        tweet = generate_viral_alpha_tweet("BONK", 15.5, 25_000_000.0, 10, "SAFE", "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263")
+        self.assertIsInstance(tweet, str)
+        self.assertLessEqual(len(tweet), 260)
+        self.assertIn("BONK", tweet)
+
+        # 3. Test audit_code_with_local_ai with mock response
+        with patch("local_model_client.query_local_ai", return_value="Add zero-division check"):
+            res = audit_code_with_local_ai("def test(): pass")
+            self.assertEqual(res, "Add zero-division check")
+
 
 if __name__ == "__main__":
     unittest.main()

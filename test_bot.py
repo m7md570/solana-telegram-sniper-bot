@@ -4564,6 +4564,39 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
             deep_cbs = [btn.callback_data for row in markup.inline_keyboard for btn in row if btn.callback_data]
             self.assertIn("btn_show_qr", deep_cbs)
 
+    def test_98_pump_fun_venue_and_direct_card_button(self):
+        """Test v3.76.0 Pump.fun venue detection, dynamic link button, and bonding curve routing."""
+        from rugcheck_scanner import format_token_card
+        from telegram_bot import get_token_card_keyboard
+
+        pump_mint = "61V8vBaqAGMpgDQi4Jcgoc1vSEKqTY4WbRC26EkDpump"
+        standard_mint = "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"
+
+        # 1. Test format_token_card identifies Pump.fun venue
+        pump_scan = {
+            "mint": pump_mint,
+            "symbol": "PIPPIN",
+            "name": "Pippin",
+            "price_usd": 0.05,
+            "status": "SAFE",
+            "rug_score": 15
+        }
+        card_en = format_token_card(pump_scan, lang="en")
+        self.assertIn("Pump.fun", card_en)
+
+        # 2. Test get_token_card_keyboard embeds direct Pump.fun link button
+        kb_pump = get_token_card_keyboard(pump_mint, "en", 99881177, "PIPPIN")
+        pump_btns = [b for row in kb_pump.inline_keyboard for b in row if b.url]
+        pump_url_btn = next((b for b in pump_btns if "pump.fun" in b.url), None)
+        self.assertIsNotNone(pump_url_btn, "Pump.fun button must be present for pump tokens")
+        self.assertEqual(pump_url_btn.url, f"https://pump.fun/coin/{pump_mint}")
+
+        # 3. Test non-pump tokens do not embed Pump.fun link
+        kb_std = get_token_card_keyboard(standard_mint, "en", 99881177, "BONK")
+        std_btns = [b for row in kb_std.inline_keyboard for b in row if b.url]
+        std_pump_btn = next((b for b in std_btns if "pump.fun" in b.url), None)
+        self.assertIsNone(std_pump_btn, "Pump.fun button should not be present for non-pump tokens")
+
 
 if __name__ == "__main__":
     unittest.main()

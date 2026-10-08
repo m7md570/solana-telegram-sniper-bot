@@ -177,13 +177,17 @@ def format_token_card(scan: Dict[str, Any], lang: str = "en") -> str:
     name = html.escape(scan.get("name") or symbol or "Unknown Token")
     price = float(scan.get("price_usd") or 0.0)
     price_sol = float(scan.get("price_sol") or 0.0)
-    dex = scan.get("dex", "Raydium")
+    mint = scan.get("mint") or ""
+    dex = scan.get("dex")
+    if not dex:
+        dex = "Pump.fun" if mint.lower().endswith("pump") else "Raydium"
+    elif mint.lower().endswith("pump") and "pump" not in dex.lower():
+        dex = f"Pump.fun / {dex}"
     mcap = float(scan.get("mcap") or 0.0)
     liq = float(scan.get("liquidity_usd") or 0.0)
     change = float(scan.get("price_change_24h") or 0.0)
     change_1h = float(scan.get("price_change_1h") or 0.0)
     score = int(scan.get("rug_score") or 0)
-    mint = scan.get("mint") or ""
     status = scan.get("status", "SAFE")
 
     change_emoji = "📈" if change >= 0 else "📉"

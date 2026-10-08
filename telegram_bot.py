@@ -227,6 +227,13 @@ def get_token_card_keyboard(mint: str, user_lang: str, user_id: int = 0, symbol:
     x_share_link = f"https://twitter.com/intent/tweet?text={urllib.parse.quote(x_intent_text)}"
     refresh_quote_label = "🔄 Refresh Quote" if user_lang == "en" else "🔄 تحديث السعر والتدقيق"
 
+    links_row = [
+        InlineKeyboardButton(t("btn_dexscreener", user_lang), url=f"https://dexscreener.com/solana/{mint}"),
+        InlineKeyboardButton(t("btn_rugcheck", user_lang), url=f"https://rugcheck.xyz/tokens/{mint}")
+    ]
+    if mint.lower().endswith("pump"):
+        links_row.append(InlineKeyboardButton("💊 Pump.fun", url=f"https://pump.fun/coin/{mint}"))
+
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("🟢 0.05 SOL", callback_data=f"buy_{mint}_0.05"),
@@ -249,10 +256,7 @@ def get_token_card_keyboard(mint: str, user_lang: str, user_id: int = 0, symbol:
             InlineKeyboardButton(share_btn_label, url=tg_share_link),
             InlineKeyboardButton("📢 Share on X", url=x_share_link)
         ],
-        [
-            InlineKeyboardButton(t("btn_dexscreener", user_lang), url=f"https://dexscreener.com/solana/{mint}"),
-            InlineKeyboardButton(t("btn_rugcheck", user_lang), url=f"https://rugcheck.xyz/tokens/{mint}")
-        ],
+        links_row,
         [
             InlineKeyboardButton("💵 Price Radar", callback_data=f"price_{mint}"),
             InlineKeyboardButton("💱 " + ("Sim Quote" if user_lang == "en" else "محاكاة الصفقة"), callback_data=f"quote_{mint}"),

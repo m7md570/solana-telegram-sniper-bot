@@ -259,6 +259,7 @@ def get_token_card_keyboard(mint: str, user_lang: str, user_id: int = 0, symbol:
             InlineKeyboardButton(refresh_quote_label, callback_data=f"inspect_{mint}")
         ],
         [
+            InlineKeyboardButton("📲 " + ("Deposit" if user_lang == "en" else "إيداع"), callback_data="btn_show_qr"),
             InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
         ]
     ])
@@ -498,6 +499,19 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if target_token_mint:
         scan = scan_token_security(target_token_mint)
         card_text = format_token_card(scan, lang=user_lang)
+        if is_new:
+            welcome_header = (
+                f"👋 <b>Welcome to Popcorn Sniper!</b>\n"
+                f"Your dedicated non-custodial wallet has been created:\n"
+                f"<code>{pubkey}</code>\n"
+                f"━━━━━━━━━━━━━━━━━━━\n\n"
+            ) if user_lang == "en" else (
+                f"👋 <b>مرحباً بك في بوت Popcorn للقنص!</b>\n"
+                f"تم إنشاء محفظتك المخصصة غير الاحتجازية بنجاح:\n"
+                f"<code>{pubkey}</code>\n"
+                f"━━━━━━━━━━━━━━━━━━━\n\n"
+            )
+            card_text = welcome_header + card_text
         kb = get_token_card_keyboard(target_token_mint, user_lang, user_id=user_id, symbol=scan.get("symbol", "TOKEN"))
         await update.message.reply_text(
             card_text,

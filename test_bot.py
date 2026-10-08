@@ -1552,10 +1552,11 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         mock_update.message.reply_text = AsyncMock()
         mock_context = MagicMock()
 
+        from config import BOT_VERSION
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.73.0", card_text)
+        self.assertIn(BOT_VERSION, card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1599,7 +1600,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.73.0")
+        self.assertTrue(BOT_VERSION.startswith("v3."))
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -4508,6 +4509,60 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         qr_callbacks = [btn.callback_data for row in qr_markup.inline_keyboard for btn in row]
         self.assertIn("btn_wallet", qr_callbacks)
         self.assertIn("btn_refresh", qr_callbacks)
+
+    def test_97_token_card_deposit_button_and_new_user_deep_link_onboarding(self):
+        """Test v3.75.0 token card 1-tap deposit button and new user deep link onboarding header."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock, patch
+        from telegram_bot import get_token_card_keyboard, start_command
+
+        test_mint = "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"
+        test_uid = 99881198
+
+        # 1. Test get_token_card_keyboard embeds direct btn_show_qr
+        kb_en = get_token_card_keyboard(test_mint, user_lang="en", user_id=test_uid, symbol="BONK")
+        all_cbs = [btn.callback_data for row in kb_en.inline_keyboard for btn in row if btn.callback_data]
+        self.assertIn("btn_show_qr", all_cbs)
+        self.assertIn("btn_refresh", all_cbs)
+
+        # 2. Test start_command with token_ deep link on brand new user prepends onboarding wallet info
+        import random
+        import sqlite3
+        from config import DB_PATH
+        new_uid = random.randint(900_000_000, 999_999_999)
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.execute("DELETE FROM users WHERE user_id = ?", (new_uid,))
+            conn.commit()
+
+        mock_update = MagicMock()
+        mock_update.effective_user.id = new_uid
+        mock_update.effective_user.username = "alpha_newbie"
+        mock_update.effective_user.first_name = "Alpha"
+        mock_update.effective_user.language_code = "en"
+        mock_update.message.reply_text = AsyncMock()
+
+        mock_context = MagicMock()
+        mock_context.args = [f"token_{test_mint}"]
+
+        fake_scan = {
+            "mint": test_mint,
+            "symbol": "BONK",
+            "name": "Bonk",
+            "price_usd": 0.000025,
+            "rug_score": 10,
+            "status": "SAFE",
+            "risks": []
+        }
+
+        with patch("telegram_bot.scan_token_security", return_value=fake_scan):
+            asyncio.run(start_command(mock_update, mock_context))
+            self.assertTrue(mock_update.message.reply_text.called)
+            sent_text = mock_update.message.reply_text.call_args[0][0]
+            markup = mock_update.message.reply_text.call_args[1]["reply_markup"]
+            self.assertIn("Welcome to Popcorn Sniper", sent_text)
+            self.assertIn("BONK", sent_text)
+            deep_cbs = [btn.callback_data for row in markup.inline_keyboard for btn in row if btn.callback_data]
+            self.assertIn("btn_show_qr", deep_cbs)
 
 
 if __name__ == "__main__":

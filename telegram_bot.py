@@ -229,11 +229,14 @@ def get_token_card_keyboard(mint: str, user_lang: str, user_id: int = 0, symbol:
 
     links_row = [
         InlineKeyboardButton(t("btn_dexscreener", user_lang), url=f"https://dexscreener.com/solana/{mint}"),
-        InlineKeyboardButton(t("btn_rugcheck", user_lang), url=f"https://rugcheck.xyz/tokens/{mint}"),
-        InlineKeyboardButton("🪐 Jupiter", url=f"https://jup.ag/swap/SOL-{mint}")
+        InlineKeyboardButton("🪐 Jupiter", url=f"https://jup.ag/swap/SOL-{mint}"),
+        InlineKeyboardButton("⚡ GMGN", url=f"https://gmgn.ai/sol/token/{mint}")
+    ]
+    audit_row = [
+        InlineKeyboardButton(t("btn_rugcheck", user_lang), url=f"https://rugcheck.xyz/tokens/{mint}")
     ]
     if mint.lower().endswith("pump"):
-        links_row.append(InlineKeyboardButton("💊 Pump.fun", url=f"https://pump.fun/coin/{mint}"))
+        audit_row.append(InlineKeyboardButton("💊 Pump.fun", url=f"https://pump.fun/coin/{mint}"))
 
     return InlineKeyboardMarkup([
         [
@@ -258,6 +261,7 @@ def get_token_card_keyboard(mint: str, user_lang: str, user_id: int = 0, symbol:
             InlineKeyboardButton("📢 Share on X", url=x_share_link)
         ],
         links_row,
+        audit_row,
         [
             InlineKeyboardButton("💵 Price Radar", callback_data=f"price_{mint}"),
             InlineKeyboardButton("💱 " + ("Sim Quote" if user_lang == "en" else "محاكاة الصفقة"), callback_data=f"quote_{mint}"),
@@ -959,6 +963,8 @@ async def render_price_card(target, user_id: int, user_lang: str, mint: str, is_
         ],
         [
             InlineKeyboardButton("📊 DexScreener", url=f"https://dexscreener.com/solana/{mint}"),
+            InlineKeyboardButton("🪐 Jupiter", url=f"https://jup.ag/swap/SOL-{mint}"),
+            InlineKeyboardButton("⚡ GMGN", url=f"https://gmgn.ai/sol/token/{mint}"),
             InlineKeyboardButton("🛡️ RugCheck", url=f"https://rugcheck.xyz/tokens/{mint}")
         ],
         [

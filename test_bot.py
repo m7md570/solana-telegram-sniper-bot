@@ -4858,6 +4858,19 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertIn(goat_mint, FALLBACK_TRENDING_MINTS)
         self.assertEqual(goat_mint[-4:], "pump")
 
+    def test_107_gmgn_terminal_direct_button_integration(self):
+        """Test v3.85.0 direct GMGN smart money & analytics terminal button integration on token cards."""
+        from telegram_bot import get_token_card_keyboard
+
+        test_mint = "CzLSujWBLFsSjncfkh59rUFqvafWcY5tzedWJSuypump"
+        kb = get_token_card_keyboard(test_mint, user_lang="en", user_id=99881177, symbol="GOAT")
+
+        url_btns = [b for row in kb.inline_keyboard for b in row if b.url]
+        gmgn_btn = next((b for b in url_btns if "gmgn.ai" in b.url), None)
+        self.assertIsNotNone(gmgn_btn, "GMGN terminal button must be present on token card")
+        self.assertEqual(gmgn_btn.url, f"https://gmgn.ai/sol/token/{test_mint}")
+        self.assertIn("GMGN", gmgn_btn.text)
+
 
 if __name__ == "__main__":
     unittest.main()

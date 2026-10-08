@@ -40,6 +40,8 @@ from jupiter_engine import (
     record_trade_db
 )
 
+MOCK_TEST_BOT_TOKEN = "1111111111:AAFakeBotTokenForUnitTestingPurposes123"
+
 # Completely isolate test execution database from live production database
 TEST_DB_PATH = os.path.join(tempfile.gettempdir(), "test_sniper_bot.sqlite")
 if os.path.exists(TEST_DB_PATH):
@@ -1521,7 +1523,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertEqual(extract_token_mint(jup_url), test_mint)
 
         # 2. Test CommandHandler registration for aliases
-        app = build_application("8935718262:AAGZc-RLQplBfx6cWzTtk2zyorXo5o74NqE")
+        app = build_application(MOCK_TEST_BOT_TOKEN)
         command_handlers = [h for h in app.handlers[0] if isinstance(h, CommandHandler)]
         registered_commands = set()
         for h in command_handlers:
@@ -1553,7 +1555,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.71.0", card_text)
+        self.assertIn("v3.72.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1564,7 +1566,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertIsNotNone(gh_btn, "GitHub releases button must be present in /version card")
 
         # 2. Test command registration
-        app = build_application("8935718262:AAGZc-RLQplBfx6cWzTtk2zyorXo5o74NqE")
+        app = build_application(MOCK_TEST_BOT_TOKEN)
         command_handlers = [h for h in app.handlers[0] if isinstance(h, CommandHandler)]
         registered_commands = set()
         for h in command_handlers:
@@ -1597,7 +1599,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.71.0")
+        self.assertEqual(BOT_VERSION, "v3.72.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -3218,7 +3220,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertTrue(mock_query.answer.called)
 
         # 6. Test CommandHandler registration for presets, preset, and quickbuy
-        app = build_application("8935718262:AAGZc-RLQplBfx6cWzTtk2zyorXo5o74NqE")
+        app = build_application(MOCK_TEST_BOT_TOKEN)
         command_handlers = [h for h in app.handlers[0] if isinstance(h, CommandHandler)]
         registered_commands = set()
         for h in command_handlers:
@@ -3406,7 +3408,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertEqual(len(get_user_watchlist(test_uid)), 0)
 
         # 6. Test CommandHandler registration for clearwatchlist and purge
-        app = build_application("8935718262:AAGZc-RLQplBfx6cWzTtk2zyorXo5o74NqE")
+        app = build_application(MOCK_TEST_BOT_TOKEN)
         command_handlers = [h for h in app.handlers[0] if isinstance(h, CommandHandler)]
         registered_commands = set()
         for h in command_handlers:
@@ -3559,7 +3561,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertTrue(mock_query.answer.called)
 
         # 5. Test CommandHandler registration for /p, /c, and /scan
-        app = build_application("8935718262:AAGZc-RLQplBfx6cWzTtk2zyorXo5o74NqE")
+        app = build_application(MOCK_TEST_BOT_TOKEN)
         command_handlers = [h for h in app.handlers[0] if isinstance(h, CommandHandler)]
         registered_commands = set()
         for h in command_handlers:
@@ -3661,7 +3663,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
             mock_render_q2.assert_called_once_with(mock_cb_query, test_uid, "en", test_mint, 0.25, is_edit=True)
 
         # 5. Test CommandHandler registration for quote, sim, simulate
-        app = build_application("8935718262:AAGZc-RLQplBfx6cWzTtk2zyorXo5o74NqE")
+        app = build_application(MOCK_TEST_BOT_TOKEN)
         command_handlers = [h for h in app.handlers[0] if isinstance(h, CommandHandler)]
         registered_commands = set()
         for h in command_handlers:
@@ -4130,7 +4132,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
             self.assertEqual(mock_send_hist.call_args[0][1], test_uid)
 
         # 4. Verify /csv and /tradescsv are registered commands in build_application
-        app = build_application("8935718262:AAGZc-RLQplBfx6cWzTtk2zyorXo5o74NqE")
+        app = build_application(MOCK_TEST_BOT_TOKEN)
         command_handlers = [h for h in app.handlers[0] if isinstance(h, CommandHandler)]
         registered_commands = set()
         for h in command_handlers:
@@ -4440,7 +4442,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
             self.assertGreaterEqual(ref_stats["total_referrals"], 1)
 
         # 3. Test /snipe and /token command handler registration
-        app = build_application("8935718262:AAGZc-RLQplBfx6cWzTtk2zyorXo5o74NqE")
+        app = build_application(MOCK_TEST_BOT_TOKEN)
         command_handlers = [h for h in app.handlers[0] if isinstance(h, CommandHandler)]
         registered_commands = set()
         for h in command_handlers:

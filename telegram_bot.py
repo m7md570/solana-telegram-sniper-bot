@@ -4093,4 +4093,4 @@ if __name__ == "__main__":
 
     print(f"🚀 Launching Popcorn Solana Sniper & Trading Bot {BOT_VERSION} (Bilingual Master)...")
     app = build_application(token)
-    app.run_polling()
+    app.run_polling(drop_pending_updates=True)

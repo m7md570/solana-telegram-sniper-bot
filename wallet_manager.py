@@ -941,12 +941,21 @@ def update_user_alert_threshold(user_id: int, threshold_pct: float) -> bool:
         conn.close()
 
 
+_DEPOSIT_QR_CACHE: dict = {}
+
+
 def generate_deposit_qr_buffer(pubkey: str):
     """
     Generates an in-memory PNG QR code buffer for the specified Solana public key.
     Uses standard solana:<pubkey> URI scheme compatible with Phantom, Solflare, OKX, and Binance.
+    Features an in-memory byte cache for instant sub-millisecond response times.
     """
     import io
+    if pubkey in _DEPOSIT_QR_CACHE:
+        buf = io.BytesIO(_DEPOSIT_QR_CACHE[pubkey])
+        buf.seek(0)
+        return buf
+
     import qrcode
     qr = qrcode.QRCode(
         version=1,
@@ -959,6 +968,10 @@ def generate_deposit_qr_buffer(pubkey: str):
     img = qr.make_image(fill_color="black", back_color="white")
     buf = io.BytesIO()
     img.save(buf, format="PNG")
+    png_bytes = buf.getvalue()
+    if len(_DEPOSIT_QR_CACHE) >= 1000:
+        _DEPOSIT_QR_CACHE.clear()
+    _DEPOSIT_QR_CACHE[pubkey] = png_bytes
     buf.seek(0)
     return buf
 

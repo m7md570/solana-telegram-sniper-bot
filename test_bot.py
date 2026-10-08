@@ -4450,6 +4450,65 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertIn("snipe", registered_commands)
         self.assertIn("token", registered_commands)
 
+    def test_96_deposit_qr_buffer_cache_and_insufficient_balance_keyboard(self):
+        """Test v3.74.0 deposit QR buffer in-memory caching and high-converting deposit funnel."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock, patch
+        from wallet_manager import generate_deposit_qr_buffer, _DEPOSIT_QR_CACHE, get_or_create_wallet
+        from telegram_bot import callback_router
+
+        test_pubkey = "7kz1mcQcaZhYzFUHBFHH6s5tGrDHc7gNhN5WAUyXyq5r"
+        _DEPOSIT_QR_CACHE.clear()
+
+        # 1. Test QR buffer generation and caching
+        buf1 = generate_deposit_qr_buffer(test_pubkey)
+        bytes1 = buf1.getvalue()
+        self.assertTrue(bytes1.startswith(b"\x89PNG\r\n\x1a\n"))
+        self.assertIn(test_pubkey, _DEPOSIT_QR_CACHE)
+
+        buf2 = generate_deposit_qr_buffer(test_pubkey)
+        bytes2 = buf2.getvalue()
+        self.assertEqual(bytes1, bytes2)
+
+        # 2. Test insufficient balance deposit routing keyboard
+        test_uid = 99881197
+        get_or_create_wallet(test_uid, "low_sol_trader")
+        test_mint = "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"
+
+        mock_update = MagicMock()
+        mock_query = MagicMock()
+        mock_query.from_user.id = test_uid
+        mock_query.from_user.username = "low_sol_trader"
+        mock_query.data = f"buy_{test_mint}_0.5"
+        mock_query.answer = AsyncMock()
+        mock_query.edit_message_text = AsyncMock()
+        mock_update.callback_query = mock_query
+
+        mock_context = MagicMock()
+        mock_context.bot.username = "PopcornSniperBot"
+
+        with patch("telegram_bot.get_sol_balance", return_value=0.0):
+            asyncio.run(callback_router(mock_update, mock_context))
+            self.assertTrue(mock_query.edit_message_text.called)
+            sent_text = mock_query.edit_message_text.call_args[0][0]
+            markup = mock_query.edit_message_text.call_args[1]["reply_markup"]
+            self.assertIn("Insufficient SOL balance", sent_text)
+            
+            button_callbacks = [btn.callback_data for row in markup.inline_keyboard for btn in row]
+            self.assertIn("btn_show_qr", button_callbacks)
+            self.assertIn(f"buy_{test_mint}_0.5", button_callbacks)
+            self.assertIn("btn_refresh", button_callbacks)
+
+        # 3. Test btn_show_qr navigation keyboard includes btn_refresh
+        mock_query.data = "btn_show_qr"
+        mock_query.message.reply_photo = AsyncMock()
+        asyncio.run(callback_router(mock_update, mock_context))
+        self.assertTrue(mock_query.message.reply_photo.called)
+        qr_markup = mock_query.message.reply_photo.call_args[1]["reply_markup"]
+        qr_callbacks = [btn.callback_data for row in qr_markup.inline_keyboard for btn in row]
+        self.assertIn("btn_wallet", qr_callbacks)
+        self.assertIn("btn_refresh", qr_callbacks)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -2385,7 +2385,10 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"{t('qr_card_title', user_lang)}\n"
             f"{t('qr_card_body', user_lang, pubkey=pubkey, balance=bal)}"
         )
-        kb = [[InlineKeyboardButton(t("btn_wallet", user_lang), callback_data="btn_wallet")]]
+        kb = [
+            [InlineKeyboardButton(t("btn_wallet", user_lang), callback_data="btn_wallet")],
+            [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
+        ]
         await query.message.reply_photo(photo=qr_buf, caption=caption, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
 
     elif data == "btn_gas_fees":
@@ -2700,7 +2703,18 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"الرصيد المتاح: <code>{bal:.4f} SOL</code>\n\n"
                 f"يرجى إيداع SOL في محفظتك:\n<code>{pubkey}</code>"
             )
-            await safe_edit_text(query, err_text, reply_markup=get_main_menu_keyboard(user_id, user_lang))
+            deposit_btn_text = "📲 Deposit SOL (QR Code)" if user_lang == "en" else "📲 إيداع فوري (رمز QR)"
+            retry_btn_text = f"🔄 Retry Buy ({amount_sol} SOL)" if user_lang == "en" else f"🔄 إعادة محاولة الشراء ({amount_sol} SOL)"
+            inspect_btn_text = "🔍 Back to Token" if user_lang == "en" else "🔍 العودة لبيانات العملة"
+            kb = [
+                [InlineKeyboardButton(deposit_btn_text, callback_data="btn_show_qr")],
+                [InlineKeyboardButton(retry_btn_text, callback_data=f"buy_{mint}_{amount_sol}")],
+                [
+                    InlineKeyboardButton(inspect_btn_text, callback_data=f"inspect_{mint}"),
+                    InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
+                ]
+            ]
+            await safe_edit_text(query, err_text, reply_markup=InlineKeyboardMarkup(kb))
             return
 
         prep_text = "⚡ <b>Routing best swap via Jupiter V6...</b>" if user_lang == "en" else "⚡ <b>جاري تحضير مسار الشراء عبر Jupiter...</b>"

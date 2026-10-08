@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.62.0", card_text)
+        self.assertIn("v3.63.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.62.0")
+        self.assertEqual(BOT_VERSION, "v3.63.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -3867,6 +3867,59 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
             all_btns = [b for row in kb.inline_keyboard for b in row]
             quote_btn = next((b for b in all_btns if b.callback_data == f"quote_{test_mint}"), None)
             self.assertIsNotNone(quote_btn, "Watchlist item must contain 1-click Quote shortcut")
+
+    def test_87_full_stack_latency_benchmark_radar(self):
+        """Test v3.63.0 full-stack latency radar measuring RPC, Jupiter V6, RugCheck, and DexScreener."""
+        import asyncio
+        from unittest.mock import patch, MagicMock, AsyncMock
+        from telegram_bot import benchmark_network_latency, render_network_ping
+
+        # 1. Mock network responses for all 4 layers
+        mock_rpc_resp = MagicMock(status_code=200)
+        mock_jup_resp = MagicMock(status_code=200)
+        mock_rug_resp = MagicMock(status_code=200)
+        mock_dex_resp = MagicMock(status_code=200)
+
+        def mock_get(url, *args, **kwargs):
+            if "jupiter" in url:
+                return mock_jup_resp
+            elif "rugcheck" in url:
+                return mock_rug_resp
+            elif "dexscreener" in url:
+                return mock_dex_resp
+            return MagicMock(status_code=200)
+
+        with patch("jupiter_engine._SESSION.post", return_value=mock_rpc_resp), \
+             patch("jupiter_engine._SESSION.get", side_effect=mock_get):
+            bench = benchmark_network_latency()
+            self.assertIn("rpc_ms", bench)
+            self.assertIn("jup_ms", bench)
+            self.assertIn("rug_ms", bench)
+            self.assertIn("dex_ms", bench)
+            self.assertTrue(bench["rpc_ok"])
+            self.assertTrue(bench["jup_ok"])
+            self.assertTrue(bench["rug_ok"])
+            self.assertTrue(bench["dex_ok"])
+
+            # 2. Render English ping card
+            mock_target = AsyncMock()
+            asyncio.run(render_network_ping(mock_target, 99881187, "en", is_edit=False))
+            self.assertTrue(mock_target.reply_text.called)
+            msg_en = mock_target.reply_text.call_args[0][0]
+            self.assertIn("Primary RPC", msg_en)
+            self.assertIn("Jupiter V6 Routing", msg_en)
+            self.assertIn("RugCheck Auditor", msg_en)
+            self.assertIn("DexScreener Feed", msg_en)
+
+            # 3. Render Arabic ping card
+            mock_target.reset_mock()
+            asyncio.run(render_network_ping(mock_target, 99881187, "ar", is_edit=False))
+            self.assertTrue(mock_target.reply_text.called)
+            msg_ar = mock_target.reply_text.call_args[0][0]
+            self.assertIn("خادم سولانا الرئيسي", msg_ar)
+            self.assertIn("مسارات توجيه Jupiter V6", msg_ar)
+            self.assertIn("فاحص أمان RugCheck", msg_ar)
+            self.assertIn("بث أسعار DexScreener", msg_ar)
 
 
 if __name__ == "__main__":

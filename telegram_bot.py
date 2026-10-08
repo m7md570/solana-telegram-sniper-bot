@@ -1323,9 +1323,9 @@ async def render_positions(target, user_id: int, user_lang: str, is_edit: bool =
 
 
 def benchmark_network_latency() -> Dict[str, Any]:
-    """Measures live round-trip latency to Solana Primary RPC and Jupiter V6 API."""
+    """Measures live round-trip latency to Solana Primary RPC, Jupiter V6, RugCheck, and DexScreener APIs."""
     import time
-    from config import PRIMARY_RPC, JUPITER_QUOTE_API, WSOL_MINT, USDC_MINT
+    from config import PRIMARY_RPC, JUPITER_QUOTE_API, WSOL_MINT, USDC_MINT, RUGCHECK_API, DEXSCREENER_API
     from jupiter_engine import _SESSION
 
     rpc_ms = 999.0
@@ -1349,11 +1349,35 @@ def benchmark_network_latency() -> Dict[str, Any]:
     except Exception:
         jup_ok = False
 
+    rug_ms = 999.0
+    rug_ok = False
+    try:
+        t2 = time.time()
+        r3 = _SESSION.get(f"{RUGCHECK_API}/{WSOL_MINT}/report", timeout=5)
+        rug_ms = (time.time() - t2) * 1000.0
+        rug_ok = (r3.status_code == 200)
+    except Exception:
+        rug_ok = False
+
+    dex_ms = 999.0
+    dex_ok = False
+    try:
+        t3 = time.time()
+        r4 = _SESSION.get(f"{DEXSCREENER_API}/{WSOL_MINT}", timeout=5)
+        dex_ms = (time.time() - t3) * 1000.0
+        dex_ok = (r4.status_code == 200)
+    except Exception:
+        dex_ok = False
+
     return {
         "rpc_ms": rpc_ms,
         "rpc_ok": rpc_ok,
         "jup_ms": jup_ms,
-        "jup_ok": jup_ok
+        "jup_ok": jup_ok,
+        "rug_ms": rug_ms,
+        "rug_ok": rug_ok,
+        "dex_ms": dex_ms,
+        "dex_ok": dex_ok
     }
 
 
@@ -1364,16 +1388,26 @@ async def render_network_ping(target, user_id: int, user_lang: str, is_edit: boo
 
     rpc_ms = bench["rpc_ms"]
     jup_ms = bench["jup_ms"]
+    rug_ms = bench.get("rug_ms", 999.0)
+    dex_ms = bench.get("dex_ms", 999.0)
 
     if user_lang == "ar":
         rpc_status = "🟢 سرعة فائقة" if rpc_ms < 1000 else "🟡 معتدل"
         jup_status = "🟢 استجابة فورية" if jup_ms < 2000 else "🟡 معتدل"
+        rug_status = "🟢 استجابة فورية" if rug_ms < 2000 else "🟡 معتدل"
+        dex_status = "🟢 استجابة فورية" if dex_ms < 2000 else "🟡 معتدل"
     else:
         rpc_status = "🟢 Ultra-Fast" if rpc_ms < 1000 else "🟡 Normal"
         jup_status = "🟢 Sub-Second" if jup_ms < 2000 else "🟡 Normal"
+        rug_status = "🟢 Sub-Second" if rug_ms < 2000 else "🟡 Normal"
+        dex_status = "🟢 Sub-Second" if dex_ms < 2000 else "🟡 Normal"
 
     title = t("ping_title", user_lang)
-    body = t("ping_body", user_lang, rpc_ms=rpc_ms, rpc_status=rpc_status, jup_ms=jup_ms, jup_status=jup_status)
+    body = t("ping_body", user_lang,
+             rpc_ms=rpc_ms, rpc_status=rpc_status,
+             jup_ms=jup_ms, jup_status=jup_status,
+             rug_ms=rug_ms, rug_status=rug_status,
+             dex_ms=dex_ms, dex_status=dex_status)
     retest_label = "🔄 فحص السرعة مجدداً" if user_lang == "ar" else "🔄 Re-test Latency"
 
     kb = [

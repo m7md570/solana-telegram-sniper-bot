@@ -787,7 +787,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             "ℹ️ <b>Send any Solana Contract Address (CA), token ticker (e.g. <code>BONK</code>), or DexScreener / Pump.fun link to start sniping.</b>\n\n"
             "Example: <code>DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263</code> (BONK)"
         ) if user_lang == "en" else (
-            "ℹ️ <b>أرسل عنوان العقد الذكي (CA) أو رمز العملة (مثل <code>BONK</code>) أو رابطها من DexScreener لبدء القنص.</b>\n\n"
+            "ℹ️ <b>أرسل عنوان العقد الذكي (CA) أو رمز العملة (مثل <code>BONK</code>) أو رابطها من DexScreener أو Pump.fun لبدء القنص.</b>\n\n"
             "مثال: <code>DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263</code> (BONK)"
         )
         await update.message.reply_text(hint_text, parse_mode="HTML")

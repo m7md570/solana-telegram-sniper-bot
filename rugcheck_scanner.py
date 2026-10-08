@@ -180,9 +180,11 @@ def format_token_card(scan: Dict[str, Any], lang: str = "en") -> str:
     mint = scan.get("mint") or ""
     dex = scan.get("dex")
     if not dex:
-        dex = "Pump.fun" if mint.lower().endswith("pump") else "Raydium"
+        dex = "PumpSwap (Pump.fun)" if mint.lower().endswith("pump") else "Raydium"
     elif mint.lower().endswith("pump") and "pump" not in dex.lower():
-        dex = f"Pump.fun / {dex}"
+        dex = f"PumpSwap / {dex}"
+    elif dex.lower() in ("pumpswap", "pumpfun"):
+        dex = "PumpSwap (Pump.fun)"
     mcap = float(scan.get("mcap") or 0.0)
     liq = float(scan.get("liquidity_usd") or 0.0)
     change = float(scan.get("price_change_24h") or 0.0)

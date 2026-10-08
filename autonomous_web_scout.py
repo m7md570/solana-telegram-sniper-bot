@@ -89,6 +89,19 @@ def scout_github_smart_contracts(max_repos: int = 2) -> List[Dict[str, Any]]:
             logger.warning(f"GitHub search returned status {r.status_code}")
             return results
 
+        # Rate-Aware Throttling: Inspect GitHub rate limits
+        rem = r.headers.get("X-RateLimit-Remaining")
+        if rem is not None:
+            try:
+                rem_int = int(rem)
+                if rem_int <= 3:
+                    reset_ts = int(r.headers.get("X-RateLimit-Reset", time.time() + 60))
+                    wait_s = max(5, min(reset_ts - int(time.time()), 60))
+                    logger.warning(f"GitHub API remaining budget low ({rem_int}). Throttling for {wait_s}s...")
+                    time.sleep(wait_s)
+            except Exception:
+                pass
+
         items = r.json().get("items", [])
         candidates = [item for item in items if item.get("full_name") not in scanned_history][:max_repos]
 
@@ -114,8 +127,10 @@ def scout_github_smart_contracts(max_repos: int = 2) -> List[Dict[str, Any]]:
                 raw_url = f"https://raw.githubusercontent.com/{repo_name}/{default_branch}/{rf}"
                 code_res = requests.get(raw_url, headers=HEADERS, timeout=10)
                 if code_res.status_code == 200 and len(code_res.text) > 100:
+                    # Bounded input to strictly protect 12GB RTX 4070 VRAM KV-cache
+                    bounded_code = code_res.text[:15000]
                     audit_res = audit_smart_contract_code(
-                        code=code_res.text,
+                        code=bounded_code,
                         contract_name=f"{repo_name}/{rf}",
                         deep_llm=True
                     )

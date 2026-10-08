@@ -5043,9 +5043,37 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
             edited_ar = mock_cmd_status.edit_text.call_args[0][0]
             self.assertIn("تقرير فحص أمان العقود الذكية", edited_ar)
 
+    def test_113_rate_limit_throttle_and_pippin_trending(self):
+        """Test v3.92.0 Pippin trending integration and rate-aware WebScout throttling."""
+        from trending_engine import FALLBACK_TRENDING_MINTS
+        from autonomous_web_scout import scout_solana_ecosystem_digest, scout_github_smart_contracts
+        from unittest.mock import patch, MagicMock
+
+        # 1. Test Pippin is registered in fallback trending mints
+        pippin_mint = "Dfh5DzRgSvvCFDoYc2ciTkMrbDfRKybA4SoFbPmApump"
+        self.assertIn(pippin_mint, FALLBACK_TRENDING_MINTS)
+
+        # 2. Test ecosystem digest generation
+        digest = scout_solana_ecosystem_digest()
+        self.assertIn("headline", digest)
+        self.assertIn("market_sentiment", digest)
+        self.assertTrue(len(digest.get("key_watchpoints", [])) > 0)
+
+        # 3. Test scout_github_smart_contracts handles low rate limits defensively
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.headers = {"X-RateLimit-Remaining": "2", "X-RateLimit-Reset": "100"}
+        mock_resp.json.return_value = {"items": []}
+
+        with patch("requests.get", return_value=mock_resp), \
+             patch("time.sleep") as mock_sleep:
+            scout_github_smart_contracts(max_repos=1)
+            self.assertTrue(mock_sleep.called, "Must throttle and sleep when remaining rate limit <= 3")
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
 
 

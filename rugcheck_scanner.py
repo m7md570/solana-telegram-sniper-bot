@@ -56,18 +56,18 @@ def scan_token_security(mint: str) -> Dict[str, Any]:
                 pairs = data.get("pairs") or []
                 if pairs:
                     # Sort pairs by USD liquidity to reliably audit the primary liquidity pool
-                    pairs.sort(key=lambda x: float(x.get("liquidity", {}).get("usd") or 0.0), reverse=True)
+                    pairs.sort(key=lambda x: float((x.get("liquidity") or {}).get("usd") or 0.0), reverse=True)
                     p = pairs[0]
-                    result["symbol"] = p.get("baseToken", {}).get("symbol", "UNKNOWN")
-                    result["name"] = p.get("baseToken", {}).get("name", "Unknown Token")
+                    result["symbol"] = (p.get("baseToken") or {}).get("symbol", "UNKNOWN")
+                    result["name"] = (p.get("baseToken") or {}).get("name", "Unknown Token")
                     result["price_usd"] = float(p.get("priceUsd") or 0.0)
                     result["price_sol"] = float(p.get("priceNative") or 0.0)
                     result["dex"] = str(p.get("dexId") or "raydium").capitalize()
                     result["mcap"] = float(p.get("fdv") or p.get("marketCap") or 0.0)
-                    result["liquidity_usd"] = float(p.get("liquidity", {}).get("usd") or 0.0)
-                    result["volume_24h"] = float(p.get("volume", {}).get("h24") or 0.0)
-                    result["price_change_24h"] = float(p.get("priceChange", {}).get("h24") or 0.0)
-                    result["price_change_1h"] = float(p.get("priceChange", {}).get("h1") or 0.0)
+                    result["liquidity_usd"] = float((p.get("liquidity") or {}).get("usd") or 0.0)
+                    result["volume_24h"] = float((p.get("volume") or {}).get("h24") or 0.0)
+                    result["price_change_24h"] = float((p.get("priceChange") or {}).get("h24") or 0.0)
+                    result["price_change_1h"] = float((p.get("priceChange") or {}).get("h1") or 0.0)
                     result["is_valid"] = True
                     break
         except Exception as e:
@@ -288,16 +288,16 @@ def search_solana_token(query: str) -> Optional[Dict[str, Any]]:
     if not clean_query:
         return None
     try:
-        url = f"https://api.dexscreener.com/latest/dex/search?q={clean_query}"
-        resp = _SESSION.get(url, timeout=6)
+        url = "https://api.dexscreener.com/latest/dex/search"
+        resp = _SESSION.get(url, params={"q": clean_query}, timeout=6)
         if resp.status_code == 200:
             data = resp.json()
             raw_pairs = data.get("pairs") or []
             pairs = [p for p in raw_pairs if isinstance(p, dict) and p.get("chainId") == "solana"]
             if pairs:
-                pairs.sort(key=lambda x: float(x.get("liquidity", {}).get("usd", 0) or 0), reverse=True)
+                pairs.sort(key=lambda x: float((x.get("liquidity") or {}).get("usd", 0) or 0), reverse=True)
                 top = pairs[0]
-                base = top.get("baseToken", {})
+                base = top.get("baseToken") or {}
                 mint = base.get("address")
                 if mint:
                     return {
@@ -305,8 +305,8 @@ def search_solana_token(query: str) -> Optional[Dict[str, Any]]:
                         "symbol": base.get("symbol", clean_query.upper()),
                         "name": base.get("name", clean_query),
                         "price_usd": float(top.get("priceUsd", 0) or 0),
-                        "liquidity_usd": float(top.get("liquidity", {}).get("usd", 0) or 0),
-                        "volume_24h": float(top.get("volume", {}).get("h24", 0) or 0),
+                        "liquidity_usd": float((top.get("liquidity") or {}).get("usd", 0) or 0),
+                        "volume_24h": float((top.get("volume") or {}).get("h24", 0) or 0),
                         "url": top.get("url", "")
                     }
     except Exception:

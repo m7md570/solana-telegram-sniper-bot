@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.68.0", card_text)
+        self.assertIn("v3.69.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.68.0")
+        self.assertEqual(BOT_VERSION, "v3.69.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -4213,6 +4213,79 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
             asyncio.run(untrack_command(u_update, u_ctx))
             mock_u_search.assert_called_with("doge 2.0")
             mock_u_rem.assert_called_with(test_uid, dummy_match["mint"])
+
+    def test_93_dexscreener_null_safety_and_chat_multiword_search(self):
+        """Test v3.69.0 DexScreener null-field safety and handle_text_message multi-word token query routing."""
+        import asyncio
+        from unittest.mock import patch, MagicMock, AsyncMock
+        from rugcheck_scanner import search_solana_token, scan_token_security
+        from telegram_bot import handle_text_message
+
+        test_uid = 99881193
+
+        # 1. Test search_solana_token resilience against null fields
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "pairs": [
+                {
+                    "chainId": "solana",
+                    "baseToken": {"address": "So11111111111111111111111111111111111111112", "symbol": "TEST", "name": "Test Token"},
+                    "liquidity": None,  # Often None on newly launched pools
+                    "volume": None,     # Often None on low-volume pools
+                    "priceUsd": "0.001"
+                }
+            ]
+        }
+        with patch("rugcheck_scanner._SESSION.get", return_value=mock_resp) as mock_get:
+            result = search_solana_token("test token")
+            self.assertIsNotNone(result)
+            self.assertEqual(result["mint"], "So11111111111111111111111111111111111111112")
+            self.assertEqual(result["liquidity_usd"], 0.0)
+            self.assertEqual(result["volume_24h"], 0.0)
+            self.assertEqual(mock_get.call_args[1]["params"], {"q": "test token"})
+
+        # 2. Test scan_token_security resilience against null liquidity in DexScreener
+        mock_dex_resp = MagicMock()
+        mock_dex_resp.status_code = 200
+        mock_dex_resp.json.return_value = {
+            "pairs": [
+                {
+                    "chainId": "solana",
+                    "baseToken": {"symbol": "TEST", "name": "Test Token"},
+                    "liquidity": None,
+                    "volume": None,
+                    "priceChange": None
+                }
+            ]
+        }
+        mock_rug_resp = MagicMock()
+        mock_rug_resp.status_code = 200
+        mock_rug_resp.json.return_value = {"score": 50, "risks": []}
+
+        with patch("rugcheck_scanner._SESSION.get", side_effect=[mock_dex_resp, mock_rug_resp]):
+            scan = scan_token_security("So11111111111111111111111111111111111111112")
+            self.assertEqual(scan["liquidity_usd"], 0.0)
+            self.assertEqual(scan["volume_24h"], 0.0)
+
+        # 3. Test handle_text_message resolves multi-word token (e.g. "pepe coin")
+        mock_update = MagicMock()
+        mock_update.effective_user.id = test_uid
+        mock_msg = MagicMock()
+        mock_msg.text = "pepe coin"
+        mock_msg.reply_text = AsyncMock()
+        mock_update.message = mock_msg
+        mock_context = MagicMock()
+        mock_context.user_data = {}
+
+        dummy_match = {"mint": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", "symbol": "POPCAT"}
+        dummy_scan = {"symbol": "PEPE", "name": "Pepe Coin", "price_usd": 0.01, "mcap": 1000000, "liquidity_usd": 50000, "price_change_24h": 5.0, "status": "SAFE", "rug_score": 10, "risks": []}
+
+        with patch("telegram_bot.search_solana_token", return_value=dummy_match) as mock_search, \
+             patch("telegram_bot.scan_token_security", return_value=dummy_scan):
+            asyncio.run(handle_text_message(mock_update, mock_context))
+            mock_search.assert_called_with("pepe coin")
+            self.assertTrue(mock_msg.reply_text.called)
 
 
 if __name__ == "__main__":

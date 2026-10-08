@@ -712,9 +712,9 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
 
         await status_msg.edit_text(card_text, parse_mode="HTML", reply_markup=get_token_card_keyboard(mint, user_lang, user_id=user_id, symbol=scan.get("symbol", "TOKEN")), disable_web_page_preview=True)
     else:
-        # Check if user sent a token ticker or name (e.g. BONK, $POPCAT, WIF)
+        # Check if user sent a token ticker or name (e.g. BONK, $POPCAT, WIF, pepe coin, ai 16z)
         clean_text = text.strip().lstrip("$")
-        if 1 <= len(clean_text) <= 20 and not any(c in clean_text for c in " \t\n\r/"):
+        if 1 <= len(clean_text) <= 40 and "\n" not in clean_text and "\r" not in clean_text and not clean_text.startswith("/"):
             matched_token = search_solana_token(clean_text)
             if matched_token:
                 found_mint = matched_token["mint"]

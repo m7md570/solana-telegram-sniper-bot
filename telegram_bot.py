@@ -229,7 +229,8 @@ def get_token_card_keyboard(mint: str, user_lang: str, user_id: int = 0, symbol:
 
     links_row = [
         InlineKeyboardButton(t("btn_dexscreener", user_lang), url=f"https://dexscreener.com/solana/{mint}"),
-        InlineKeyboardButton(t("btn_rugcheck", user_lang), url=f"https://rugcheck.xyz/tokens/{mint}")
+        InlineKeyboardButton(t("btn_rugcheck", user_lang), url=f"https://rugcheck.xyz/tokens/{mint}"),
+        InlineKeyboardButton("🪐 Jupiter", url=f"https://jup.ag/swap/SOL-{mint}")
     ]
     if mint.lower().endswith("pump"):
         links_row.append(InlineKeyboardButton("💊 Pump.fun", url=f"https://pump.fun/coin/{mint}"))

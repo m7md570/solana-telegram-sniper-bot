@@ -4806,6 +4806,19 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
             self.assertTrue(called_payload.get("dynamicComputeUnitLimit"), "dynamicComputeUnitLimit must be True")
             self.assertTrue(called_payload.get("wrapAndUnwrapSol"))
 
+    def test_104_jupiter_direct_swap_button_on_token_cards(self):
+        """Test v3.82.0 token card keyboard embeds direct official Jupiter swap button."""
+        from telegram_bot import get_token_card_keyboard
+
+        test_mint = "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"
+        kb = get_token_card_keyboard(test_mint, user_lang="en", user_id=99881166, symbol="BONK")
+
+        url_btns = [b for row in kb.inline_keyboard for b in row if b.url]
+        jup_btn = next((b for b in url_btns if "jup.ag" in b.url), None)
+        self.assertIsNotNone(jup_btn, "Jupiter button must be present on token card")
+        self.assertEqual(jup_btn.url, f"https://jup.ag/swap/SOL-{test_mint}")
+        self.assertIn("Jupiter", jup_btn.text)
+
 
 if __name__ == "__main__":
     unittest.main()

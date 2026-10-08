@@ -4774,6 +4774,38 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         card_en_zero = format_token_card(zero_vol_scan, lang="en")
         self.assertNotIn("24h Volume", card_en_zero)
 
+    def test_103_dynamic_compute_unit_limit_swap_builder(self):
+        """Test v3.81.0 Jupiter swap payload includes dynamicComputeUnitLimit for landing rate optimization."""
+        from unittest.mock import patch, MagicMock
+        from jupiter_engine import build_and_sign_swap_tx
+        from solders.keypair import Keypair
+
+        kp = Keypair()
+        fake_quote = {
+            "inputMint": WSOL_MINT,
+            "outputMint": USDC_MINT,
+            "inAmount": "50000000",
+            "outAmount": "10000000",
+            "otherAmountThreshold": "9900000",
+            "swapMode": "ExactIn",
+            "slippageBps": 100,
+            "routePlan": []
+        }
+
+        with patch("jupiter_engine._SESSION.post") as mock_post:
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.json.return_value = {"swapTransaction": None}
+            mock_post.return_value = mock_resp
+
+            build_and_sign_swap_tx(fake_quote, kp, priority_fee_lamports=75_000)
+
+            self.assertTrue(mock_post.called)
+            called_payload = mock_post.call_args[1]["json"]
+            self.assertEqual(called_payload.get("prioritizationFeeLamports"), 75_000)
+            self.assertTrue(called_payload.get("dynamicComputeUnitLimit"), "dynamicComputeUnitLimit must be True")
+            self.assertTrue(called_payload.get("wrapAndUnwrapSol"))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -113,7 +113,8 @@ def build_and_sign_swap_tx(
         "quoteResponse": quote,
         "userPublicKey": user_pubkey_str,
         "wrapAndUnwrapSol": True,
-        "prioritizationFeeLamports": priority_fee_lamports
+        "prioritizationFeeLamports": priority_fee_lamports,
+        "dynamicComputeUnitLimit": True
     }
 
     # Route platform trading fee directly to developer wallet

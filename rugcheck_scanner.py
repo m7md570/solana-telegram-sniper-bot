@@ -173,17 +173,17 @@ def extract_token_mint(text: str) -> Optional[str]:
 def format_token_card(scan: Dict[str, Any], lang: str = "en") -> str:
     """Formats an executive Telegram card using robust HTML in English or Arabic."""
     import html
-    symbol = html.escape(scan["symbol"])
-    name = html.escape(scan["name"])
-    price = scan["price_usd"]
-    price_sol = scan.get("price_sol", 0.0)
+    symbol = html.escape(scan.get("symbol") or "TOKEN")
+    name = html.escape(scan.get("name") or symbol or "Unknown Token")
+    price = float(scan.get("price_usd") or 0.0)
+    price_sol = float(scan.get("price_sol") or 0.0)
     dex = scan.get("dex", "Raydium")
-    mcap = scan["mcap"]
-    liq = scan["liquidity_usd"]
-    change = scan["price_change_24h"]
-    change_1h = scan.get("price_change_1h", 0.0)
-    score = scan.get("rug_score", 0)
-    mint = scan["mint"]
+    mcap = float(scan.get("mcap") or 0.0)
+    liq = float(scan.get("liquidity_usd") or 0.0)
+    change = float(scan.get("price_change_24h") or 0.0)
+    change_1h = float(scan.get("price_change_1h") or 0.0)
+    score = int(scan.get("rug_score") or 0)
+    mint = scan.get("mint") or ""
     status = scan.get("status", "SAFE")
 
     change_emoji = "📈" if change >= 0 else "📉"

@@ -1,8 +1,8 @@
 # ⚡ Solana High-Velocity Telegram Sniper & Trading Bot
 
 [![Telegram](https://img.shields.io/badge/Live_Bot-@PopcornSniperBot-2CA5E0?logo=telegram&logoColor=white)](https://t.me/PopcornSniperBot)
-[![Release](https://img.shields.io/badge/Release-v3.64.0-blue.svg)](https://github.com/m7md570/solana-telegram-sniper-bot/releases)
-[![Tests](https://img.shields.io/badge/Tests-88%2F88%20Passing-brightgreen.svg)](test_bot.py)
+[![Release](https://img.shields.io/badge/Release-v3.65.0-blue.svg)](https://github.com/m7md570/solana-telegram-sniper-bot/releases)
+[![Tests](https://img.shields.io/badge/Tests-89%2F89%20Passing-brightgreen.svg)](test_bot.py)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![Network](https://img.shields.io/badge/Solana-Mainnet--Beta-9945FF.svg)](https://solana.com)

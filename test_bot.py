@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.64.0", card_text)
+        self.assertIn("v3.65.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.64.0")
+        self.assertEqual(BOT_VERSION, "v3.65.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -3939,7 +3939,8 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         v_kb = v_call.call_args[1]["reply_markup"]
         all_v_btns = [b for row in v_kb.inline_keyboard for b in row]
 
-        self.assertIn("v3.64.0", v_text)
+        self.assertIn("Software Release:", v_text)
+        self.assertIn("Production", v_text)
         self.assertIsNotNone(next((b for b in all_v_btns if b.url and "releases" in b.url), None))
         self.assertIsNotNone(next((b for b in all_v_btns if b.callback_data == "btn_ping"), None))
         self.assertIsNotNone(next((b for b in all_v_btns if b.callback_data == "btn_help"), None))
@@ -3961,6 +3962,71 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertIn("/sim", help_en)
         self.assertIn("/quote", help_ar)
         self.assertIn("/sim", help_ar)
+
+    def test_89_multi_word_token_query_resilience(self):
+        """Test v3.65.0 multi-word token query resilience across /price, /audit, /quote, and /track."""
+        import asyncio
+        from unittest.mock import patch, MagicMock, AsyncMock
+        from telegram_bot import price_command, audit_command, quote_command, track_command
+
+        test_uid = 99881189
+        dummy_match = {"mint": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", "symbol": "POPCAT"}
+
+        # 1. Test price_command joins multi-word args: /price pepe coin
+        p_update = MagicMock()
+        p_update.effective_user.id = test_uid
+        p_update.message.reply_text = AsyncMock(return_value=AsyncMock())
+        p_ctx = MagicMock()
+        p_ctx.args = ["pepe", "coin"]
+        with patch("telegram_bot.search_solana_token", return_value=dummy_match) as mock_search, \
+             patch("telegram_bot.render_price_card", new_callable=AsyncMock) as mock_rpc:
+            asyncio.run(price_command(p_update, p_ctx))
+            mock_search.assert_called_with("pepe coin")
+
+        # 2. Test audit_command joins multi-word args: /audit ai 16z
+        a_update = MagicMock()
+        a_update.effective_user.id = test_uid
+        a_update.message.reply_text = AsyncMock(return_value=AsyncMock())
+        a_ctx = MagicMock()
+        a_ctx.args = ["ai", "16z"]
+        with patch("telegram_bot.search_solana_token", return_value=dummy_match) as mock_search, \
+             patch("telegram_bot.scan_token_security", return_value={"mint": dummy_match["mint"], "symbol": "AI16Z", "rug_score": 1, "risks": []}):
+            asyncio.run(audit_command(a_update, a_ctx))
+            mock_search.assert_called_with("ai 16z")
+
+        # 3. Test quote_command with multi-word token and amount first: /quote 0.5 pop cat
+        q_update = MagicMock()
+        q_update.effective_user.id = test_uid
+        q_update.message.reply_text = AsyncMock(return_value=AsyncMock())
+        q_ctx1 = MagicMock()
+        q_ctx1.args = ["0.5", "pop", "cat"]
+        with patch("telegram_bot.search_solana_token", return_value=dummy_match) as mock_search, \
+             patch("telegram_bot.render_quote_card", new_callable=AsyncMock) as mock_rq:
+            asyncio.run(quote_command(q_update, q_ctx1))
+            mock_search.assert_called_with("pop cat")
+            self.assertEqual(mock_rq.call_args[0][4], 0.5)
+
+        # 4. Test quote_command with multi-word token and amount last: /quote pop cat 0.5
+        q_ctx2 = MagicMock()
+        q_ctx2.args = ["pop", "cat", "0.5"]
+        with patch("telegram_bot.search_solana_token", return_value=dummy_match) as mock_search, \
+             patch("telegram_bot.render_quote_card", new_callable=AsyncMock) as mock_rq:
+            asyncio.run(quote_command(q_update, q_ctx2))
+            mock_search.assert_called_with("pop cat")
+            self.assertEqual(mock_rq.call_args[0][4], 0.5)
+
+        # 5. Test track_command joins multi-word args: /track doge 2.0
+        t_update = MagicMock()
+        t_update.effective_user.id = test_uid
+        t_update.message.reply_text = AsyncMock()
+        t_ctx = MagicMock()
+        t_ctx.args = ["doge", "2.0"]
+        with patch("telegram_bot.search_solana_token", return_value=dummy_match) as mock_search, \
+             patch("telegram_bot.add_to_watchlist") as mock_add, \
+             patch("telegram_bot.scan_token_security", return_value={"price_usd": 0.05, "symbol": "DOGE2"}):
+            asyncio.run(track_command(t_update, t_ctx))
+            mock_search.assert_called_with("doge 2.0")
+            self.assertTrue(mock_add.called)
 
 
 if __name__ == "__main__":

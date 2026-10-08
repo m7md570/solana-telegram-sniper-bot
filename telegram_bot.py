@@ -3113,7 +3113,7 @@ async def price_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(t("price_syntax_help", user_lang), parse_mode="HTML")
         return
 
-    query = args[0].strip()
+    query = " ".join(args).strip()
     mint = extract_token_mint(query)
     if not mint:
         matched = search_solana_token(query)
@@ -3160,18 +3160,29 @@ async def quote_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     settings = get_user_settings(user_id)
     default_buy = settings.get("default_buy_amount", 0.1)
 
+    # Resilient multi-word token and amount parsing
+    amount_sol = None
+    target_token = ""
     try:
-        amount_sol = float(args[0].strip())
-        target_token = args[1].strip() if len(args) > 1 else ""
+        first_val = float(args[0].strip())
+        if first_val > 0:
+            amount_sol = first_val
+            target_token = " ".join(args[1:]).strip()
     except ValueError:
-        target_token = args[0].strip()
-        if len(args) > 1:
-            try:
-                amount_sol = float(args[1].strip())
-            except ValueError:
-                amount_sol = default_buy
-        else:
-            amount_sol = default_buy
+        pass
+
+    if amount_sol is None and len(args) > 1:
+        try:
+            last_val = float(args[-1].strip())
+            if last_val > 0:
+                amount_sol = last_val
+                target_token = " ".join(args[:-1]).strip()
+        except ValueError:
+            pass
+
+    if amount_sol is None:
+        amount_sol = default_buy
+        target_token = " ".join(args).strip()
 
     if not target_token:
         err = "❌ Please specify a token ticker or CA. Example: <code>/quote 0.1 bonk</code>" if user_lang == "en" else "❌ يرجى تحديد رمز أو عقد العملة. مثال: <code>/quote 0.1 bonk</code>"
@@ -3378,7 +3389,7 @@ async def audit_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(help_msg, parse_mode="HTML")
         return
 
-    query = args[0].strip()
+    query = " ".join(args).strip()
     mint = extract_token_mint(query)
     if not mint:
         matched = search_solana_token(query)
@@ -3561,7 +3572,7 @@ async def track_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         hint = "ℹ️ <b>Usage</b>: <code>/track [CA_OR_TICKER]</code>\nExample: <code>/track bonk</code>" if user_lang == "en" else "ℹ️ <b>الاستخدام</b>: <code>/track [العقد_أو_الرمز]</code>\nمثال: <code>/track bonk</code>"
         await update.message.reply_text(hint, parse_mode="HTML")
         return
-    raw = args[0].strip()
+    raw = " ".join(args).strip()
     mint = extract_token_mint(raw)
     sym = "TOKEN"
     if not mint:

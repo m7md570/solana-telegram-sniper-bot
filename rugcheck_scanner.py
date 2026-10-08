@@ -43,6 +43,7 @@ def scan_token_security(mint: str) -> Dict[str, Any]:
         "risks": [],
         "mint_authority": False,
         "freeze_authority": False,
+        "transfer_hook": False,
         "top_holders_pct": 0.0,
         "is_valid": False
     }
@@ -91,10 +92,13 @@ def scan_token_security(mint: str) -> Dict[str, Any]:
             # Check critical red flags
             for rk in raw_risks:
                 name = rk.get("name", "").lower()
+                desc = rk.get("description", "").lower()
                 if "freeze" in name:
                     result["freeze_authority"] = True
                 if "mint" in name:
                     result["mint_authority"] = True
+                if "transfer hook" in name or "transferhook" in name or "transfer hook" in desc:
+                    result["transfer_hook"] = True
 
             # Determine badge & status based on score
             if score < 350:
@@ -106,6 +110,11 @@ def scan_token_security(mint: str) -> Dict[str, Any]:
             else:
                 result["status"] = "DANGER"
                 result["badge"] = f"🔴 خطر شديد / فخ (درجة الخطر: {score})"
+
+            # Elevate warning if Token-2022 Transfer Hook is detected
+            if result.get("transfer_hook") and result["status"] == "SAFE":
+                result["status"] = "WARNING"
+                result["badge"] = f"🟡 مخاطرة خطاف التحويل (درجة الخطر: {score})"
         else:
             result["status"] = "UNVERIFIED"
             result["badge"] = "ℹ️ فحص أساسي (غير مفهرس في RugCheck)"
@@ -266,6 +275,11 @@ def format_token_card(scan: Dict[str, Any], lang: str = "en") -> str:
                 lines.append("• ⚠️ <b>تحذير</b>: إمكانية تجميد المحافظ (Freeze Authority) مفعلة!")
             else:
                 lines.append("• صلاحية التجميد (Freeze): 🟢 ملغاة (Revoked)")
+
+            if scan.get("transfer_hook"):
+                lines.append("• ⚠️ <b>تحذير خطاف التحويل</b>: Transfer Hook مفعل (عقد Token-2022 مخصص - خطر فخ بيع)!")
+            else:
+                lines.append("• خطاف التحويل (Transfer Hook): 🟢 غير مفعل (Standard)")
         elif scan.get("freeze_authority") or scan.get("mint_authority"):
             if scan.get("freeze_authority"):
                 lines.append("• ⚠️ <b>تحذير</b>: إمكانية تجميد المحافظ (Freeze Authority) مفعلة!")
@@ -327,6 +341,11 @@ def format_token_card(scan: Dict[str, Any], lang: str = "en") -> str:
                 lines.append("• ⚠️ <b>WARNING</b>: Freeze Authority is ENABLED (Blacklist risk)!")
             else:
                 lines.append("• Freeze Authority: 🟢 Revoked")
+
+            if scan.get("transfer_hook"):
+                lines.append("• ⚠️ <b>WARNING</b>: Transfer Hook is ACTIVE (Token-2022 custom logic - Honeypot risk)!")
+            else:
+                lines.append("• Transfer Hook: 🟢 Not Active (Standard)")
         elif scan.get("freeze_authority") or scan.get("mint_authority"):
             if scan.get("freeze_authority"):
                 lines.append("• ⚠️ <b>WARNING</b>: Freeze Authority is ENABLED (Blacklist risk)!")

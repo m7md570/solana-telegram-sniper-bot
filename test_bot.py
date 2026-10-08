@@ -4920,21 +4920,58 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from local_model_client import get_token_ai_verdict, generate_viral_alpha_tweet, audit_code_with_local_ai
         from unittest.mock import patch
 
-        # 1. Test token alpha verdict fallback and structure
-        verdict = get_token_ai_verdict("BONK", 15.5, 25_000_000.0, 5_000_000.0, 10, "SAFE")
-        self.assertIsInstance(verdict, str)
-        self.assertTrue(len(verdict) > 10)
+        # 1. Test token alpha verdict with mock AI
+        with patch("local_model_client.query_local_ai", return_value="Bullish momentum backed by solid on-chain liquidity."):
+            verdict = get_token_ai_verdict("BONK", 15.5, 25_000_000.0, 5_000_000.0, 10, "SAFE")
+            self.assertIsInstance(verdict, str)
+            self.assertIn("Bullish", verdict)
 
-        # 2. Test viral alpha tweet fallback with character constraints
-        tweet = generate_viral_alpha_tweet("BONK", 15.5, 25_000_000.0, 10, "SAFE", "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263")
-        self.assertIsInstance(tweet, str)
-        self.assertLessEqual(len(tweet), 260)
-        self.assertIn("BONK", tweet)
+        # 2. Test algorithmic fallback when offline
+        with patch("local_model_client.query_local_ai", return_value=None):
+            verdict_fb = get_token_ai_verdict("BONK", 15.5, 25_000_000.0, 5_000_000.0, 10, "SAFE")
+            self.assertIn("Bullish momentum", verdict_fb)
+
+            tweet = generate_viral_alpha_tweet("BONK", 15.5, 25_000_000.0, 10, "SAFE", "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263")
+            self.assertIsInstance(tweet, str)
+            self.assertLessEqual(len(tweet), 260)
+            self.assertIn("BONK", tweet)
 
         # 3. Test audit_code_with_local_ai with mock response
         with patch("local_model_client.query_local_ai", return_value="Add zero-division check"):
             res = audit_code_with_local_ai("def test(): pass")
             self.assertEqual(res, "Add zero-division check")
+
+    def test_111_token_2022_transfer_hook_honeypot_detection(self):
+        """Test v3.89.0 Token-2022 Transfer Hook honeypot detection and bilingual card alerts."""
+        from rugcheck_scanner import scan_token_security, format_token_card
+        from unittest.mock import patch
+
+        # 1. Test scan_token_security detects transfer hook risk and elevates status
+        fake_rc = {
+            "score": 100,
+            "risks": [
+                {"name": "Token-2022 Transfer Hook Program", "description": "Custom transfer hook detected"}
+            ]
+        }
+        with patch("rugcheck_scanner._SESSION.get") as mock_get:
+            mock_get.return_value.status_code = 200
+            mock_get.return_value.json.return_value = fake_rc
+            scan = scan_token_security("DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263")
+            self.assertTrue(scan.get("transfer_hook"), "transfer_hook flag must be True")
+            self.assertEqual(scan.get("status"), "WARNING", "Status must be elevated from SAFE to WARNING")
+
+        # 2. Test format_token_card renders transfer hook warning in English and Arabic
+        en_card = format_token_card(scan, lang="en")
+        ar_card = format_token_card(scan, lang="ar")
+        self.assertIn("Transfer Hook is ACTIVE", en_card)
+        self.assertIn("تحذير خطاف التحويل", ar_card)
+
+        # 3. Test clean token without transfer hook shows clean status
+        clean_scan = {"mint": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", "status": "SAFE", "transfer_hook": False}
+        clean_en = format_token_card(clean_scan, lang="en")
+        clean_ar = format_token_card(clean_scan, lang="ar")
+        self.assertIn("Transfer Hook: 🟢 Not Active", clean_en)
+        self.assertIn("خطاف التحويل (Transfer Hook): 🟢 غير مفعل", clean_ar)
 
 
 if __name__ == "__main__":

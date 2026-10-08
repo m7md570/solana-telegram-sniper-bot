@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.58.0", card_text)
+        self.assertIn("v3.59.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.58.0")
+        self.assertEqual(BOT_VERSION, "v3.59.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -3568,6 +3568,113 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertIn("p", registered_commands)
         self.assertIn("c", registered_commands)
         self.assertIn("scan", registered_commands)
+
+    def test_83_jupiter_quote_simulation_and_wallet_cockpit(self):
+        """Test render_wallet_card cockpit, render_quote_card swap simulation, quote_command, and /quote, /sim aliases."""
+        from telegram_bot import (
+            render_wallet_card,
+            render_quote_card,
+            quote_command,
+            callback_router,
+            build_application,
+            get_token_card_keyboard
+        )
+        from wallet_manager import get_or_create_wallet
+        from telegram.ext import CommandHandler
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        test_uid = 99667788
+        get_or_create_wallet(test_uid, "QuoteTester", initial_language="en")
+        test_mint = "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"  # BONK
+
+        # 1. Test render_wallet_card
+        mock_wallet_target = MagicMock()
+        mock_wallet_target.reply_text = AsyncMock()
+        asyncio.run(render_wallet_card(mock_wallet_target, test_uid, "en", is_edit=False))
+        self.assertTrue(mock_wallet_target.reply_text.called)
+        w_text = mock_wallet_target.reply_text.call_args[0][0]
+        self.assertIn("Solana Trading Wallet & Deposit", w_text)
+        self.assertIn("Available Balance", w_text)
+
+        w_kb = mock_wallet_target.reply_text.call_args[1]["reply_markup"]
+        all_w_btns = [b for row in w_kb.inline_keyboard for b in row]
+        self.assertTrue(any(b.callback_data == "btn_show_qr" for b in all_w_btns))
+        self.assertTrue(any(b.callback_data == "btn_wallet" for b in all_w_btns))
+
+        # 2. Test render_quote_card with mocked Jupiter Quote API
+        mock_quote_data = {
+            "inAmount": "100000000",
+            "outAmount": "332663340000",
+            "otherAmountThreshold": "329336700000",
+            "priceImpactPct": "0.00026",
+            "routePlan": [{"swapInfo": {"label": "Whirlpool"}}],
+            "platformFee": {"amount": "1000000"}
+        }
+
+        mock_quote_target = MagicMock()
+        mock_quote_target.reply_text = AsyncMock()
+
+        with patch("telegram_bot.get_jupiter_quote", return_value=mock_quote_data), \
+             patch("telegram_bot.get_token_decimals", return_value=5):
+            asyncio.run(render_quote_card(mock_quote_target, test_uid, "en", test_mint, 0.1, is_edit=False))
+            self.assertTrue(mock_quote_target.reply_text.called)
+            q_text = mock_quote_target.reply_text.call_args[0][0]
+            self.assertIn("Jupiter V6 Swap Simulation Quote", q_text)
+            self.assertIn("0.1000 SOL", q_text)
+            self.assertIn("Whirlpool", q_text)
+
+            q_kb = mock_quote_target.reply_text.call_args[1]["reply_markup"]
+            all_q_btns = [b for row in q_kb.inline_keyboard for b in row]
+            exec_btn = next((b for b in all_q_btns if b.callback_data == f"buy_{test_mint}_0.1"), None)
+            radar_btn = next((b for b in all_q_btns if b.callback_data == f"price_{test_mint}"), None)
+            refresh_sim_btn = next((b for b in all_q_btns if b.callback_data == f"quote_{test_mint}_0.1"), None)
+
+            self.assertIsNotNone(exec_btn, "1-click execution buy button must exist on quote simulation card")
+            self.assertIsNotNone(radar_btn, "Price radar button must exist on quote simulation card")
+            self.assertIsNotNone(refresh_sim_btn, "Refresh simulation button must exist")
+
+        # 3. Test quote_command CLI invocation
+        mock_cmd_update = MagicMock()
+        mock_cmd_update.effective_user.id = test_uid
+        mock_status_msg = AsyncMock()
+        mock_cmd_update.message.reply_text = AsyncMock(return_value=mock_status_msg)
+        mock_cmd_ctx = MagicMock()
+        mock_cmd_ctx.args = ["0.1", "BONK"]
+
+        with patch("telegram_bot.render_quote_card", new_callable=AsyncMock) as mock_render_q:
+            asyncio.run(quote_command(mock_cmd_update, mock_cmd_ctx))
+            self.assertTrue(mock_cmd_update.message.reply_text.called)
+            mock_render_q.assert_called_once()
+
+        # 4. Test callback_router quote_ routing
+        mock_cb_query = MagicMock()
+        mock_cb_query.from_user.id = test_uid
+        mock_cb_query.data = f"quote_{test_mint}_0.25"
+        mock_cb_query.answer = AsyncMock()
+        mock_cb_query.message.reply_chat_action = AsyncMock()
+        mock_cb_update = MagicMock()
+        mock_cb_update.callback_query = mock_cb_query
+
+        with patch("telegram_bot.render_quote_card", new_callable=AsyncMock) as mock_render_q2:
+            asyncio.run(callback_router(mock_cb_update, mock_cmd_ctx))
+            mock_render_q2.assert_called_once_with(mock_cb_query, test_uid, "en", test_mint, 0.25, is_edit=True)
+
+        # 5. Test CommandHandler registration for quote, sim, simulate
+        app = build_application("8935718262:AAGZc-RLQplBfx6cWzTtk2zyorXo5o74NqE")
+        command_handlers = [h for h in app.handlers[0] if isinstance(h, CommandHandler)]
+        registered_commands = set()
+        for h in command_handlers:
+            registered_commands.update(h.commands)
+
+        self.assertIn("quote", registered_commands)
+        self.assertIn("sim", registered_commands)
+        self.assertIn("simulate", registered_commands)
+
+        # 6. Test get_token_card_keyboard embeds price radar button
+        token_kb = get_token_card_keyboard(test_mint, "en", test_uid, "BONK")
+        all_t_btns = [b for row in token_kb.inline_keyboard for b in row]
+        self.assertTrue(any(b.callback_data == f"price_{test_mint}" for b in all_t_btns))
 
 
 if __name__ == "__main__":

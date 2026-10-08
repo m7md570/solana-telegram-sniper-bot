@@ -55,6 +55,7 @@ from config import (
     PLATFORM_FEE_BPS,
     WSOL_MINT,
     USDC_MINT,
+    PRIMARY_RPC,
     BOT_VERSION
 )
 from wallet_manager import (
@@ -252,6 +253,7 @@ def get_token_card_keyboard(mint: str, user_lang: str, user_id: int = 0, symbol:
             InlineKeyboardButton(t("btn_rugcheck", user_lang), url=f"https://rugcheck.xyz/tokens/{mint}")
         ],
         [
+            InlineKeyboardButton("💵 Price Radar", callback_data=f"price_{mint}"),
             InlineKeyboardButton(refresh_quote_label, callback_data=f"inspect_{mint}"),
             InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
         ]
@@ -867,6 +869,159 @@ async def render_price_card(target, user_id: int, user_lang: str, mint: str, is_
             InlineKeyboardButton(refresh_label, callback_data=f"price_{mint}")
         ],
         [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
+    ]
+    markup = InlineKeyboardMarkup(kb)
+    if is_edit:
+        await safe_edit_text(target, card, reply_markup=markup)
+    else:
+        if hasattr(target, "reply_text"):
+            await target.reply_text(card, parse_mode="HTML", reply_markup=markup, disable_web_page_preview=True)
+        elif hasattr(target, "message") and hasattr(target.message, "reply_text"):
+            await target.message.reply_text(card, parse_mode="HTML", reply_markup=markup, disable_web_page_preview=True)
+
+
+def get_token_decimals(mint: str) -> int:
+    """Queries mint decimals via Solana RPC getTokenSupply with resilient fallback."""
+    import urllib.request
+    import json
+    try:
+        data = json.dumps({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "getTokenSupply",
+            "params": [mint]
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            PRIMARY_RPC,
+            data=data,
+            headers={"Content-Type": "application/json", "User-Agent": "Mozilla/5.0"}
+        )
+        with urllib.request.urlopen(req, timeout=5) as res:
+            parsed = json.loads(res.read().decode("utf-8"))
+            val = parsed.get("result", {}).get("value", {})
+            dec = val.get("decimals")
+            if dec is not None:
+                return int(dec)
+    except Exception:
+        pass
+    return 6
+
+
+async def render_quote_card(target, user_id: int, user_lang: str, mint: str, amount_sol: float, is_edit: bool = False):
+    """Renders real-time Jupiter V6 swap simulation card with route plan, slippage calculation, and 1-click execution."""
+    scan = scan_token_security(mint)
+    sym = html.escape(scan.get("symbol", "TOKEN"))
+    name = html.escape(scan.get("name", "Unknown Token"))
+    settings = get_user_settings(user_id)
+    slippage_bps = settings.get("slippage_bps", 100)
+    slip_pct = slippage_bps / 100.0
+    gas_lamports = settings.get("priority_fee", 50000)
+    gas_sol = gas_lamports / 1e9
+    now_str = get_current_time_str()
+
+    amount_lamports = int(amount_sol * 1_000_000_000)
+    quote = get_jupiter_quote(
+        input_mint=WSOL_MINT,
+        output_mint=mint,
+        amount_lamports=amount_lamports,
+        slippage_bps=slippage_bps,
+        with_fee=True
+    )
+
+    if not quote:
+        err_text = (
+            f"❌ <b>No Liquidity Route Found!</b>\n\n"
+            f"Could not find a valid Jupiter V6 routing path for <code>{amount_sol} SOL</code> into <b>${sym}</b>."
+        ) if user_lang == "en" else (
+            f"❌ <b>تعذر العثور على مسار سيولة!</b>\n\n"
+            f"لم يتم العثور على مسار صالح في Jupiter V6 لمبلغ <code>{amount_sol} SOL</code> مقابل عملة <b>${sym}</b>."
+        )
+        kb = [[InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]]
+        markup = InlineKeyboardMarkup(kb)
+        if is_edit:
+            await safe_edit_text(target, err_text, reply_markup=markup)
+        else:
+            if hasattr(target, "reply_text"):
+                await target.reply_text(err_text, parse_mode="HTML", reply_markup=markup)
+            elif hasattr(target, "message") and hasattr(target.message, "reply_text"):
+                await target.message.reply_text(err_text, parse_mode="HTML", reply_markup=markup)
+        return
+
+    # Extract quote metrics
+    raw_out = float(quote.get("outAmount", 0))
+    raw_min = float(quote.get("otherAmountThreshold", 0))
+    decimals = get_token_decimals(mint)
+    divisor = 10 ** decimals
+    out_tokens = raw_out / divisor
+    min_tokens = raw_min / divisor
+    price_impact_pct = float(quote.get("priceImpactPct") or 0.0)
+
+    # Route AMM summary
+    routes = [step.get("swapInfo", {}).get("label", "DEX") for step in quote.get("routePlan", [])]
+    route_str = " ➔ ".join(routes) if routes else "Jupiter V6 Aggregator"
+
+    # Platform fee calculation
+    fee_lamports = float(quote.get("platformFee", {}).get("amount", 0))
+    fee_sol = fee_lamports / 1e9
+
+    if user_lang == "ar":
+        card = (
+            f"🎯 <b>محاكاة صفقة الشراء الذكية (Jupiter V6 Quote)</b> ⚡\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"🪙 <b>العملة:</b> <b>{name}</b> (<code>${sym}</code>)\n"
+            f"💸 <b>المبلغ المدفوع:</b> <code>{amount_sol:.4f} SOL</code>\n"
+            f"💎 <b>الكمية المتوقعة:</b> <code>{out_tokens:,.2f} ${sym}</code>\n"
+            f"🛑 <b>الحد الأدنى المضمون:</b> <code>{min_tokens:,.2f} ${sym}</code> ({slip_pct:.1f}% انزلاق)\n"
+            f"📉 <b>تأثير السعر (Price Impact):</b> <code>{price_impact_pct:.2f}%</code>\n"
+            f"🛣️ <b>مسار السيولة:</b> <code>{route_str}</code>\n"
+            f"🛡️ <b>عمولة المنصة (1.0%):</b> <code>{fee_sol:.5f} SOL</code> (مشمولة)\n"
+            f"⚡ <b>رسوم الأولوية:</b> <code>{gas_sol:.5f} SOL</code>\n"
+            f"📋 <b>العقد:</b> <code>{mint}</code>\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"🕒 <code>{now_str}</code>"
+        )
+        exec_label = f"🟢 تنفيذ الشراء ({amount_sol:.2f} SOL)"
+        refresh_label = "🔄 تحديث المحاكاة"
+    else:
+        card = (
+            f"🎯 <b>Jupiter V6 Swap Simulation Quote</b> ⚡\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"🪙 <b>Token:</b> <b>{name}</b> (<code>${sym}</code>)\n"
+            f"💸 <b>Input Amount:</b> <code>{amount_sol:.4f} SOL</code>\n"
+            f"💎 <b>Estimated Output:</b> <code>~{out_tokens:,.2f} ${sym}</code>\n"
+            f"🛑 <b>Guaranteed Minimum:</b> <code>~{min_tokens:,.2f} ${sym}</code> ({slip_pct:.1f}% Slippage)\n"
+            f"📉 <b>Price Impact:</b> <code>{price_impact_pct:.2f}%</code>\n"
+            f"🛣️ <b>Route Path:</b> <code>{route_str}</code>\n"
+            f"🛡️ <b>Dev Fee (1.0%):</b> <code>{fee_sol:.5f} SOL</code> (Included)\n"
+            f"⚡ <b>Priority Gas:</b> <code>{gas_sol:.5f} SOL</code>\n"
+            f"📋 <b>CA:</b> <code>{mint}</code>\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"🕒 <code>{now_str}</code>"
+        )
+        exec_label = f"🟢 Execute Swap ({amount_sol:.2f} SOL)"
+        refresh_label = "🔄 Refresh Simulation"
+
+    is_tracked = is_token_in_watchlist(user_id, mint) if user_id else False
+    if is_tracked:
+        track_label = "⭐ " + ("Untrack" if user_lang == "en" else "إزالة من المتابعة")
+        track_cb = f"untrack_{mint}"
+    else:
+        track_label = "⭐ " + t("btn_track", user_lang)
+        track_cb = f"track_{mint}"
+
+    kb = [
+        [
+            InlineKeyboardButton(exec_label, callback_data=f"buy_{mint}_{amount_sol}"),
+            InlineKeyboardButton("💵 Price Radar", callback_data=f"price_{mint}")
+        ],
+        [
+            InlineKeyboardButton(track_label, callback_data=track_cb),
+            InlineKeyboardButton("📊 DexScreener", url=f"https://dexscreener.com/solana/{mint}")
+        ],
+        [
+            InlineKeyboardButton(refresh_label, callback_data=f"quote_{mint}_{amount_sol}"),
+            InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
+        ]
     ]
     markup = InlineKeyboardMarkup(kb)
     if is_edit:
@@ -2099,55 +2254,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await render_autobuy_card(query, user_id, user_lang, is_edit=True)
 
     elif data == "btn_wallet":
-        pubkey, _ = get_or_create_wallet(user_id)
-        balance = get_sol_balance(pubkey)
-        tokens = get_token_accounts(pubkey)
-        qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=solana:{pubkey}"
-        if user_lang == "ar":
-            text = (
-                f"💳 <b>إدارة المحفظة والإيداع</b> 🏦\n"
-                f"━━━━━━━━━━━━━━━━━━━\n"
-                f"📍 <b>عنوان إيداع SOL (اضغط للنسخ)</b>:\n<code>{pubkey}</code>\n\n"
-                f"💰 <b>الرصيد المتاح</b>: <code>{balance:.4f} SOL</code>\n"
-                f"📊 <b>العملات المفتوحة</b>: <code>{len(tokens)} صفقات</code>\n"
-                f"🕒 وقت الفحص: <code>{now_str}</code>\n\n"
-                f"🔗 <a href='https://solscan.io/account/{pubkey}'>عرض المحفظة على Solscan</a>\n"
-                f"📷 <a href='{qr_url}'>عرض رمز QR للإيداع السريع عبر الكاميرا</a>\n\n"
-                f"⚠️ <i>مفتاحك الخاص مشفر محلياً بنظام AES-256 لحمايتك الكاملة.</i>\n"
-            )
-            kb = [
-                [InlineKeyboardButton("📲 إظهار رمز QR للإيداع", callback_data="btn_show_qr")],
-                [InlineKeyboardButton("📊 عرض الصفقات المفتوحة", callback_data="btn_positions")],
-                [InlineKeyboardButton("💸 سحب SOL إلى محفظتك الخارجية", callback_data="btn_withdraw_guide")],
-                [InlineKeyboardButton("🔑 إظهار المفتاح الخاص (Private Key)", callback_data="btn_export_key")],
-                [
-                    InlineKeyboardButton("🔄 تحديث الرصيد", callback_data="btn_wallet"),
-                    InlineKeyboardButton("🔙 العودة للرئيسية", callback_data="btn_refresh")
-                ]
-            ]
-        else:
-            text = (
-                f"💳 <b>Solana Trading Wallet & Deposit</b> 🏦\n"
-                f"━━━━━━━━━━━━━━━━━━━\n"
-                f"📍 <b>SOL Deposit Address (Tap to copy)</b>:\n<code>{pubkey}</code>\n\n"
-                f"💰 <b>Available Balance</b>: <code>{balance:.4f} SOL</code>\n"
-                f"📊 <b>Open Token Holdings</b>: <code>{len(tokens)} positions</code>\n"
-                f"🕒 Checked: <code>{now_str}</code>\n\n"
-                f"🔗 <a href='https://solscan.io/account/{pubkey}'>View Account on Solscan</a>\n"
-                f"📷 <a href='{qr_url}'>Instant QR Code Deposit</a>\n\n"
-                f"⚠️ <i>Your private key is encrypted locally with AES-256 for non-custodial ownership.</i>\n"
-            )
-            kb = [
-                [InlineKeyboardButton("📲 Instant Deposit QR", callback_data="btn_show_qr")],
-                [InlineKeyboardButton("📊 View Open Positions", callback_data="btn_positions")],
-                [InlineKeyboardButton("💸 Withdraw SOL to External Wallet", callback_data="btn_withdraw_guide")],
-                [InlineKeyboardButton("🔑 Export Private Key", callback_data="btn_export_key")],
-                [
-                    InlineKeyboardButton("🔄 Refresh Balance", callback_data="btn_wallet"),
-                    InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
-                ]
-            ]
-        await safe_edit_text(query, text, reply_markup=InlineKeyboardMarkup(kb))
+        await render_wallet_card(query, user_id, user_lang, is_edit=True)
 
     elif data == "btn_show_qr":
         pubkey, _ = get_or_create_wallet(user_id)
@@ -2215,6 +2322,13 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         bot_user = (context.bot.username if context and context.bot else None) or "PopcornSniperBot"
         await render_price_card(query, user_id, user_lang, mint, is_edit=True, bot_username=bot_user)
 
+    elif data.startswith("quote_"):
+        parts = data.split("_")
+        mint = parts[1]
+        amt = float(parts[2]) if len(parts) > 2 else 0.1
+        await query.message.reply_chat_action("typing")
+        await render_quote_card(query, user_id, user_lang, mint, amt, is_edit=True)
+
     elif data.startswith("track_"):
         mint = data.replace("track_", "", 1)
         scan = scan_token_security(mint)
@@ -2226,6 +2340,11 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if "Radar" in msg_text or "رادار" in msg_text or "Price" in msg_text:
             bot_user = (context.bot.username if context and context.bot else None) or "PopcornSniperBot"
             await render_price_card(query, user_id, user_lang, mint, is_edit=True, bot_username=bot_user)
+        elif "Simulation" in msg_text or "محاكاة" in msg_text:
+            amt = get_user_settings(user_id).get("default_buy_amount", 0.1)
+            await render_quote_card(query, user_id, user_lang, mint, amt, is_edit=True)
+        elif "RugCheck" in msg_text or "Audit" in msg_text or "تدقيق" in msg_text or "أمان" in msg_text:
+            await query.edit_message_reply_markup(reply_markup=get_token_card_keyboard(mint, user_lang, user_id=user_id, symbol=sym))
 
     elif data.startswith("untrack_"):
         mint = data.replace("untrack_", "", 1)
@@ -2235,6 +2354,13 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if "Radar" in msg_text or "رادار" in msg_text or "Price" in msg_text:
             bot_user = (context.bot.username if context and context.bot else None) or "PopcornSniperBot"
             await render_price_card(query, user_id, user_lang, mint, is_edit=True, bot_username=bot_user)
+        elif "Simulation" in msg_text or "محاكاة" in msg_text:
+            amt = get_user_settings(user_id).get("default_buy_amount", 0.1)
+            await render_quote_card(query, user_id, user_lang, mint, amt, is_edit=True)
+        elif "RugCheck" in msg_text or "Audit" in msg_text or "تدقيق" in msg_text or "أمان" in msg_text:
+            scan = scan_token_security(mint)
+            sym = scan.get("symbol", "TOKEN")
+            await query.edit_message_reply_markup(reply_markup=get_token_card_keyboard(mint, user_lang, user_id=user_id, symbol=sym))
         else:
             await render_watchlist(query, user_id, user_lang, is_edit=True)
 
@@ -2576,10 +2702,8 @@ async def withdraw_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await status_msg.edit_text(f"❌ <b>Withdrawal failed</b>: <code>{html.escape(sig_or_err)}</code>", parse_mode="HTML")
 
 
-async def wallet_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler for /wallet command with open token holdings preview."""
-    user_id = update.effective_user.id
-    user_lang = get_user_language(user_id)
+async def render_wallet_card(target, user_id: int, user_lang: str, is_edit: bool = False):
+    """Renders the comprehensive non-custodial Solana wallet cockpit and deposit interface."""
     pubkey, _ = get_or_create_wallet(user_id)
     balance = get_sol_balance(pubkey)
     tokens = get_token_accounts(pubkey)
@@ -2630,7 +2754,21 @@ async def wallet_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
             ]
         ]
-    await update.message.reply_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb), disable_web_page_preview=True)
+    markup = InlineKeyboardMarkup(kb)
+    if is_edit:
+        await safe_edit_text(target, text, reply_markup=markup)
+    else:
+        if hasattr(target, "reply_text"):
+            await target.reply_text(text, parse_mode="HTML", reply_markup=markup, disable_web_page_preview=True)
+        elif hasattr(target, "message") and hasattr(target.message, "reply_text"):
+            await target.message.reply_text(text, parse_mode="HTML", reply_markup=markup, disable_web_page_preview=True)
+
+
+async def wallet_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for /wallet command with open token holdings preview."""
+    user_id = update.effective_user.id
+    user_lang = get_user_language(user_id)
+    await render_wallet_card(update.message, user_id, user_lang, is_edit=False)
 
 
 async def qr_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2913,6 +3051,62 @@ async def price_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     bot_user = (context.bot.username if context and context.bot else None) or "PopcornSniperBot"
     await render_price_card(status_msg, user_id, user_lang, mint, is_edit=True, bot_username=bot_user)
+
+
+async def quote_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for /quote, /sim, and /simulate commands: /quote [AMOUNT_SOL] [CA_OR_TICKER]"""
+    user_id = update.effective_user.id
+    user_lang = get_user_language(user_id)
+    args = context.args
+
+    if not args:
+        help_text = (
+            "ℹ️ <b>Jupiter V6 Swap Simulation Syntax:</b>\n"
+            "<code>/quote [AMOUNT_SOL] [CA_OR_TICKER]</code>\n\n"
+            "<b>Examples:</b>\n"
+            "• <code>/quote 0.1 bonk</code>\n"
+            "• <code>/quote 0.5 DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263</code>\n"
+            "• <code>/quote popcat</code> (uses default quick-buy size)"
+        ) if user_lang == "en" else (
+            "ℹ️ <b>صيغة محاكاة صفقات Jupiter V6:</b>\n"
+            "<code>/quote [المبلغ_SOL] [العقد_أو_الرمز]</code>\n\n"
+            "<b>أمثلة سريعة:</b>\n"
+            "• <code>/quote 0.1 bonk</code>\n"
+            "• <code>/quote 0.5 DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263</code>\n"
+            "• <code>/quote popcat</code> (يستخدم مبلغ القنص الافتراضي الخاص بك)"
+        )
+        await update.message.reply_text(help_text, parse_mode="HTML")
+        return
+
+    settings = get_user_settings(user_id)
+    default_buy = settings.get("default_buy_amount", 0.1)
+
+    try:
+        amount_sol = float(args[0].strip())
+        target_token = args[1].strip() if len(args) > 1 else ""
+    except ValueError:
+        amount_sol = default_buy
+        target_token = args[0].strip()
+
+    if not target_token:
+        err = "❌ Please specify a token ticker or CA. Example: <code>/quote 0.1 bonk</code>" if user_lang == "en" else "❌ يرجى تحديد رمز أو عقد العملة. مثال: <code>/quote 0.1 bonk</code>"
+        await update.message.reply_text(err, parse_mode="HTML")
+        return
+
+    mint = extract_token_mint(target_token)
+    if not mint:
+        matched = search_solana_token(target_token)
+        if matched:
+            mint = matched["mint"]
+
+    if not mint:
+        err = t("search_not_found", user_lang, query=html.escape(target_token))
+        await update.message.reply_text(err, parse_mode="HTML")
+        return
+
+    wait_text = "⚡ <b>Simulating Jupiter V6 swap routing & price impact...</b>" if user_lang == "en" else "⚡ <b>جاري محاكاة مسار الصفقة وحساب السعر عبر Jupiter V6...</b>"
+    status_msg = await update.message.reply_text(wait_text, parse_mode="HTML")
+    await render_quote_card(status_msg, user_id, user_lang, mint, amount_sol, is_edit=True)
 
 
 async def tp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -3636,6 +3830,7 @@ async def bot_post_init(app: Application):
             BotCommand("export", "Non-custodial private key export"),
             BotCommand("settings", "Customize slippage & gas fees"),
             BotCommand("about", "Bot version & architecture specs"),
+            BotCommand("quote", "Jupiter V6 swap simulation & quote"),
             BotCommand("help", "All bot commands and guide")
         ]
         await app.bot.set_my_commands(commands)
@@ -3675,6 +3870,9 @@ def build_application(token: str) -> Application:
     app.add_handler(CommandHandler("chart", price_command))
     app.add_handler(CommandHandler("p", price_command))
     app.add_handler(CommandHandler("c", price_command))
+    app.add_handler(CommandHandler("quote", quote_command))
+    app.add_handler(CommandHandler("sim", quote_command))
+    app.add_handler(CommandHandler("simulate", quote_command))
     app.add_handler(CommandHandler("tp", tp_command))
     app.add_handler(CommandHandler("sl", sl_command))
     app.add_handler(CommandHandler("alerts", alerts_command))

@@ -329,7 +329,7 @@ def get_batch_token_prices(mints: List[str]) -> Dict[str, Dict[str, Any]]:
             try:
                 r = _SESSION.get(url, timeout=12)
                 if r.status_code == 200:
-                    pairs = r.json().get("pairs", [])
+                    pairs = r.json().get("pairs") or []
                     for p in pairs:
                         base = p.get("baseToken", {})
                         mint_addr = base.get("address")

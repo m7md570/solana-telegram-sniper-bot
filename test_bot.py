@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.57.0", card_text)
+        self.assertIn("v3.58.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.57.0")
+        self.assertEqual(BOT_VERSION, "v3.58.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -3470,6 +3470,104 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         with patch("telegram_bot.execute_panic_sell_all", new_callable=AsyncMock) as mock_panic_exec:
             asyncio.run(panic_command(mock_cmd_update, mock_cmd_ctx))
             mock_panic_exec.assert_called_once_with(mock_cmd_update.message, test_uid, "en")
+
+    def test_82_interactive_price_radar_and_quickbuy_flow(self):
+        """Test render_price_card, dynamic track/untrack button, watchlist price shortcut, and /p, /c, /scan aliases."""
+        from telegram_bot import (
+            render_price_card,
+            price_command,
+            render_watchlist,
+            callback_router,
+            build_application
+        )
+        from wallet_manager import (
+            get_or_create_wallet,
+            add_to_watchlist,
+            remove_from_watchlist,
+            update_user_default_buy_amount
+        )
+        from telegram.ext import CommandHandler
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        test_uid = 99556677
+        get_or_create_wallet(test_uid, "PriceRadarTester", initial_language="en")
+        update_user_default_buy_amount(test_uid, 0.25)
+        test_mint = "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"  # BONK
+
+        # 1. Test render_price_card with default buy size (0.25 SOL) and untracked state
+        remove_from_watchlist(test_uid, test_mint)
+        mock_target = MagicMock()
+        mock_target.reply_text = AsyncMock()
+
+        asyncio.run(render_price_card(mock_target, test_uid, "en", test_mint, is_edit=False))
+        self.assertTrue(mock_target.reply_text.called)
+
+        card_text = mock_target.reply_text.call_args[0][0]
+        self.assertIn("Token Price & Liquidity Radar", card_text)
+        self.assertIn(test_mint, card_text)
+
+        kb = mock_target.reply_text.call_args[1]["reply_markup"]
+        all_btns = [b for row in kb.inline_keyboard for b in row]
+
+        quick_buy_btn = next((b for b in all_btns if b.callback_data == f"buy_{test_mint}_0.25"), None)
+        snipe_btn = next((b for b in all_btns if b.callback_data == f"inspect_{test_mint}"), None)
+        track_btn = next((b for b in all_btns if b.callback_data == f"track_{test_mint}"), None)
+        refresh_btn = next((b for b in all_btns if b.callback_data == f"price_{test_mint}"), None)
+
+        self.assertIsNotNone(quick_buy_btn, "Quick buy button must use user configured amount 0.25 SOL")
+        self.assertIsNotNone(snipe_btn, "Inspect & Snipe button must exist")
+        self.assertIsNotNone(track_btn, "Track button must exist when token is untracked")
+        self.assertIsNotNone(refresh_btn, "Refresh price callback button must exist")
+
+        # 2. Test render_price_card when token is already tracked flips to untrack
+        add_to_watchlist(test_uid, test_mint, "BONK", 0.00002)
+        mock_target_tracked = MagicMock()
+        mock_target_tracked.reply_text = AsyncMock()
+
+        asyncio.run(render_price_card(mock_target_tracked, test_uid, "en", test_mint, is_edit=False))
+        kb_tracked = mock_target_tracked.reply_text.call_args[1]["reply_markup"]
+        all_btns_tracked = [b for row in kb_tracked.inline_keyboard for b in row]
+        untrack_btn = next((b for b in all_btns_tracked if b.callback_data == f"untrack_{test_mint}"), None)
+        self.assertIsNotNone(untrack_btn, "Track button must flip to Untrack when token is in watchlist")
+        self.assertIn("Untrack", untrack_btn.text)
+
+        # 3. Test watchlist item includes Price button shortcut
+        mock_wl_target = MagicMock()
+        mock_wl_target.reply_text = AsyncMock()
+        asyncio.run(render_watchlist(mock_wl_target, test_uid, "en", is_edit=False))
+        wl_kb = mock_wl_target.reply_text.call_args[1]["reply_markup"]
+        all_wl_btns = [b for row in wl_kb.inline_keyboard for b in row]
+        price_wl_btn = next((b for b in all_wl_btns if b.callback_data == f"price_{test_mint}"), None)
+        self.assertIsNotNone(price_wl_btn, "Watchlist row must contain direct 💵 Price shortcut button")
+
+        # 4. Test callback_router handles price_ callback
+        mock_query = MagicMock()
+        mock_query.from_user.id = test_uid
+        mock_query.data = f"price_{test_mint}"
+        mock_query.answer = AsyncMock()
+        mock_query.message.reply_chat_action = AsyncMock()
+        mock_query.edit_message_text = AsyncMock()
+        mock_query.message.edit_text = AsyncMock()
+
+        mock_update = MagicMock()
+        mock_update.callback_query = mock_query
+        mock_ctx = MagicMock()
+        mock_ctx.bot.username = "PopcornSniperBot"
+
+        asyncio.run(callback_router(mock_update, mock_ctx))
+        self.assertTrue(mock_query.answer.called)
+
+        # 5. Test CommandHandler registration for /p, /c, and /scan
+        app = build_application("8935718262:AAGZc-RLQplBfx6cWzTtk2zyorXo5o74NqE")
+        command_handlers = [h for h in app.handlers[0] if isinstance(h, CommandHandler)]
+        registered_commands = set()
+        for h in command_handlers:
+            registered_commands.update(h.commands)
+
+        self.assertIn("p", registered_commands)
+        self.assertIn("c", registered_commands)
+        self.assertIn("scan", registered_commands)
 
 
 if __name__ == "__main__":

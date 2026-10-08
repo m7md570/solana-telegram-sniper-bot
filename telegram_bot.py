@@ -391,10 +391,12 @@ def build_welcome_text(user, pubkey: str, balance: float, now_str: str, lang: st
 async def safe_edit_text(query, text: str, reply_markup=None):
     """Safely edits message text while preventing 'Message is not modified' errors."""
     try:
-        if hasattr(query, "edit_message_text"):
+        if isinstance(getattr(query, "data", None), str) and hasattr(query, "edit_message_text"):
             await query.edit_message_text(text, parse_mode="HTML", reply_markup=reply_markup, disable_web_page_preview=True)
         elif hasattr(query, "edit_text"):
             await query.edit_text(text, parse_mode="HTML", reply_markup=reply_markup, disable_web_page_preview=True)
+        elif hasattr(query, "edit_message_text"):
+            await query.edit_message_text(text, parse_mode="HTML", reply_markup=reply_markup, disable_web_page_preview=True)
     except BadRequest as e:
         if "Message is not modified" in str(e):
             if hasattr(query, "answer"):
@@ -752,6 +754,7 @@ async def render_watchlist(target, user_id: int, user_lang: str, is_edit: bool =
         text_lines.append(f"  📋 <code>{mint}</code>\n")
         kb.append([
             InlineKeyboardButton(f"🚀 Snipe ${sym}", callback_data=f"inspect_{mint}"),
+            InlineKeyboardButton("💵 Price", callback_data=f"price_{mint}"),
             InlineKeyboardButton("🗑️ Untrack", callback_data=f"untrack_{mint}")
         ])
     tip_text = (
@@ -778,6 +781,101 @@ async def render_watchlist(target, user_id: int, user_lang: str, is_edit: bool =
         await safe_edit_text(target, full_text, reply_markup=InlineKeyboardMarkup(kb))
     else:
         await target.reply_text(full_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
+
+
+async def render_price_card(target, user_id: int, user_lang: str, mint: str, is_edit: bool = False, bot_username: str = "PopcornSniperBot"):
+    """Renders real-time token price & liquidity radar with 1-click quick-buy, dynamic watchlist tracking, X viral sharing, and live refresh."""
+    scan = scan_token_security(mint)
+    sym = html.escape(scan.get("symbol", "TOKEN"))
+    name = html.escape(scan.get("name", "Unknown Token"))
+    p_usd = scan.get("price_usd", 0.0)
+    c24 = scan.get("price_change_24h", 0.0)
+    liq = scan.get("liquidity_usd", 0.0)
+    mcap = scan.get("mcap", 0.0)
+    vol24 = scan.get("volume_24h", 0.0)
+    now_str = get_current_time_str()
+    emoji = "📈" if c24 >= 0 else "📉"
+
+    title = t("price_card_title", user_lang)
+    settings = get_user_settings(user_id)
+    default_buy_amt = settings.get("default_buy_amount", 0.1)
+
+    if user_lang == "ar":
+        card = (
+            f"{title} ⚡\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"🪙 <b>{name}</b> (<code>${sym}</code>)\n"
+            f"💵 <b>السعر اللحظي:</b> <code>${p_usd:.8f}</code> {emoji} <code>{c24:+.2f}%</code>\n"
+            f"💎 <b>القيمة السوقية:</b> <code>${mcap:,.0f}</code>\n"
+            f"💧 <b>السيولة المتاحة:</b> <code>${liq:,.0f}</code>\n"
+            f"📊 <b>حجم تداول 24 ساعة:</b> <code>${vol24:,.0f}</code>\n"
+            f"📋 <b>العقد:</b> <code>{mint}</code>\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"🕒 <code>{now_str}</code>"
+        )
+        quick_buy_label = f"🟢 شراء سريع ({default_buy_amt:.2f} SOL)"
+        snipe_label = f"🚀 فحص وتداول ${sym}"
+        refresh_label = "🔄 تحديث السعر"
+    else:
+        card = (
+            f"{title} ⚡\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"🪙 <b>{name}</b> (<code>${sym}</code>)\n"
+            f"💵 <b>Current Price:</b> <code>${p_usd:.8f}</code> {emoji} <code>{c24:+.2f}%</code>\n"
+            f"💎 <b>Market Cap:</b> <code>${mcap:,.0f}</code>\n"
+            f"💧 <b>Liquidity:</b> <code>${liq:,.0f}</code>\n"
+            f"📊 <b>24h Volume:</b> <code>${vol24:,.0f}</code>\n"
+            f"📋 <b>CA:</b> <code>{mint}</code>\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"🕒 <code>{now_str}</code>"
+        )
+        quick_buy_label = f"🟢 Quick Buy ({default_buy_amt:.2f} SOL)"
+        snipe_label = f"🚀 Inspect & Snipe ${sym}"
+        refresh_label = "🔄 Refresh Price"
+
+    is_tracked = is_token_in_watchlist(user_id, mint) if user_id else False
+    if is_tracked:
+        track_label = "⭐ " + ("Untrack" if user_lang == "en" else "إزالة من المتابعة")
+        track_cb = f"untrack_{mint}"
+    else:
+        track_label = "⭐ " + t("btn_track", user_lang)
+        track_cb = f"track_{mint}"
+
+    ref_param = f"?start=ref_{user_id}" if user_id else ""
+    share_bot_url = f"https://t.me/{bot_username}{ref_param}"
+    x_intent_text = (
+        f"Checking ${sym} on @{bot_username}! 🍿⚡\n"
+        f"Price: ${p_usd:.8f} ({c24:+.1f}%)\n"
+        f"Contract: {mint}\n\n"
+        f"Trade now: {share_bot_url}"
+    )
+    import urllib.parse
+    x_share_link = f"https://twitter.com/intent/tweet?text={urllib.parse.quote(x_intent_text)}"
+
+    kb = [
+        [
+            InlineKeyboardButton(quick_buy_label, callback_data=f"buy_{mint}_{default_buy_amt}"),
+            InlineKeyboardButton(snipe_label, callback_data=f"inspect_{mint}")
+        ],
+        [
+            InlineKeyboardButton(track_label, callback_data=track_cb),
+            InlineKeyboardButton("📊 DexScreener", url=f"https://dexscreener.com/solana/{mint}"),
+            InlineKeyboardButton("🛡️ RugCheck", url=f"https://rugcheck.xyz/tokens/{mint}")
+        ],
+        [
+            InlineKeyboardButton("📢 Share on X", url=x_share_link),
+            InlineKeyboardButton(refresh_label, callback_data=f"price_{mint}")
+        ],
+        [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
+    ]
+    markup = InlineKeyboardMarkup(kb)
+    if is_edit:
+        await safe_edit_text(target, card, reply_markup=markup)
+    else:
+        if hasattr(target, "reply_text"):
+            await target.reply_text(card, parse_mode="HTML", reply_markup=markup, disable_web_page_preview=True)
+        elif hasattr(target, "message") and hasattr(target.message, "reply_text"):
+            await target.message.reply_text(card, parse_mode="HTML", reply_markup=markup, disable_web_page_preview=True)
 
 
 async def render_trade_history(target, user_id: int, user_lang: str, is_edit: bool = False):
@@ -2111,6 +2209,12 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_chat_action("typing")
         await render_network_ping(query, user_id, user_lang, is_edit=True)
 
+    elif data.startswith("price_"):
+        mint = data.replace("price_", "", 1)
+        await query.message.reply_chat_action("typing")
+        bot_user = (context.bot.username if context and context.bot else None) or "PopcornSniperBot"
+        await render_price_card(query, user_id, user_lang, mint, is_edit=True, bot_username=bot_user)
+
     elif data.startswith("track_"):
         mint = data.replace("track_", "", 1)
         scan = scan_token_security(mint)
@@ -2118,12 +2222,21 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         current_price = float(scan.get("price_usd") or 0.0)
         add_to_watchlist(user_id, mint, sym, current_price=current_price)
         await query.answer(t("watchlist_added", user_lang), show_alert=False)
+        msg_text = (query.message.text or "") if query.message else ""
+        if "Radar" in msg_text or "رادار" in msg_text or "Price" in msg_text:
+            bot_user = (context.bot.username if context and context.bot else None) or "PopcornSniperBot"
+            await render_price_card(query, user_id, user_lang, mint, is_edit=True, bot_username=bot_user)
 
     elif data.startswith("untrack_"):
         mint = data.replace("untrack_", "", 1)
         remove_from_watchlist(user_id, mint)
         await query.answer(t("watchlist_removed", user_lang), show_alert=False)
-        await render_watchlist(query, user_id, user_lang, is_edit=True)
+        msg_text = (query.message.text or "") if query.message else ""
+        if "Radar" in msg_text or "رادار" in msg_text or "Price" in msg_text:
+            bot_user = (context.bot.username if context and context.bot else None) or "PopcornSniperBot"
+            await render_price_card(query, user_id, user_lang, mint, is_edit=True, bot_username=bot_user)
+        else:
+            await render_watchlist(query, user_id, user_lang, is_edit=True)
 
     elif data == "btn_clear_watchlist":
         cleared_count = clear_user_watchlist(user_id)
@@ -2774,7 +2887,7 @@ async def presets_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def price_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler for /price and /chart command: /price [CA_OR_TICKER]"""
+    """Handler for /price, /chart, /p, and /c command: /price [CA_OR_TICKER]"""
     user_id = update.effective_user.id
     user_lang = get_user_language(user_id)
     args = context.args
@@ -2798,50 +2911,8 @@ async def price_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     wait_text = "💵 <b>جاري فحص السعر والسيولة اللحظية...</b>" if user_lang == "ar" else "💵 <b>Fetching real-time price & liquidity quote...</b>"
     status_msg = await update.message.reply_text(wait_text, parse_mode="HTML")
 
-    scan = scan_token_security(mint)
-    sym = html.escape(scan.get("symbol", "TOKEN"))
-    name = html.escape(scan.get("name", "Unknown Token"))
-    p_usd = scan.get("price_usd", 0.0)
-    c24 = scan.get("price_change_24h", 0.0)
-    liq = scan.get("liquidity_usd", 0.0)
-    mcap = scan.get("mcap", 0.0)
-    now_str = get_current_time_str()
-    emoji = "📈" if c24 >= 0 else "📉"
-
-    title = t("price_card_title", user_lang)
-    if user_lang == "ar":
-        card = (
-            f"{title} ⚡\n"
-            f"━━━━━━━━━━━━━━━━━━━\n"
-            f"🪙 <b>{name}</b> (<code>${sym}</code>)\n"
-            f"💵 <b>السعر اللحظي:</b> <code>${p_usd:.8f}</code> {emoji} <code>{c24:+.2f}%</code>\n"
-            f"💎 <b>القيمة السوقية:</b> <code>${mcap:,.0f}</code>\n"
-            f"💧 <b>السيولة المتاحة:</b> <code>${liq:,.0f}</code>\n"
-            f"📋 <b>العقد:</b> <code>{mint}</code>\n"
-            f"━━━━━━━━━━━━━━━━━━━\n"
-            f"🕒 <code>{now_str}</code>"
-        )
-    else:
-        card = (
-            f"{title} ⚡\n"
-            f"━━━━━━━━━━━━━━━━━━━\n"
-            f"🪙 <b>{name}</b> (<code>${sym}</code>)\n"
-            f"💵 <b>Current Price:</b> <code>${p_usd:.8f}</code> {emoji} <code>{c24:+.2f}%</code>\n"
-            f"💎 <b>Market Cap:</b> <code>${mcap:,.0f}</code>\n"
-            f"💧 <b>Liquidity:</b> <code>${liq:,.0f}</code>\n"
-            f"📋 <b>CA:</b> <code>{mint}</code>\n"
-            f"━━━━━━━━━━━━━━━━━━━\n"
-            f"🕒 <code>{now_str}</code>"
-        )
-
-    kb = [
-        [
-            InlineKeyboardButton(f"🚀 Snipe ${sym}", callback_data=f"inspect_{mint}"),
-            InlineKeyboardButton("📊 Chart", url=f"https://dexscreener.com/solana/{mint}")
-        ],
-        [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
-    ]
-    await status_msg.edit_text(card, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb), disable_web_page_preview=True)
+    bot_user = (context.bot.username if context and context.bot else None) or "PopcornSniperBot"
+    await render_price_card(status_msg, user_id, user_lang, mint, is_edit=True, bot_username=bot_user)
 
 
 async def tp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -3602,6 +3673,8 @@ def build_application(token: str) -> Application:
     app.add_handler(CommandHandler("quickbuy", presets_command))
     app.add_handler(CommandHandler("price", price_command))
     app.add_handler(CommandHandler("chart", price_command))
+    app.add_handler(CommandHandler("p", price_command))
+    app.add_handler(CommandHandler("c", price_command))
     app.add_handler(CommandHandler("tp", tp_command))
     app.add_handler(CommandHandler("sl", sl_command))
     app.add_handler(CommandHandler("alerts", alerts_command))
@@ -3611,6 +3684,7 @@ def build_application(token: str) -> Application:
     app.add_handler(CommandHandler("network", ping_command))
     app.add_handler(CommandHandler("audit", audit_command))
     app.add_handler(CommandHandler("check", audit_command))
+    app.add_handler(CommandHandler("scan", audit_command))
     app.add_handler(CommandHandler("status", status_command))
     app.add_handler(CommandHandler("cluster", status_command))
     app.add_handler(CommandHandler("info", status_command))

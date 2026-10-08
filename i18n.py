@@ -234,11 +234,17 @@ MESSAGES = {
         "price_card_title": "💵 <b>Token Price & Liquidity Radar</b>",
         "price_syntax_help": "ℹ️ <b>Price Syntax</b>: <code>/price [CA_OR_TICKER]</code>\nExample: <code>/price bonk</code>",
         "auditcode_usage_help": "ℹ️ <b>Bug Bounty Auditor Usage</b>:\n<code>/auditcode [RUST_OR_ANCHOR_CODE]</code>\n\nExample:\n<code>/auditcode pub struct Admin { pub authority: AccountInfo&lt;'info&gt; }</code>\n\nAudits Solana programs for Missing Signers, Arbitrary CPI, Stale State, and Math Overflows. Generates full Immunefi-ready PoC reports!",
+        "smartmoney_usage_help": "ℹ️ <b>Smart Money Cluster Radar</b>:\n<code>/smartmoney</code> (or <code>/clusters</code>, <code>/whales</code>)\n\nScans for Multi-Wallet Cluster Conviction where 2+ verified smart money wallets accumulate the same token within 30 minutes.\n\nTo track custom whales:\n<code>/trackwallet [SOLANA_ADDRESS] [ALIAS]</code>",
+        "trackwallet_usage_help": "ℹ️ <b>Track Smart Wallet Usage</b>:\n<code>/trackwallet [SOLANA_ADDRESS] [ALIAS]</code>\nExample:\n<code>/trackwallet 5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1 AlphaSniper</code>",
+        "trackwallet_added": "✅ Successfully registered smart wallet: <b>{alias}</b> (<code>{address}</code>) for cluster tracking!",
+        "trackwallet_invalid": "❌ Invalid Solana wallet address format. Please provide a valid 32-44 character base58 address.",
         "help_title": "❓ <b>Popcorn Solana Sniper & Trading Bot Guide</b> ⚡",
         "help_body": (
             "━━━━━━━━━━━━━━━━━━━\n"
             "• <code>/start</code> - Open Main Dashboard\n"
             "• <code>/tour</code> - 3-Step Quick Sniping Onboarding Guide\n"
+            "• <code>/smartmoney</code> - Multi-Wallet Whale Cluster Conviction Radar (/clusters, /whales)\n"
+            "• <code>/trackwallet [ADDR] [NAME]</code> - Track Custom Smart Money Wallets\n"
             "• <code>/status</code> - Live Solana Cluster Slot & Bot Health Radar\n"
             "• <code>/fees</code> - Transparent 1.0% Fee Schedule & Payouts\n"
             "• <code>/search [TICKER]</code> - Search Token by Name or Symbol\n"
@@ -502,11 +508,17 @@ MESSAGES = {
         "price_card_title": "💵 <b>رادار سعر وسيولة العملة اللحظي</b>",
         "price_syntax_help": "ℹ️ <b>صيغة فحص السعر</b>: <code>/price [العقد_أو_الرمز]</code>\nمثال: <code>/price bonk</code>",
         "auditcode_usage_help": "ℹ️ <b>صيغة فحص وتدقيق العقود الذكية</b>:\n<code>/auditcode [كود_العقد_الذكي_بـ_Rust_أو_Anchor]</code>\n\nمثال:\n<code>/auditcode pub struct Admin { pub authority: AccountInfo&lt;'info&gt; }</code>\n\nيقوم بفحص أمان برامج سولانا واكتشاف ثغرات التوقيع، الحسابات غير المقيدة، واستدعاءات CPI العشوائية، ويصيغ تقرير مكافآت جاهز لـ Immunefi!",
+        "smartmoney_usage_help": "ℹ️ <b>رادار كتل الحيتان والمال الذكي</b>:\n<code>/smartmoney</code> (أو <code>/clusters</code>)\n\nيكتشف تراكم وتحركات محافظ الحيتان والمال الذكي عندما تدخل محفظتان أو أكثر على نفس العملة خلال 30 دقيقة بيقين استثماري مضاعف.\n\nلتتبع محفظة مخصصة:\n<code>/trackwallet [عنوان_المحفظة] [الاسم]</code>",
+        "trackwallet_usage_help": "ℹ️ <b>صيغة تتبع محفظة ذكية</b>:\n<code>/trackwallet [عنوان_المحفظة_سولانا] [الاسم_المستعار]</code>\nمثال:\n<code>/trackwallet 5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1 قناص_ريديوم</code>",
+        "trackwallet_added": "✅ تم بنجاح تسجيل المحفظة الذكية للمتابعة: <b>{alias}</b> (<code>{address}</code>)!",
+        "trackwallet_invalid": "❌ عنوان محفظة سولانا غير صالح. يرجى إدخال عنوان Base58 صالح بين 32 و 44 حرفاً.",
         "help_title": "❓ <b>دليل استخدام بوت قنص وتداول سولانا</b> ⚡",
         "help_body": (
             "━━━━━━━━━━━━━━━━━━━\n"
             "• <code>/start</code> - فتح لوحة التحكم الرئيسية\n"
             "• <code>/tour</code> - جولة سريعة للقنص والربح في 3 خطوات\n"
+            "• <code>/smartmoney</code> - رادار كتل الحيتان والمال الذكي عالي اليقين (/clusters)\n"
+            "• <code>/trackwallet [العنوان] [الاسم]</code> - متابعة وتتبع محافظ الحيتان\n"
             "• <code>/status</code> - رادار حالة شبكة سولانا وبلوك Mainnet وسرعة الـ RPC\n"
             "• <code>/fees</code> - جدول الرسوم الشفاف (1% وعوائد الإحالة 25%)\n"
             "• <code>/search [الرمز/الاسم]</code> - البحث عن العملات بالاسم أو الرمز\n"

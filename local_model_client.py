@@ -62,8 +62,7 @@ def query_local_ai(prompt: str, system_prompt: str = "", max_tokens: int = 500, 
                 # Fallback to reasoning_content if content was truncated by length
                 reasoning = (msg.get("reasoning_content") or "").strip()
                 if reasoning:
-                    lines = [ln.strip() for ln in reasoning.split("\n") if ln.strip()]
-                    return lines[-1] if lines else reasoning[:200]
+                    return reasoning[-400:] if len(reasoning) > 400 else reasoning
     except Exception as e:
         logger.debug(f"Local AI inference bypassed or offline: {e}")
     return None

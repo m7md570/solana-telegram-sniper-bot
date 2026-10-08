@@ -5098,6 +5098,121 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertEqual(normal_slip, 100)
         self.assertEqual(dlmm_slip, 125)  # max(50+75, 100) = 125 bps
 
+    def test_115_smart_money_cluster_tracker(self):
+        from unittest.mock import patch, MagicMock
+        import smart_money_cluster_tracker as smct
+        from smart_money_cluster_tracker import (
+            get_tracked_wallets,
+            add_tracked_wallet,
+            remove_tracked_wallet,
+            record_wallet_activity,
+            detect_clusters,
+            clear_activity_buffer,
+            calculate_conviction_score,
+            format_cluster_alert_card,
+            get_active_or_fallback_clusters
+        )
+
+        # 1. Test tracked wallet registry & defaults
+        wallets = get_tracked_wallets()
+        self.assertGreaterEqual(len(wallets), 4)
+        self.assertIn("5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1", wallets)
+
+        # 2. Test adding and removing custom smart wallet
+        test_custom_addr = "8xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAs1"
+        self.assertTrue(add_tracked_wallet(test_custom_addr, "Test Whale #99", winrate=85.0))
+        updated_wallets = get_tracked_wallets()
+        self.assertIn(test_custom_addr, updated_wallets)
+        self.assertEqual(updated_wallets[test_custom_addr]["winrate"], 85.0)
+
+        # Remove custom wallet
+        self.assertTrue(remove_tracked_wallet(test_custom_addr))
+        self.assertNotIn(test_custom_addr, get_tracked_wallets())
+
+        # Test invalid address rejection
+        self.assertFalse(add_tracked_wallet("short_addr", "Invalid"))
+
+        # 3. Test cluster detection mechanics
+        clear_activity_buffer()
+        now = 1760000000.0
+        test_mint = "TokenMintClusterTest11111111111111111111111"
+        test_mint_b = "TokenMintSingleTest22222222222222222222222"
+
+        # Only 1 wallet buys test_mint_b -> Should NOT form a cluster
+        record_wallet_activity(
+            wallet="5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1",
+            token_mint=test_mint_b,
+            token_symbol="SINGLE",
+            action="BUY",
+            sol_amount=5.0,
+            timestamp=now
+        )
+        clusters = detect_clusters(time_window_seconds=1800, min_unique_wallets=2, now=now)
+        self.assertEqual(len(clusters), 0, "Single wallet buy should not trigger cluster conviction")
+
+        # 2 distinct wallets buy test_mint within 10 minutes -> Should trigger cluster!
+        record_wallet_activity(
+            wallet="5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1",
+            token_mint=test_mint,
+            token_symbol="CLUSTER",
+            action="BUY",
+            sol_amount=8.5,
+            timestamp=now - 600
+        )
+        record_wallet_activity(
+            wallet="7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
+            token_mint=test_mint,
+            token_symbol="CLUSTER",
+            action="BUY",
+            sol_amount=12.0,
+            timestamp=now - 100
+        )
+
+        clusters = detect_clusters(time_window_seconds=1800, min_unique_wallets=2, now=now)
+        self.assertEqual(len(clusters), 1)
+        c = clusters[0]
+        self.assertEqual(c["token_mint"], test_mint)
+        self.assertEqual(c["token_symbol"], "CLUSTER")
+        self.assertEqual(c["wallet_count"], 2)
+        self.assertAlmostEqual(c["total_sol_accumulated"], 20.5, places=2)
+        self.assertGreaterEqual(c["conviction_score"], 70)
+
+        # 3rd wallet joins -> Conviction score elevates further
+        record_wallet_activity(
+            wallet="9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
+            token_mint=test_mint,
+            token_symbol="CLUSTER",
+            action="BUY",
+            sol_amount=15.0,
+            timestamp=now
+        )
+        clusters_3 = detect_clusters(time_window_seconds=1800, min_unique_wallets=2, now=now)
+        self.assertEqual(len(clusters_3), 1)
+        self.assertEqual(clusters_3[0]["wallet_count"], 3)
+        self.assertGreaterEqual(clusters_3[0]["conviction_score"], 85)
+        self.assertIn("CONVICTION", clusters_3[0]["conviction_level"])
+
+        # 4. Test format_cluster_alert_card
+        with patch("local_model_client.query_local_ai", return_value="High conviction institutional inflow."):
+            card = format_cluster_alert_card(clusters_3[0])
+            self.assertIn("SMART MONEY CLUSTER DETECTED", card)
+            self.assertIn("$CLUSTER", card)
+            self.assertIn("Total Net Inflow:", card)
+            self.assertIn("3 Whales", card)
+
+        # 5. Test get_active_or_fallback_clusters
+        clear_activity_buffer()
+        fallback_clusters = get_active_or_fallback_clusters()
+        self.assertGreaterEqual(len(fallback_clusters), 1)
+        self.assertEqual(fallback_clusters[0]["token_symbol"], "PIPPIN")
+
+        # 6. Test telegram_bot get_cluster_card_keyboard
+        from telegram_bot import get_cluster_card_keyboard
+        kb = get_cluster_card_keyboard(test_mint, lang="en")
+        self.assertTrue(any(btn.callback_data == f"buy_{test_mint}_0.1" for row in kb.inline_keyboard for btn in row))
+        self.assertTrue(any(btn.callback_data == f"buy_{test_mint}_0.5" for row in kb.inline_keyboard for btn in row))
+        self.assertTrue(any(btn.callback_data == f"buy_{test_mint}_1.0" for row in kb.inline_keyboard for btn in row))
+
 
 if __name__ == "__main__":
     unittest.main()

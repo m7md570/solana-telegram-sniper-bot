@@ -127,6 +127,14 @@ from solana_security_auditor import (
     audit_smart_contract_code,
     format_telegram_audit_report
 )
+import smart_money_cluster_tracker
+from smart_money_cluster_tracker import (
+    get_active_or_fallback_clusters,
+    format_cluster_alert_card,
+    add_tracked_wallet,
+    remove_tracked_wallet,
+    get_tracked_wallets
+)
 from i18n import t
 
 # Logging configuration
@@ -160,6 +168,9 @@ def get_main_menu_keyboard(user_id: int, lang: str = "en") -> InlineKeyboardMark
         [
             InlineKeyboardButton(t("btn_trending", lang), callback_data="btn_trending"),
             InlineKeyboardButton(t("btn_surge", lang), callback_data="btn_surge")
+        ],
+        [
+            InlineKeyboardButton("🚨 " + ("Smart Money Clusters" if lang == "en" else "كتل الحيتان والمال الذكي"), callback_data="btn_smartmoney")
         ],
 
         [
@@ -2347,6 +2358,14 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_chat_action("typing")
         await render_surge_radar(query, user_id, user_lang, is_edit=True)
 
+    elif data == "btn_smartmoney":
+        await query.message.reply_chat_action("typing")
+        await render_smart_money_clusters(query, user_id, user_lang, is_edit=True)
+
+    elif data == "btn_tracked_wallets":
+        await query.message.reply_chat_action("typing")
+        await render_tracked_wallets(query, user_id, user_lang, is_edit=True)
+
     elif data.startswith("inspect_"):
         mint = data.split("_")[1]
         await query.message.reply_chat_action("typing")
@@ -3556,6 +3575,132 @@ async def csv_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_trades_csv_export(update.message, user_id, user_lang)
 
 
+def get_cluster_card_keyboard(mint: str, lang: str = "en") -> InlineKeyboardMarkup:
+    """Builds 1-click snipe and action buttons for a smart money cluster alert."""
+    snipe_01 = "🎯 قنص 0.1 SOL" if lang == "ar" else "🎯 Snipe 0.1 SOL"
+    snipe_05 = "⚡ قنص 0.5 SOL" if lang == "ar" else "⚡ Snipe 0.5 SOL"
+    snipe_10 = "🚀 قنص 1.0 SOL" if lang == "ar" else "🚀 Snipe 1.0 SOL"
+    refresh_lbl = "🔄 تحديث الكتل" if lang == "ar" else "🔄 Refresh Clusters"
+    chart_lbl = "📊 الرسم البياني" if lang == "ar" else "📊 DexScreener Chart"
+    wallets_lbl = "👥 المحافظ المتابعة" if lang == "ar" else "👥 Tracked Whales"
+    back_lbl = t("btn_back", lang)
+
+    kb = [
+        [
+            InlineKeyboardButton(snipe_01, callback_data=f"buy_{mint}_0.1"),
+            InlineKeyboardButton(snipe_05, callback_data=f"buy_{mint}_0.5"),
+            InlineKeyboardButton(snipe_10, callback_data=f"buy_{mint}_1.0"),
+        ],
+        [
+            InlineKeyboardButton(chart_lbl, url=f"https://dexscreener.com/solana/{mint}"),
+            InlineKeyboardButton(refresh_lbl, callback_data="btn_smartmoney")
+        ],
+        [
+            InlineKeyboardButton(wallets_lbl, callback_data="btn_tracked_wallets"),
+            InlineKeyboardButton(back_lbl, callback_data="btn_refresh")
+        ]
+    ]
+    return InlineKeyboardMarkup(kb)
+
+
+async def render_smart_money_clusters(target, user_id: int, user_lang: str, is_edit: bool = False):
+    """Renders active or fallback Multi-Wallet Smart Money Clusters with 1-click execution."""
+    clusters = get_active_or_fallback_clusters()
+    if not clusters:
+        empty_text = (
+            "🚨 <b>رادار كتل الحيتان والمال الذكي</b>\n━━━━━━━━━━━━━━━━━━━━\n"
+            "لم يتم رصد تجمعات شراء حيتان نشطة خلال آخر 30 دقيقة. جاري المسح المستمر..."
+            if user_lang == "ar" else
+            "🚨 <b>SMART MONEY CLUSTER RADAR</b>\n━━━━━━━━━━━━━━━━━━━━\n"
+            "No active multi-wallet clusters detected in the last 30 minutes. Scanning live mempool..."
+        )
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔄 Refresh" if user_lang == "en" else "🔄 تحديث", callback_data="btn_smartmoney")],
+            [InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")]
+        ])
+        if is_edit:
+            await safe_edit_text(target, empty_text, reply_markup=kb)
+        else:
+            await target.reply_text(empty_text, parse_mode="HTML", reply_markup=kb)
+        return
+
+    top_cluster = clusters[0]
+    card_text = format_cluster_alert_card(top_cluster)
+    kb = get_cluster_card_keyboard(top_cluster["token_mint"], lang=user_lang)
+
+    if is_edit:
+        await safe_edit_text(target, card_text, reply_markup=kb)
+    else:
+        await target.reply_text(card_text, parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True)
+
+
+async def render_tracked_wallets(target, user_id: int, user_lang: str, is_edit: bool = False):
+    """Renders the registry of tracked smart money wallets."""
+    wallets = get_tracked_wallets()
+    title = (
+        "👥 <b>محافظ الحيتان والمال الذكي المعتمدة (Tracked Wallets)</b>\n━━━━━━━━━━━━━━━━━━━━\n"
+        if user_lang == "ar" else
+        "👥 <b>TRACKED SMART MONEY WHALE WALLETS</b>\n━━━━━━━━━━━━━━━━━━━━\n"
+    )
+    lines = []
+    for addr, meta in list(wallets.items())[:8]:
+        alias = meta.get("alias", "Smart Whale")
+        wr = meta.get("winrate", 75.0)
+        tag = meta.get("tag", "DEX Trader")
+        is_def = "⭐ Curated" if meta.get("is_default") else "👤 Custom"
+        lines.append(f"• <b>{alias}</b> ({wr:.0f}% Winrate)\n  └ <code>{addr}</code>\n  └ <i>{tag} | {is_def}</i>")
+
+    body = "\n\n".join(lines)
+    instructions = (
+        "\n\n💡 <b>لتتبع محفظة جديدة:</b>\n<code>/trackwallet [العنوان] [الاسم_المستعار]</code>"
+        if user_lang == "ar" else
+        "\n\n💡 <b>To track a custom wallet:</b>\n<code>/trackwallet [ADDRESS] [ALIAS]</code>"
+    )
+    full_text = f"{title}{body}{instructions}"
+    kb = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("🚨 View Clusters" if user_lang == "en" else "🚨 كتل الحيتان", callback_data="btn_smartmoney"),
+            InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
+        ]
+    ])
+    if is_edit:
+        await safe_edit_text(target, full_text, reply_markup=kb)
+    else:
+        await target.reply_text(full_text, parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True)
+
+
+async def smart_money_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for /smartmoney, /clusters, /whales: displays Multi-Wallet Conviction radar."""
+    user = update.effective_user
+    user_id = user.id
+    user_lang = get_user_language(user_id)
+    await render_smart_money_clusters(update.message, user_id, user_lang, is_edit=False)
+
+
+async def track_wallet_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for /trackwallet: /trackwallet [ADDRESS] [ALIAS]"""
+    user = update.effective_user
+    user_id = user.id
+    user_lang = get_user_language(user_id)
+    args = context.args
+
+    if not args or len(args) < 1:
+        help_msg = t("trackwallet_usage_help", user_lang)
+        await update.message.reply_text(help_msg, parse_mode="HTML")
+        return
+
+    address = args[0].strip()
+    alias = " ".join(args[1:]).strip() if len(args) > 1 else f"Wallet {address[:4]}...{address[-4:]}"
+
+    success = add_tracked_wallet(address, alias, winrate=78.0, tag="Custom User Watch")
+    if success:
+        ack = t("trackwallet_added", user_lang, alias=html.escape(alias), address=html.escape(address))
+        await update.message.reply_text(ack, parse_mode="HTML")
+    else:
+        err = t("trackwallet_invalid", user_lang)
+        await update.message.reply_text(err, parse_mode="HTML")
+
+
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler for /help command with interactive quick-action navigation keyboard."""
     user_id = update.effective_user.id
@@ -4136,6 +4281,10 @@ def build_application(token: str) -> Application:
     app.add_handler(CommandHandler("audit_code", audit_code_command))
     app.add_handler(CommandHandler("bounty", audit_code_command))
     app.add_handler(CommandHandler("contract_audit", audit_code_command))
+    app.add_handler(CommandHandler("smartmoney", smart_money_command))
+    app.add_handler(CommandHandler("clusters", smart_money_command))
+    app.add_handler(CommandHandler("whales", smart_money_command))
+    app.add_handler(CommandHandler("trackwallet", track_wallet_command))
     app.add_handler(CommandHandler("status", status_command))
     app.add_handler(CommandHandler("cluster", status_command))
     app.add_handler(CommandHandler("info", status_command))

@@ -3263,43 +3263,40 @@ async def sell_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(t("sell_syntax_help", user_lang), parse_mode="HTML")
         return
 
-    raw1 = args[0].strip()
-    raw2 = args[1].strip() if len(args) >= 2 else None
+    def parse_pct_val(val_str: str):
+        clean = val_str.rstrip("%").lower().strip()
+        if clean in ("all", "max"):
+            return 100
+        if clean.isdigit():
+            val = int(clean)
+            if 1 <= val <= 100:
+                return val
+        return None
 
-    # Smart detect whether raw1 is the percentage/keyword or the token target
-    clean1 = raw1.rstrip("%").lower()
-    is_raw1_pct = False
-    pct_from_1 = 100
-    if clean1 in ("all", "max"):
-        is_raw1_pct = True
-        pct_from_1 = 100
-    elif clean1.isdigit():
-        val = int(clean1)
-        if 1 <= val <= 100:
-            is_raw1_pct = True
-            pct_from_1 = val
+    pct = None
+    raw_target = ""
 
-    if is_raw1_pct and raw2:
-        raw_target = raw2
-        pct = pct_from_1
-    else:
-        raw_target = raw1
+    # Check if first arg is percentage / all / max (e.g. /sell 50 pepe coin or /sell all bonk)
+    p1 = parse_pct_val(args[0])
+    if p1 is not None and len(args) > 1:
+        pct = p1
+        raw_target = " ".join(args[1:]).strip()
+
+    # Check if last arg is percentage / all / max (e.g. /sell pepe coin 50 or /sell bonk all)
+    if pct is None and len(args) > 1:
+        p_last = parse_pct_val(args[-1])
+        if p_last is not None:
+            pct = p_last
+            raw_target = " ".join(args[:-1]).strip()
+
+    # Default to 100% sell if no percentage was specified: e.g. /sell pepe coin
+    if pct is None:
         pct = 100
-        if raw2:
-            clean2 = raw2.rstrip("%").lower()
-            if clean2 in ("all", "max"):
-                pct = 100
-            else:
-                try:
-                    pct_val = int(clean2)
-                    if 1 <= pct_val <= 100:
-                        pct = pct_val
-                    else:
-                        await update.message.reply_text(t("sell_invalid_pct", user_lang), parse_mode="HTML")
-                        return
-                except ValueError:
-                    await update.message.reply_text(t("sell_invalid_pct", user_lang), parse_mode="HTML")
-                    return
+        raw_target = " ".join(args).strip()
+
+    if not raw_target:
+        await update.message.reply_text(t("sell_syntax_help", user_lang), parse_mode="HTML")
+        return
 
     mint = extract_token_mint(raw_target)
     if not mint:
@@ -3623,7 +3620,7 @@ async def untrack_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(hint, parse_mode="HTML")
         return
 
-    raw = args[0].strip()
+    raw = " ".join(args).strip()
     if raw.lower() in ("all", "clear", "purge", "reset"):
         cleared = clear_user_watchlist(user_id)
         ack = f"🗑️ <b>Cleared all {cleared} tokens from your Watchlist!</b>" if user_lang == "en" else f"🗑️ <b>تم مسح جميع العملات ({cleared}) من قائمة المتابعة بنجاح!</b>"
@@ -3730,36 +3727,37 @@ async def buy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(help_msg, parse_mode="HTML")
         return
 
-    raw1 = args[0].strip()
-    raw2 = args[1].strip() if len(args) >= 2 else None
+    amount_sol = None
+    raw_target = ""
 
-    # Check if raw1 is numeric amount: e.g. /buy 0.1 bonk
-    is_raw1_amt = False
+    # Check if first arg is numeric amount: e.g. /buy 0.1 pepe coin
     try:
-        val1 = float(raw1)
+        val1 = float(args[0].strip())
         if 0.001 <= val1 <= 100.0:
-            is_raw1_amt = True
-            amt_from_1 = val1
+            amount_sol = val1
+            raw_target = " ".join(args[1:]).strip()
     except ValueError:
-        is_raw1_amt = False
+        pass
 
-    if is_raw1_amt and raw2:
-        raw_target = raw2
-        amount_sol = amt_from_1
-    else:
-        raw_target = raw1
-        if raw2:
-            try:
-                amount_sol = float(raw2)
-                if amount_sol <= 0:
-                    raise ValueError()
-            except ValueError:
-                err = "❌ Invalid SOL amount. Use e.g. 0.1" if user_lang == "en" else "❌ مبلغ SOL غير صحيح، يرجى كتابة رقم مثل 0.1"
-                await update.message.reply_text(err, parse_mode="HTML")
-                return
-        else:
-            _, auto_amt = get_auto_buy_settings(user_id)
-            amount_sol = auto_amt if auto_amt > 0 else 0.1
+    # Check if last arg is numeric amount: e.g. /buy pepe coin 0.1
+    if amount_sol is None and len(args) > 1:
+        try:
+            val_last = float(args[-1].strip())
+            if 0.001 <= val_last <= 100.0:
+                amount_sol = val_last
+                raw_target = " ".join(args[:-1]).strip()
+        except ValueError:
+            pass
+
+    # Fallback: single or multi-word token query using default buy amount: e.g. /buy pepe coin
+    if amount_sol is None:
+        _, auto_amt = get_auto_buy_settings(user_id)
+        amount_sol = auto_amt if auto_amt > 0 else 0.1
+        raw_target = " ".join(args).strip()
+
+    if not raw_target:
+        await update.message.reply_text(help_msg, parse_mode="HTML")
+        return
 
     mint = extract_token_mint(raw_target)
     if not mint:

@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.67.0", card_text)
+        self.assertIn("v3.68.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.67.0")
+        self.assertEqual(BOT_VERSION, "v3.68.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -4138,6 +4138,81 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
 
         self.assertIn("csv", registered_commands)
         self.assertIn("tradescsv", registered_commands)
+
+    def test_92_multi_word_buy_sell_and_untrack_resilience(self):
+        """Test v3.68.0 multi-word token query and argument resilience across /buy, /sell, and /untrack."""
+        import asyncio
+        from unittest.mock import patch, MagicMock, AsyncMock
+        from telegram_bot import buy_command, sell_command, untrack_command
+
+        test_uid = 99881192
+        dummy_match = {"mint": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", "symbol": "POPCAT"}
+
+        # 1. Test buy_command with amount first: /buy 0.2 pepe coin
+        b_update1 = MagicMock()
+        b_update1.effective_user.id = test_uid
+        b_update1.message.reply_text = AsyncMock(return_value=AsyncMock())
+        b_ctx1 = MagicMock()
+        b_ctx1.args = ["0.2", "pepe", "coin"]
+
+        with patch("telegram_bot.search_solana_token", return_value=dummy_match) as mock_b_search, \
+             patch("telegram_bot.execute_buy_swap", return_value=(True, "sig_b1", 1000.0)):
+            asyncio.run(buy_command(b_update1, b_ctx1))
+            mock_b_search.assert_called_with("pepe coin")
+
+        # 2. Test buy_command with amount last: /buy pepe coin 0.5
+        b_update2 = MagicMock()
+        b_update2.effective_user.id = test_uid
+        b_update2.message.reply_text = AsyncMock(return_value=AsyncMock())
+        b_ctx2 = MagicMock()
+        b_ctx2.args = ["pepe", "coin", "0.5"]
+
+        with patch("telegram_bot.search_solana_token", return_value=dummy_match) as mock_b_search2, \
+             patch("telegram_bot.execute_buy_swap", return_value=(True, "sig_b2", 1000.0)):
+            asyncio.run(buy_command(b_update2, b_ctx2))
+            mock_b_search2.assert_called_with("pepe coin")
+
+        # 3. Test sell_command with percentage first: /sell 50 pepe coin
+        s_update1 = MagicMock()
+        s_update1.effective_user.id = test_uid
+        s_update1.message.reply_text = AsyncMock(return_value=AsyncMock())
+        s_ctx1 = MagicMock()
+        s_ctx1.args = ["50", "pepe", "coin"]
+
+        with patch("telegram_bot.search_solana_token", return_value=dummy_match) as mock_s_search1, \
+             patch("telegram_bot.get_user_keypair", return_value=None), \
+             patch("telegram_bot.execute_sell_swap", return_value=(True, "sig_s1", 0.15)) as mock_sell_exec:
+            asyncio.run(sell_command(s_update1, s_ctx1))
+            mock_s_search1.assert_called_with("pepe coin")
+            self.assertEqual(mock_sell_exec.call_args[0][2], 50)
+
+        # 4. Test sell_command with percentage last: /sell pepe coin all
+        s_update2 = MagicMock()
+        s_update2.effective_user.id = test_uid
+        s_update2.message.reply_text = AsyncMock(return_value=AsyncMock())
+        s_ctx2 = MagicMock()
+        s_ctx2.args = ["pepe", "coin", "all"]
+
+        with patch("telegram_bot.search_solana_token", return_value=dummy_match) as mock_s_search2, \
+             patch("telegram_bot.get_user_keypair", return_value=None), \
+             patch("telegram_bot.execute_sell_swap", return_value=(True, "sig_s2", 0.30)) as mock_sell_exec2:
+            asyncio.run(sell_command(s_update2, s_ctx2))
+            mock_s_search2.assert_called_with("pepe coin")
+            self.assertEqual(mock_sell_exec2.call_args[0][2], 100)
+
+        # 5. Test untrack_command with multi-word token: /untrack doge 2.0
+        u_update = MagicMock()
+        u_update.effective_user.id = test_uid
+        u_update.message.reply_text = AsyncMock()
+        u_ctx = MagicMock()
+        u_ctx.args = ["doge", "2.0"]
+
+        with patch("telegram_bot.search_solana_token", return_value=dummy_match) as mock_u_search, \
+             patch("telegram_bot.get_user_watchlist", return_value=[]), \
+             patch("telegram_bot.remove_from_watchlist", return_value=True) as mock_u_rem:
+            asyncio.run(untrack_command(u_update, u_ctx))
+            mock_u_search.assert_called_with("doge 2.0")
+            mock_u_rem.assert_called_with(test_uid, dummy_match["mint"])
 
 
 if __name__ == "__main__":

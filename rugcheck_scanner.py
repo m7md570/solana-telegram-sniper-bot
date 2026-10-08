@@ -231,10 +231,21 @@ def format_token_card(scan: Dict[str, Any], lang: str = "en") -> str:
             f"• تقييم الأمان: {badge}",
         ]
 
-        if scan.get("freeze_authority"):
-            lines.append("• ⚠️ <b>تحذير</b>: إمكانية تجميد المحافظ (Freeze Authority) مفعلة!")
-        if scan.get("mint_authority"):
-            lines.append("• ⚠️ <b>تحذير</b>: إمكانية طباعة عملات جديدة (Mint Authority) مفعلة!")
+        if status in ("SAFE", "WARNING", "DANGER"):
+            if scan.get("mint_authority"):
+                lines.append("• ⚠️ <b>تحذير</b>: إمكانية طباعة عملات جديدة (Mint Authority) مفعلة!")
+            else:
+                lines.append("• صلاحية الطباعة (Mint): 🟢 ملغاة (Revoked)")
+
+            if scan.get("freeze_authority"):
+                lines.append("• ⚠️ <b>تحذير</b>: إمكانية تجميد المحافظ (Freeze Authority) مفعلة!")
+            else:
+                lines.append("• صلاحية التجميد (Freeze): 🟢 ملغاة (Revoked)")
+        elif scan.get("freeze_authority") or scan.get("mint_authority"):
+            if scan.get("freeze_authority"):
+                lines.append("• ⚠️ <b>تحذير</b>: إمكانية تجميد المحافظ (Freeze Authority) مفعلة!")
+            if scan.get("mint_authority"):
+                lines.append("• ⚠️ <b>تحذير</b>: إمكانية طباعة عملات جديدة (Mint Authority) مفعلة!")
 
         if scan.get("risks"):
             safe_risks = [html.escape(r) for r in scan["risks"][:3]]
@@ -273,10 +284,21 @@ def format_token_card(scan: Dict[str, Any], lang: str = "en") -> str:
             f"• Risk Assessment: {badge}",
         ]
 
-        if scan.get("freeze_authority"):
-            lines.append("• ⚠️ <b>WARNING</b>: Freeze Authority is ENABLED (Blacklist risk)!")
-        if scan.get("mint_authority"):
-            lines.append("• ⚠️ <b>WARNING</b>: Mint Authority is ENABLED (Dumping / minting risk)!")
+        if status in ("SAFE", "WARNING", "DANGER"):
+            if scan.get("mint_authority"):
+                lines.append("• ⚠️ <b>WARNING</b>: Mint Authority is ENABLED (Dumping / minting risk)!")
+            else:
+                lines.append("• Mint Authority: 🟢 Revoked")
+
+            if scan.get("freeze_authority"):
+                lines.append("• ⚠️ <b>WARNING</b>: Freeze Authority is ENABLED (Blacklist risk)!")
+            else:
+                lines.append("• Freeze Authority: 🟢 Revoked")
+        elif scan.get("freeze_authority") or scan.get("mint_authority"):
+            if scan.get("freeze_authority"):
+                lines.append("• ⚠️ <b>WARNING</b>: Freeze Authority is ENABLED (Blacklist risk)!")
+            if scan.get("mint_authority"):
+                lines.append("• ⚠️ <b>WARNING</b>: Mint Authority is ENABLED (Dumping / minting risk)!")
 
         if scan.get("risks"):
             safe_risks = [html.escape(r) for r in scan["risks"][:3]]

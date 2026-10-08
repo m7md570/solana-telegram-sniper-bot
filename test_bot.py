@@ -4637,6 +4637,48 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertIn("(15.0%)", card_ar_healthy)
         self.assertNotIn("⚠️ (منخفضة:", card_ar_healthy)
 
+    def test_100_mint_freeze_revoked_auditing(self):
+        """Test v3.78.0 explicit Mint & Freeze Authority Revoked security auditing display."""
+        from rugcheck_scanner import format_token_card
+
+        # 1. Safe audited token: authorities revoked
+        safe_audit_scan = {
+            "mint": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
+            "symbol": "BONK",
+            "name": "Bonk",
+            "price_usd": 0.000025,
+            "status": "SAFE",
+            "rug_score": 10,
+            "mint_authority": False,
+            "freeze_authority": False,
+        }
+        card_en = format_token_card(safe_audit_scan, lang="en")
+        self.assertIn("• Mint Authority: 🟢 Revoked", card_en)
+        self.assertIn("• Freeze Authority: 🟢 Revoked", card_en)
+
+        card_ar = format_token_card(safe_audit_scan, lang="ar")
+        self.assertIn("• صلاحية الطباعة (Mint): 🟢 ملغاة (Revoked)", card_ar)
+        self.assertIn("• صلاحية التجميد (Freeze): 🟢 ملغاة (Revoked)", card_ar)
+
+        # 2. Risky token: authorities enabled
+        risky_scan = {
+            "mint": "ScamToken11111111111111111111111111111111111",
+            "symbol": "TRAP",
+            "name": "Trap Token",
+            "price_usd": 0.01,
+            "status": "DANGER",
+            "rug_score": 950,
+            "mint_authority": True,
+            "freeze_authority": True,
+        }
+        card_en_risky = format_token_card(risky_scan, lang="en")
+        self.assertIn("Mint Authority is ENABLED", card_en_risky)
+        self.assertIn("Freeze Authority is ENABLED", card_en_risky)
+
+        card_ar_risky = format_token_card(risky_scan, lang="ar")
+        self.assertIn("إمكانية طباعة عملات جديدة (Mint Authority) مفعلة!", card_ar_risky)
+        self.assertIn("إمكانية تجميد المحافظ (Freeze Authority) مفعلة!", card_ar_risky)
+
 
 if __name__ == "__main__":
     unittest.main()

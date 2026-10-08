@@ -254,7 +254,10 @@ def get_token_card_keyboard(mint: str, user_lang: str, user_id: int = 0, symbol:
         ],
         [
             InlineKeyboardButton("💵 Price Radar", callback_data=f"price_{mint}"),
-            InlineKeyboardButton(refresh_quote_label, callback_data=f"inspect_{mint}"),
+            InlineKeyboardButton("💱 " + ("Sim Quote" if user_lang == "en" else "محاكاة الصفقة"), callback_data=f"quote_{mint}"),
+            InlineKeyboardButton(refresh_quote_label, callback_data=f"inspect_{mint}")
+        ],
+        [
             InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
         ]
     ])
@@ -474,13 +477,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-async def trending_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler for /trending command."""
-    user_id = update.effective_user.id
-    user_lang = get_user_language(user_id)
-    wait_text = "🔥 <b>جاري جلب أكثر عملات سولانا رواجاً من DexScreener...</b>" if user_lang == "ar" else "🔥 <b>Fetching top trending Solana tokens from DexScreener...</b>"
-    status_msg = await update.message.reply_text(wait_text, parse_mode="HTML")
-
+async def render_trending_radar(target, user_id: int, user_lang: str, is_edit: bool = False):
+    """Renders real-time DexScreener trending radar with 1-click snipe, price radar, and swap simulation shortcuts."""
     tokens = get_trending_tokens(limit=5)
     text = format_trending_list(tokens, lang=user_lang)
 
@@ -488,17 +486,42 @@ async def trending_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for tkn in tokens:
         sym = html.escape(tkn["symbol"])
         mint = tkn["mint"]
-        btn_label = f"🚀 قنص ${sym} ({tkn['change_24h']:+.1f}%)" if user_lang == "ar" else f"🚀 Snipe ${sym} ({tkn['change_24h']:+.1f}%)"
+        c24 = tkn.get("change_24h", 0.0)
+        snipe_lbl = f"🚀 ${sym} ({c24:+.1f}%)"
         keyboard.append([
-            InlineKeyboardButton(btn_label, callback_data=f"inspect_{mint}")
+            InlineKeyboardButton(snipe_lbl, callback_data=f"inspect_{mint}"),
+            InlineKeyboardButton("💵 Price", callback_data=f"price_{mint}"),
+            InlineKeyboardButton("💱 Quote", callback_data=f"quote_{mint}")
         ])
-    refresh_btn_text = "🔄 Refresh Trending" if user_lang == "en" else "🔄 تحديث القائمة"
+    refresh_btn_text = "🔄 " + ("Refresh Trending" if user_lang == "en" else "تحديث القائمة")
+    surge_btn_text = "🚀 " + ("Top Gainers" if user_lang == "en" else "الأعلى صعوداً")
     keyboard.append([
         InlineKeyboardButton(refresh_btn_text, callback_data="btn_trending"),
+        InlineKeyboardButton(surge_btn_text, callback_data="btn_surge")
+    ])
+    keyboard.append([
         InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
     ])
 
-    await status_msg.edit_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard), disable_web_page_preview=True)
+    markup = InlineKeyboardMarkup(keyboard)
+    if is_edit:
+        await safe_edit_text(target, text, reply_markup=markup)
+    else:
+        if hasattr(target, "edit_text"):
+            await target.edit_text(text, parse_mode="HTML", reply_markup=markup, disable_web_page_preview=True)
+        elif hasattr(target, "reply_text"):
+            await target.reply_text(text, parse_mode="HTML", reply_markup=markup, disable_web_page_preview=True)
+        elif hasattr(target, "message") and hasattr(target.message, "reply_text"):
+            await target.message.reply_text(text, parse_mode="HTML", reply_markup=markup, disable_web_page_preview=True)
+
+
+async def trending_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for /trending command."""
+    user_id = update.effective_user.id
+    user_lang = get_user_language(user_id)
+    wait_text = "🔥 <b>جاري جلب أكثر عملات سولانا رواجاً من DexScreener...</b>" if user_lang == "ar" else "🔥 <b>Fetching top trending Solana tokens from DexScreener...</b>"
+    status_msg = await update.message.reply_text(wait_text, parse_mode="HTML")
+    await render_trending_radar(status_msg, user_id, user_lang, is_edit=False)
 
 
 async def surge_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1156,9 +1179,12 @@ async def render_surge_radar(target, user_id: int, user_lang: str, is_edit: bool
         for tkn in tokens:
             sym = html.escape(tkn["symbol"])
             mint = tkn["mint"]
-            btn_label = f"🚀 قنص ${sym} ({tkn['change_1h']:+.1f}%)" if user_lang == "ar" else f"🚀 Snipe ${sym} ({tkn['change_1h']:+.1f}%)"
+            c1 = tkn.get("change_1h", 0.0)
+            snipe_label = f"🚀 ${sym} ({c1:+.1f}%)"
             keyboard.append([
-                InlineKeyboardButton(btn_label, callback_data=f"inspect_{mint}")
+                InlineKeyboardButton(snipe_label, callback_data=f"inspect_{mint}"),
+                InlineKeyboardButton("💵 Price", callback_data=f"price_{mint}"),
+                InlineKeyboardButton("💱 Quote", callback_data=f"quote_{mint}")
             ])
     else:
         trending_btn = "🔥 " + ("Explore Trending" if user_lang == "en" else "استكشاف العملات الرائجة")
@@ -1166,8 +1192,12 @@ async def render_surge_radar(target, user_id: int, user_lang: str, is_edit: bool
             InlineKeyboardButton(trending_btn, callback_data="btn_trending")
         ])
     refresh_label = "🔄 " + ("Refresh Gainers" if user_lang == "en" else "تحديث القائمة")
+    trending_label = "🔥 " + ("Trending" if user_lang == "en" else "الرائجة")
     keyboard.append([
         InlineKeyboardButton(refresh_label, callback_data="btn_surge"),
+        InlineKeyboardButton(trending_label, callback_data="btn_trending")
+    ])
+    keyboard.append([
         InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
     ])
     if is_edit:
@@ -2186,22 +2216,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif data == "btn_trending":
         await query.message.reply_chat_action("typing")
-        tokens = get_trending_tokens(limit=5)
-        text = format_trending_list(tokens, lang=user_lang)
-        keyboard = []
-        for tkn in tokens:
-            sym = html.escape(tkn["symbol"])
-            mint = tkn["mint"]
-            btn_label = f"🚀 قنص ${sym} ({tkn['change_24h']:+.1f}%)" if user_lang == "ar" else f"🚀 Snipe ${sym} ({tkn['change_24h']:+.1f}%)"
-            keyboard.append([
-                InlineKeyboardButton(btn_label, callback_data=f"inspect_{mint}")
-            ])
-        refresh_btn_text = "🔄 Refresh Trending" if user_lang == "en" else "🔄 تحديث القائمة"
-        keyboard.append([
-            InlineKeyboardButton(refresh_btn_text, callback_data="btn_trending"),
-            InlineKeyboardButton(t("btn_back", user_lang), callback_data="btn_refresh")
-        ])
-        await safe_edit_text(query, text, reply_markup=InlineKeyboardMarkup(keyboard))
+        await render_trending_radar(query, user_id, user_lang, is_edit=True)
 
     elif data == "btn_surge":
         await query.message.reply_chat_action("typing")

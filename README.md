@@ -1,8 +1,8 @@
 # ⚡ Solana High-Velocity Telegram Sniper & Trading Bot
 
 [![Telegram](https://img.shields.io/badge/Live_Bot-@PopcornSniperBot-2CA5E0?logo=telegram&logoColor=white)](https://t.me/PopcornSniperBot)
-[![Release](https://img.shields.io/badge/Release-v3.60.0-blue.svg)](https://github.com/m7md570/solana-telegram-sniper-bot/releases)
-[![Tests](https://img.shields.io/badge/Tests-84%2F84%20Passing-brightgreen.svg)](test_bot.py)
+[![Release](https://img.shields.io/badge/Release-v3.61.0-blue.svg)](https://github.com/m7md570/solana-telegram-sniper-bot/releases)
+[![Tests](https://img.shields.io/badge/Tests-85%2F85%20Passing-brightgreen.svg)](test_bot.py)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![Network](https://img.shields.io/badge/Solana-Mainnet--Beta-9945FF.svg)](https://solana.com)
@@ -106,7 +106,7 @@ python test_bot.py
 ```
 Expected output:
 ```
-Ran 84 tests in 23.7s -> OK
+Ran 85 tests in 24.1s -> OK
 ```
 
 ### 5. Launch the Bot
@@ -159,7 +159,7 @@ python telegram_bot.py
 ## 🧪 Benchmark & Quality Assurance
 
 * **RPC Broadcast Latency:** < 350ms via Jupiter V6
-* **Unit Test Coverage:** 84/84 comprehensive tests passing (`test_bot.py`, 100% pass rate)
+* **Unit Test Coverage:** 85/85 comprehensive tests passing (`test_bot.py`, 100% pass rate)
 * **Security Checks:** Zero plain-text private key logging. Local AES-256 database encryption.
 * **Token-2022 Compatibility:** Multi-program discovery across SPL Token and Token-2022 programs.
 * **MEV Defense:** Dynamic price-impact slippage auto-scaling and anti-sandwich protection.

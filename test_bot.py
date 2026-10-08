@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.60.0", card_text)
+        self.assertIn("v3.61.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.60.0")
+        self.assertEqual(BOT_VERSION, "v3.61.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -3760,6 +3760,71 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
             self.assertTrue(mock_cmd_update.message.reply_text.called)
             call_args = mock_render_q.call_args[0]
             self.assertEqual(call_args[4], 0.5, "quote_command must extract 0.5 even when passed after ticker")
+
+    def test_85_trending_surge_shortcuts_and_token_card_quote_navigation(self):
+        """Test v3.61.0 trending/surge shortcuts and token card quote simulation navigation."""
+        import asyncio
+        from unittest.mock import patch, MagicMock, AsyncMock
+        from telegram_bot import render_trending_radar, render_surge_radar, get_token_card_keyboard
+        from wallet_manager import get_or_create_wallet
+
+        test_uid = 99881185
+        get_or_create_wallet(test_uid, "Tester85")
+        test_mint = "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"
+
+        dummy_trending = [
+            {
+                "symbol": "BONK",
+                "mint": test_mint,
+                "price_usd": 0.00002,
+                "change_24h": 12.5,
+                "change_1h": 2.1,
+                "volume_24h": 500000,
+                "liquidity": 1000000
+            }
+        ]
+
+        # 1. Test render_trending_radar produces Snipe, Price, and Quote shortcuts
+        mock_trend_target = AsyncMock()
+        with patch("telegram_bot.get_trending_tokens", return_value=dummy_trending):
+            asyncio.run(render_trending_radar(mock_trend_target, test_uid, "en", is_edit=False))
+            self.assertTrue(mock_trend_target.edit_text.called or mock_trend_target.reply_text.called)
+            call = mock_trend_target.edit_text if mock_trend_target.edit_text.called else mock_trend_target.reply_text
+            kb = call.call_args[1]["reply_markup"]
+            all_btns = [b for row in kb.inline_keyboard for b in row]
+
+            snipe_btn = next((b for b in all_btns if b.callback_data == f"inspect_{test_mint}"), None)
+            price_btn = next((b for b in all_btns if b.callback_data == f"price_{test_mint}"), None)
+            quote_btn = next((b for b in all_btns if b.callback_data == f"quote_{test_mint}"), None)
+            surge_link = next((b for b in all_btns if b.callback_data == "btn_surge"), None)
+
+            self.assertIsNotNone(snipe_btn, "Trending radar must contain 1-click Snipe button")
+            self.assertIsNotNone(price_btn, "Trending radar must contain 1-click Price button")
+            self.assertIsNotNone(quote_btn, "Trending radar must contain 1-click Quote button")
+            self.assertIsNotNone(surge_link, "Trending radar must contain Top Gainers link")
+
+        # 2. Test render_surge_radar produces Snipe, Price, and Quote shortcuts
+        mock_surge_target = AsyncMock()
+        with patch("telegram_bot.get_top_gainers", return_value=dummy_trending):
+            asyncio.run(render_surge_radar(mock_surge_target, test_uid, "en", is_edit=False))
+            self.assertTrue(mock_surge_target.edit_text.called or mock_surge_target.reply_text.called)
+            call_s = mock_surge_target.edit_text if mock_surge_target.edit_text.called else mock_surge_target.reply_text
+            kb_s = call_s.call_args[1]["reply_markup"]
+            all_s_btns = [b for row in kb_s.inline_keyboard for b in row]
+
+            s_snipe = next((b for b in all_s_btns if b.callback_data == f"inspect_{test_mint}"), None)
+            s_price = next((b for b in all_s_btns if b.callback_data == f"price_{test_mint}"), None)
+            s_quote = next((b for b in all_s_btns if b.callback_data == f"quote_{test_mint}"), None)
+
+            self.assertIsNotNone(s_snipe, "Surge radar must contain 1-click Snipe button")
+            self.assertIsNotNone(s_price, "Surge radar must contain 1-click Price button")
+            self.assertIsNotNone(s_quote, "Surge radar must contain 1-click Quote button")
+
+        # 3. Test get_token_card_keyboard embeds Quote Sim button
+        token_kb = get_token_card_keyboard(test_mint, "en", test_uid, "BONK")
+        all_t_btns = [b for row in token_kb.inline_keyboard for b in row]
+        token_quote_btn = next((b for b in all_t_btns if b.callback_data == f"quote_{test_mint}"), None)
+        self.assertIsNotNone(token_quote_btn, "Token audit card must embed 1-click Quote button")
 
 
 if __name__ == "__main__":

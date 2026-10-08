@@ -344,14 +344,16 @@ def build_settings_card(user_id: int, user_lang: str) -> Tuple[str, InlineKeyboa
     tp_btns = [
         InlineKeyboardButton(f"{'✅ ' if current_tp == 25 else ''}🎯 +25%", callback_data="tp_25"),
         InlineKeyboardButton(f"{'✅ ' if current_tp == 50 else ''}🎯 +50%", callback_data="tp_50"),
-        InlineKeyboardButton(f"{'✅ ' if current_tp == 100 else ''}🎯 +100%", callback_data="tp_100")
+        InlineKeyboardButton(f"{'✅ ' if current_tp == 100 else ''}🎯 +100%", callback_data="tp_100"),
+        InlineKeyboardButton(f"{'✅ ' if current_tp == 200 else ''}🎯 +200%", callback_data="tp_200")
     ]
 
     # Stop-Loss row with active checkmark
     sl_btns = [
         InlineKeyboardButton(f"{'✅ ' if current_sl == 15 else ''}🛑 -15%", callback_data="sl_15"),
         InlineKeyboardButton(f"{'✅ ' if current_sl == 25 else ''}🛑 -25%", callback_data="sl_25"),
-        InlineKeyboardButton(f"{'✅ ' if current_sl == 50 else ''}🛑 -50%", callback_data="sl_50")
+        InlineKeyboardButton(f"{'✅ ' if current_sl == 50 else ''}🛑 -50%", callback_data="sl_50"),
+        InlineKeyboardButton(f"{'✅ ' if current_sl == 75 else ''}🛑 -75%", callback_data="sl_75")
     ]
 
     kb = [

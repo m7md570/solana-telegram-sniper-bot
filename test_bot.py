@@ -4890,6 +4890,31 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertIsInstance(result["dex_id"], str)
         self.assertIsInstance(result["pair_address"], str)
 
+    def test_109_extended_tp_sl_presets_and_settings_parity(self):
+        """Test v3.87.0 +200% Take-Profit and -75% Stop-Loss presets parity on build_settings_card."""
+        from telegram_bot import build_settings_card
+        from wallet_manager import get_or_create_wallet, update_user_tp, update_user_sl
+
+        test_uid = 99881144
+        get_or_create_wallet(test_uid)
+        update_user_tp(test_uid, 200)
+        update_user_sl(test_uid, 75)
+
+        text, kb = build_settings_card(test_uid, "en")
+        all_btns = [b for row in kb.inline_keyboard for b in row]
+
+        # Verify tp_200 button exists and has checkmark
+        tp200_btn = next((b for b in all_btns if b.callback_data == "tp_200"), None)
+        self.assertIsNotNone(tp200_btn, "tp_200 button must be present in settings card")
+        self.assertIn("✅", tp200_btn.text)
+        self.assertIn("+200%", tp200_btn.text)
+
+        # Verify sl_75 button exists and has checkmark
+        sl75_btn = next((b for b in all_btns if b.callback_data == "sl_75"), None)
+        self.assertIsNotNone(sl75_btn, "sl_75 button must be present in settings card")
+        self.assertIn("✅", sl75_btn.text)
+        self.assertIn("-75%", sl75_btn.text)
+
 
 if __name__ == "__main__":
     unittest.main()

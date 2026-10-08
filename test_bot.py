@@ -4973,9 +4973,80 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertIn("Transfer Hook: 🟢 Not Active", clean_en)
         self.assertIn("خطاف التحويل (Transfer Hook): 🟢 غير مفعل", clean_ar)
 
+    def test_112_solana_security_auditor_and_auditcode_command(self):
+        """Test v3.90.0 Solana Smart Contract Bug Bounty Auditor & /auditcode command handler."""
+        import asyncio
+        from unittest.mock import MagicMock, AsyncMock, patch
+        from solana_security_auditor import audit_smart_contract_code, format_telegram_audit_report
+        from telegram_bot import audit_code_command, audit_command
+
+        test_vulnerable_code = (
+            "pub struct Admin {\n"
+            "    pub authority: AccountInfo<'info>,\n"
+            "}\n"
+            "pub fn execute() {\n"
+            "    amount += fee;\n"
+            "    invoke(&ix, &[prog]);\n"
+            "}\n"
+        )
+
+        # 1. Test audit_smart_contract_code detects CRITICAL risk and 3 distinct vulnerabilities
+        with patch("solana_security_auditor.query_local_ai", return_value="Critical unauthorized fund drain risk detected."):
+            res = audit_smart_contract_code(test_vulnerable_code, contract_name="TestVault", deep_llm=True)
+            self.assertEqual(res["risk_level"], "CRITICAL")
+            self.assertEqual(res["findings_count"], 3)
+            rule_ids = [f["rule_id"] for f in res["findings"]]
+            self.assertIn("SOL-001", rule_ids)  # Missing signer
+            self.assertIn("SOL-003", rule_ids)  # Arbitrary CPI
+            self.assertIn("SOL-005", rule_ids)  # Unchecked arithmetic
+            self.assertIn("7kz1mcQcaZhYzFUHBFHH6s5tGrDHc7gNhN5WAUyXyq5r", res["immunefi_report"])
+
+        # 2. Test format_telegram_audit_report generates Arabic and English output
+        ar_report = format_telegram_audit_report(res, lang="ar")
+        en_report = format_telegram_audit_report(res, lang="en")
+        self.assertIn("تقرير فحص أمان العقود الذكية", ar_report)
+        self.assertIn("CRITICAL RISK", en_report)
+        self.assertIn("SOL-001", ar_report)
+
+        # 3. Test audit_code_command execution in Telegram Bot
+        mock_msg = MagicMock()
+        mock_msg.reply_text = AsyncMock()
+        mock_status = MagicMock()
+        mock_status.edit_text = AsyncMock()
+        mock_msg.reply_text.return_value = mock_status
+        mock_update = MagicMock(effective_user=MagicMock(id=99221144), message=mock_msg)
+        mock_context = MagicMock()
+        mock_context.args = ["pub", "struct", "Vault", "{", "pub", "owner:", "AccountInfo<'info>", "}"]
+
+        with patch("telegram_bot.get_user_language", return_value="en"), \
+             patch("solana_security_auditor.query_local_ai", return_value="Admin missing signer check."):
+            asyncio.run(audit_code_command(mock_update, mock_context))
+            self.assertTrue(mock_msg.reply_text.called)
+            self.assertTrue(mock_status.edit_text.called)
+            edited_card = mock_status.edit_text.call_args[0][0]
+            self.assertIn("Solana Smart Contract Security Audit", edited_card)
+
+        # 4. Test audit_command routing to code auditor when Rust code is provided
+        mock_cmd_msg = MagicMock()
+        mock_cmd_status = MagicMock()
+        mock_cmd_status.edit_text = AsyncMock()
+        mock_cmd_msg.reply_text = AsyncMock(return_value=mock_cmd_status)
+        mock_update_cmd = MagicMock(effective_user=MagicMock(id=99221144), message=mock_cmd_msg)
+        mock_context_cmd = MagicMock()
+        mock_context_cmd.args = ["pub", "fn", "withdraw()", "{", "invoke(&ix);", "}"]
+
+        with patch("telegram_bot.get_user_language", return_value="ar"), \
+             patch("solana_security_auditor.query_local_ai", return_value="Unauthorized CPI invocation."):
+            asyncio.run(audit_command(mock_update_cmd, mock_context_cmd))
+            self.assertTrue(mock_cmd_msg.reply_text.called)
+            self.assertTrue(mock_cmd_status.edit_text.called)
+            edited_ar = mock_cmd_status.edit_text.call_args[0][0]
+            self.assertIn("تقرير فحص أمان العقود الذكية", edited_ar)
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
 
 

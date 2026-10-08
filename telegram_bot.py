@@ -123,6 +123,10 @@ from trending_engine import (
     format_gainers_list,
     get_batch_token_prices
 )
+from solana_security_auditor import (
+    audit_smart_contract_code,
+    format_telegram_audit_report
+)
 from i18n import t
 
 # Logging configuration
@@ -3463,8 +3467,33 @@ async def fees_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await render_fees_card(update.message, user_id, user_lang, is_edit=False)
 
 
+async def audit_code_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for /auditcode and /bounty command: audits Solana/Anchor smart contract code."""
+    user = update.effective_user
+    user_id = user.id
+    user_lang = get_user_language(user_id)
+    args = context.args
+
+    if not args:
+        help_msg = t("auditcode_usage_help", user_lang)
+        await update.message.reply_text(help_msg, parse_mode="HTML")
+        return
+
+    code_text = " ".join(args).strip()
+    wait_text = (
+        "🔬 <b>جاري فحص وتدقيق كود العقد الذكي عبر الذكاء الاصطناعي (Qwen 27B)...</b>"
+        if user_lang == "ar" else
+        "🔬 <b>Running deep whitehat security audit on smart contract code via Qwen 27B...</b>"
+    )
+    status_msg = await update.message.reply_text(wait_text, parse_mode="HTML")
+
+    audit_res = audit_smart_contract_code(code_text, contract_name="CustomAnchorProgram", deep_llm=True)
+    report_text = format_telegram_audit_report(audit_res, lang=user_lang)
+    await status_msg.edit_text(report_text, parse_mode="HTML", disable_web_page_preview=True)
+
+
 async def audit_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler for /audit and /check command: /audit [CA_OR_TICKER]"""
+    """Handler for /audit and /check command: /audit [CA_OR_TICKER|CODE]"""
     user = update.effective_user
     user_id = user.id
     user_lang = get_user_language(user_id)
@@ -3476,6 +3505,20 @@ async def audit_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     query = " ".join(args).strip()
+
+    # Smart Code Detection: if query contains Rust/Anchor code keywords, route to code auditor
+    if any(kw in query for kw in ["fn ", "struct ", "AccountInfo", "Signer", "declare_id!", "invoke", "realloc", "anchor_lang"]):
+        wait_text = (
+            "🔬 <b>جاري فحص وتدقيق كود العقد الذكي عبر الذكاء الاصطناعي (Qwen 27B)...</b>"
+            if user_lang == "ar" else
+            "🔬 <b>Running deep whitehat security audit on smart contract code via Qwen 27B...</b>"
+        )
+        status_msg = await update.message.reply_text(wait_text, parse_mode="HTML")
+        audit_res = audit_smart_contract_code(query, contract_name="InlineAnchorProgram", deep_llm=True)
+        report_text = format_telegram_audit_report(audit_res, lang=user_lang)
+        await status_msg.edit_text(report_text, parse_mode="HTML", disable_web_page_preview=True)
+        return
+
     mint = extract_token_mint(query)
     if not mint:
         matched = search_solana_token(query)
@@ -4089,6 +4132,10 @@ def build_application(token: str) -> Application:
     app.add_handler(CommandHandler("scan", audit_command))
     app.add_handler(CommandHandler("snipe", audit_command))
     app.add_handler(CommandHandler("token", audit_command))
+    app.add_handler(CommandHandler("auditcode", audit_code_command))
+    app.add_handler(CommandHandler("audit_code", audit_code_command))
+    app.add_handler(CommandHandler("bounty", audit_code_command))
+    app.add_handler(CommandHandler("contract_audit", audit_code_command))
     app.add_handler(CommandHandler("status", status_command))
     app.add_handler(CommandHandler("cluster", status_command))
     app.add_handler(CommandHandler("info", status_command))

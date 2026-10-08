@@ -233,6 +233,7 @@ MESSAGES = {
         "autobuy_syntax_help": "ℹ️ <b>Auto-Buy Syntax</b>: <code>/autobuy [AMOUNT|on|off]</code>\nExample: <code>/autobuy 0.1</code> or <code>/autobuy off</code>",
         "price_card_title": "💵 <b>Token Price & Liquidity Radar</b>",
         "price_syntax_help": "ℹ️ <b>Price Syntax</b>: <code>/price [CA_OR_TICKER]</code>\nExample: <code>/price bonk</code>",
+        "auditcode_usage_help": "ℹ️ <b>Bug Bounty Auditor Usage</b>:\n<code>/auditcode [RUST_OR_ANCHOR_CODE]</code>\n\nExample:\n<code>/auditcode pub struct Admin { pub authority: AccountInfo&lt;'info&gt; }</code>\n\nAudits Solana programs for Missing Signers, Arbitrary CPI, Stale State, and Math Overflows. Generates full Immunefi-ready PoC reports!",
         "help_title": "❓ <b>Popcorn Solana Sniper & Trading Bot Guide</b> ⚡",
         "help_body": (
             "━━━━━━━━━━━━━━━━━━━\n"
@@ -243,6 +244,7 @@ MESSAGES = {
             "• <code>/search [TICKER]</code> - Search Token by Name or Symbol\n"
             "• <code>/price [CA/TICKER]</code> - Quick Price & Liquidity Radar\n"
             "• <code>/audit [CA/TICKER]</code> - Full Token Security & RugCheck Scan\n"
+            "• <code>/auditcode [CODE]</code> - Whitehat Bug Bounty & Solana Smart Contract Vulnerability Auditor\n"
             "• <code>/ping</code> - Check Solana RPC & Jupiter Routing Speed\n"
             "• <code>/quote [AMT] [CA]</code> - Live Swap Simulation & Route Plan (aliases: /sim, /simulate)\n"
             "• <code>/buy [CA/TICKER] [AMOUNT]</code> - Instant Custom Buy Snipe\n"
@@ -499,6 +501,7 @@ MESSAGES = {
         "autobuy_syntax_help": "ℹ️ <b>صيغة الشراء التلقائي</b>: <code>/autobuy [المبلغ|on|off]</code>\nمثال: <code>/autobuy 0.1</code> أو <code>/autobuy off</code>",
         "price_card_title": "💵 <b>رادار سعر وسيولة العملة اللحظي</b>",
         "price_syntax_help": "ℹ️ <b>صيغة فحص السعر</b>: <code>/price [العقد_أو_الرمز]</code>\nمثال: <code>/price bonk</code>",
+        "auditcode_usage_help": "ℹ️ <b>صيغة فحص وتدقيق العقود الذكية</b>:\n<code>/auditcode [كود_العقد_الذكي_بـ_Rust_أو_Anchor]</code>\n\nمثال:\n<code>/auditcode pub struct Admin { pub authority: AccountInfo&lt;'info&gt; }</code>\n\nيقوم بفحص أمان برامج سولانا واكتشاف ثغرات التوقيع، الحسابات غير المقيدة، واستدعاءات CPI العشوائية، ويصيغ تقرير مكافآت جاهز لـ Immunefi!",
         "help_title": "❓ <b>دليل استخدام بوت قنص وتداول سولانا</b> ⚡",
         "help_body": (
             "━━━━━━━━━━━━━━━━━━━\n"
@@ -509,6 +512,7 @@ MESSAGES = {
             "• <code>/search [الرمز/الاسم]</code> - البحث عن العملات بالاسم أو الرمز\n"
             "• <code>/price [العقد/الرمز]</code> - فحص سريع للسعر والسيولة والماركت كاب\n"
             "• <code>/audit [العقد/الرمز]</code> - فحص وتدقيق أمان العقد و RugCheck\n"
+            "• <code>/auditcode [الكود]</code> - فحص أمان العقود الذكية واكتشاف ثغرات ومكافآت Immunefi بواسطة الذكاء الاصطناعي\n"
             "• <code>/ping</code> - فحص سرعة استجابة خوادم سولانا و Jupiter\n"
             "• <code>/quote [المبلغ] [العقد]</code> - محاكاة مسار ومخرجات التبادل مسبقاً عبر Jupiter V6 (أو /sim)\n"
             "• <code>/buy [العقد/الرمز] [المبلغ]</code> - قنص وشراء فوري بمبلغ مخصص\n"

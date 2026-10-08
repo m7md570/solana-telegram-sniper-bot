@@ -4850,6 +4850,14 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertIn("✅", slip1000_card.text)
         self.assertIn("10.0%", slip1000_card.text)
 
+    def test_106_ai_agent_token_radar_integration(self):
+        """Test v3.84.0 AI Agent meme token (GOAT) integration in fallback trending mints."""
+        from trending_engine import FALLBACK_TRENDING_MINTS
+
+        goat_mint = "CzLSujWBLFsSjncfkh59rUFqvafWcY5tzedWJSuypump"
+        self.assertIn(goat_mint, FALLBACK_TRENDING_MINTS)
+        self.assertEqual(goat_mint[-4:], "pump")
+
 
 if __name__ == "__main__":
     unittest.main()

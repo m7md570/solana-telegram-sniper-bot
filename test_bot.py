@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.63.0", card_text)
+        self.assertIn("v3.64.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.63.0")
+        self.assertEqual(BOT_VERSION, "v3.64.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -3920,6 +3920,47 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
             self.assertIn("مسارات توجيه Jupiter V6", msg_ar)
             self.assertIn("فاحص أمان RugCheck", msg_ar)
             self.assertIn("بث أسعار DexScreener", msg_ar)
+
+    def test_88_version_card_navigation_and_help_quote_docs(self):
+        """Test v3.64.0 render_version_card navigation, help menu btn_version routing, and /quote help documentation."""
+        import asyncio
+        from unittest.mock import patch, MagicMock, AsyncMock
+        from telegram_bot import render_version_card, render_help_card
+        from i18n import t
+
+        test_uid = 99881188
+
+        # 1. Test render_version_card navigation buttons (Releases, Latency, Back)
+        mock_v_target = AsyncMock()
+        asyncio.run(render_version_card(mock_v_target, test_uid, "en", is_edit=False))
+        self.assertTrue(mock_v_target.reply_text.called)
+        v_call = mock_v_target.reply_text
+        v_text = v_call.call_args[0][0]
+        v_kb = v_call.call_args[1]["reply_markup"]
+        all_v_btns = [b for row in v_kb.inline_keyboard for b in row]
+
+        self.assertIn("v3.64.0", v_text)
+        self.assertIsNotNone(next((b for b in all_v_btns if b.url and "releases" in b.url), None))
+        self.assertIsNotNone(next((b for b in all_v_btns if b.callback_data == "btn_ping"), None))
+        self.assertIsNotNone(next((b for b in all_v_btns if b.callback_data == "btn_help"), None))
+
+        # 2. Test render_help_card contains btn_version and btn_ping
+        mock_h_target = AsyncMock()
+        asyncio.run(render_help_card(mock_h_target, test_uid, "en", is_edit=False))
+        self.assertTrue(mock_h_target.reply_text.called)
+        h_kb = mock_h_target.reply_text.call_args[1]["reply_markup"]
+        all_h_btns = [b for row in h_kb.inline_keyboard for b in row]
+
+        self.assertIsNotNone(next((b for b in all_h_btns if b.callback_data == "btn_version"), None))
+        self.assertIsNotNone(next((b for b in all_h_btns if b.callback_data == "btn_ping"), None))
+
+        # 3. Test bilingual help_body contains /quote documentation
+        help_en = t("help_body", "en")
+        help_ar = t("help_body", "ar")
+        self.assertIn("/quote", help_en)
+        self.assertIn("/sim", help_en)
+        self.assertIn("/quote", help_ar)
+        self.assertIn("/sim", help_ar)
 
 
 if __name__ == "__main__":

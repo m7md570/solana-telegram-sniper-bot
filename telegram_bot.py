@@ -2213,7 +2213,11 @@ async def render_help_card(target, user_id: int, user_lang: str, is_edit: bool =
         [
             InlineKeyboardButton("⚙️ Settings" if user_lang == "en" else "⚙️ الإعدادات", callback_data="btn_settings"),
             InlineKeyboardButton("🤝 Referral" if user_lang == "en" else "🤝 الإحالات", callback_data="btn_referral"),
-            InlineKeyboardButton("ℹ️ Version" if user_lang == "en" else "ℹ️ الإصدار", callback_data="btn_status")
+            InlineKeyboardButton("📊 Status" if user_lang == "en" else "📊 الحالة", callback_data="btn_status")
+        ],
+        [
+            InlineKeyboardButton("ℹ️ Version" if user_lang == "en" else "ℹ️ الإصدار", callback_data="btn_version"),
+            InlineKeyboardButton("⚡ Latency Radar" if user_lang == "en" else "⚡ سرعة الشبكة", callback_data="btn_ping")
         ],
         [
             InlineKeyboardButton("🚀 Quick Tour" if user_lang == "en" else "🚀 الجولة السريعة", callback_data="btn_tour"),
@@ -2485,6 +2489,9 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif data == "btn_help":
         await render_help_card(query, user_id, user_lang, is_edit=True)
+
+    elif data == "btn_version":
+        await render_version_card(query, user_id, user_lang, is_edit=True)
 
     elif data == "btn_slippage":
         await render_slippage_card(query, user_id, user_lang, is_edit=True)
@@ -3424,11 +3431,8 @@ async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(msg, parse_mode="HTML")
 
 
-async def version_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler for /version and /about command displaying architectural specs and release metadata."""
-    user_id = update.effective_user.id
-    user_lang = get_user_language(user_id)
-
+async def render_version_card(target, user_id: int, user_lang: str, is_edit: bool = False):
+    """Renders architectural specs, release metadata, and navigation buttons."""
     if user_lang == "ar":
         card = (
             "🍿 <b>Popcorn Sniper Bot — معلومات الإصدار والبنية المعمارية</b>\n"
@@ -3460,16 +3464,33 @@ async def version_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🌐 <b>Official Repository:</b> github.com/m7md570/solana-telegram-sniper-bot"
         )
 
+    latency_label = "⚡ سرعة الشبكة" if user_lang == "ar" else "⚡ Latency Radar"
+    back_label = t("btn_back", user_lang)
     kb = [
         [
             InlineKeyboardButton("🚀 Launch Sniper", callback_data="btn_refresh"),
             InlineKeyboardButton("🎁 25% Referral", callback_data="btn_referral")
         ],
         [
-            InlineKeyboardButton("📦 GitHub Releases", url="https://github.com/m7md570/solana-telegram-sniper-bot/releases")
+            InlineKeyboardButton("📦 GitHub Releases", url="https://github.com/m7md570/solana-telegram-sniper-bot/releases"),
+            InlineKeyboardButton(latency_label, callback_data="btn_ping")
+        ],
+        [
+            InlineKeyboardButton(back_label, callback_data="btn_help")
         ]
     ]
-    await update.message.reply_text(card, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb), disable_web_page_preview=True)
+    markup = InlineKeyboardMarkup(kb)
+    if is_edit:
+        await safe_edit_text(target, card, reply_markup=markup)
+    else:
+        await target.reply_text(card, parse_mode="HTML", reply_markup=markup, disable_web_page_preview=True)
+
+
+async def version_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for /version and /about command displaying architectural specs and release metadata."""
+    user_id = update.effective_user.id
+    user_lang = get_user_language(user_id)
+    await render_version_card(update.message, user_id, user_lang, is_edit=False)
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):

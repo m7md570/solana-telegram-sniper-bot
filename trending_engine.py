@@ -74,9 +74,9 @@ def get_trending_tokens(limit: int = 5) -> List[Dict[str, Any]]:
                         pairs = resp.json().get("pairs") or []
                         pairs_by_mint = {}
                         for p in pairs:
-                            m = p.get("baseToken", {}).get("address")
+                            m = (p.get("baseToken") or {}).get("address")
                             if m:
-                                cur_liq = float(p.get("liquidity", {}).get("usd") or 0.0)
+                                cur_liq = float((p.get("liquidity") or {}).get("usd") or 0.0)
                                 if m not in pairs_by_mint or cur_liq > pairs_by_mint[m]["_liq"]:
                                     pairs_by_mint[m] = {"pair": p, "_liq": cur_liq}
 
@@ -84,13 +84,14 @@ def get_trending_tokens(limit: int = 5) -> List[Dict[str, Any]]:
                         for mint in mints_to_fetch:
                             if mint in pairs_by_mint:
                                 p = pairs_by_mint[mint]["pair"]
-                                symbol = p.get("baseToken", {}).get("symbol", "UNKNOWN")
-                                name = p.get("baseToken", {}).get("name", "Unknown Token")
+                                base = p.get("baseToken") or {}
+                                symbol = base.get("symbol", "UNKNOWN")
+                                name = base.get("name", "Unknown Token")
                                 price = float(p.get("priceUsd") or 0.0)
-                                change_24h = float(p.get("priceChange", {}).get("h24") or 0.0)
-                                change_1h = float(p.get("priceChange", {}).get("h1") or 0.0)
-                                vol = float(p.get("volume", {}).get("h24") or 0.0)
-                                liq = float(p.get("liquidity", {}).get("usd") or 0.0)
+                                change_24h = float((p.get("priceChange") or {}).get("h24") or 0.0)
+                                change_1h = float((p.get("priceChange") or {}).get("h1") or 0.0)
+                                vol = float((p.get("volume") or {}).get("h24") or 0.0)
+                                liq = float((p.get("liquidity") or {}).get("usd") or 0.0)
                                 fdv = float(p.get("fdv") or p.get("marketCap") or 0.0)
 
                                 trending.append({
@@ -115,23 +116,24 @@ def get_trending_tokens(limit: int = 5) -> List[Dict[str, Any]]:
                 pairs = (resp.json().get("pairs") or []) if resp.status_code == 200 else []
                 pairs_by_mint = {}
                 for p in pairs:
-                    m = p.get("baseToken", {}).get("address")
+                    m = (p.get("baseToken") or {}).get("address")
                     if m:
-                        cur_liq = float(p.get("liquidity", {}).get("usd") or 0.0)
+                        cur_liq = float((p.get("liquidity") or {}).get("usd") or 0.0)
                         if m not in pairs_by_mint or cur_liq > pairs_by_mint[m]["_liq"]:
                             pairs_by_mint[m] = {"pair": p, "_liq": cur_liq}
                 for mint in FALLBACK_TRENDING_MINTS[:limit]:
                     if mint in pairs_by_mint:
                         p = pairs_by_mint[mint]["pair"]
+                        base = p.get("baseToken") or {}
                         trending.append({
                             "mint": mint,
-                            "symbol": p.get("baseToken", {}).get("symbol", "UNKNOWN"),
-                            "name": p.get("baseToken", {}).get("name", "Unknown Token"),
+                            "symbol": base.get("symbol", "UNKNOWN"),
+                            "name": base.get("name", "Unknown Token"),
                             "price_usd": float(p.get("priceUsd") or 0.0),
-                            "change_1h": float(p.get("priceChange", {}).get("h1") or 0.0),
-                            "change_24h": float(p.get("priceChange", {}).get("h24") or 0.0),
-                            "volume_24h": float(p.get("volume", {}).get("h24") or 0.0),
-                            "liquidity": float(p.get("liquidity", {}).get("usd") or 0.0),
+                            "change_1h": float((p.get("priceChange") or {}).get("h1") or 0.0),
+                            "change_24h": float((p.get("priceChange") or {}).get("h24") or 0.0),
+                            "volume_24h": float((p.get("volume") or {}).get("h24") or 0.0),
+                            "liquidity": float((p.get("liquidity") or {}).get("usd") or 0.0),
                             "fdv": float(p.get("fdv") or p.get("marketCap") or 0.0)
                         })
 
@@ -142,16 +144,17 @@ def get_trending_tokens(limit: int = 5) -> List[Dict[str, Any]]:
                             s_resp = _SESSION.get(f"https://api.dexscreener.com/latest/dex/tokens/{mint}", timeout=4)
                             s_pairs = (s_resp.json().get("pairs") or []) if s_resp.status_code == 200 else []
                             if s_pairs:
-                                best = max(s_pairs, key=lambda x: float(x.get("liquidity", {}).get("usd") or 0.0))
+                                best = max(s_pairs, key=lambda x: float((x.get("liquidity") or {}).get("usd") or 0.0))
+                                base_best = best.get("baseToken") or {}
                                 trending.append({
                                     "mint": mint,
-                                    "symbol": best.get("baseToken", {}).get("symbol", "UNKNOWN"),
-                                    "name": best.get("baseToken", {}).get("name", "Unknown Token"),
+                                    "symbol": base_best.get("symbol", "UNKNOWN"),
+                                    "name": base_best.get("name", "Unknown Token"),
                                     "price_usd": float(best.get("priceUsd") or 0.0),
-                                    "change_1h": float(best.get("priceChange", {}).get("h1") or 0.0),
-                                    "change_24h": float(best.get("priceChange", {}).get("h24") or 0.0),
-                                    "volume_24h": float(best.get("volume", {}).get("h24") or 0.0),
-                                    "liquidity": float(best.get("liquidity", {}).get("usd") or 0.0),
+                                    "change_1h": float((best.get("priceChange") or {}).get("h1") or 0.0),
+                                    "change_24h": float((best.get("priceChange") or {}).get("h24") or 0.0),
+                                    "volume_24h": float((best.get("volume") or {}).get("h24") or 0.0),
+                                    "liquidity": float((best.get("liquidity") or {}).get("usd") or 0.0),
                                     "fdv": float(best.get("fdv") or best.get("marketCap") or 0.0)
                                 })
                         except Exception:
@@ -331,17 +334,17 @@ def get_batch_token_prices(mints: List[str]) -> Dict[str, Dict[str, Any]]:
                 if r.status_code == 200:
                     pairs = r.json().get("pairs") or []
                     for p in pairs:
-                        base = p.get("baseToken", {})
+                        base = p.get("baseToken") or {}
                         mint_addr = base.get("address")
                         if mint_addr and mint_addr in chunk:
-                            cur_liq = float(p.get("liquidity", {}).get("usd") or 0.0)
+                            cur_liq = float((p.get("liquidity") or {}).get("usd") or 0.0)
                             if mint_addr not in results or cur_liq > results[mint_addr].get("liquidity", 0.0):
                                 results[mint_addr] = {
                                     "symbol": base.get("symbol", "UNKNOWN"),
                                     "name": base.get("name", "Unknown"),
                                     "price_usd": float(p.get("priceUsd") or 0.0),
-                                    "change_24h": float(p.get("priceChange", {}).get("h24") or 0.0),
-                                    "change_1h": float(p.get("priceChange", {}).get("h1") or 0.0),
+                                    "change_24h": float((p.get("priceChange") or {}).get("h24") or 0.0),
+                                    "change_1h": float((p.get("priceChange") or {}).get("h1") or 0.0),
                                     "liquidity": cur_liq
                                 }
                     break

@@ -992,11 +992,12 @@ async def render_quote_card(target, user_id: int, user_lang: str, mint: str, amo
     price_impact_pct = float(quote.get("priceImpactPct") or 0.0)
 
     # Route AMM summary
-    routes = [step.get("swapInfo", {}).get("label", "DEX") for step in quote.get("routePlan", [])]
+    route_plan = quote.get("routePlan") or []
+    routes = [(step.get("swapInfo") or {}).get("label", "DEX") for step in route_plan if isinstance(step, dict)]
     route_str = " ➔ ".join(routes) if routes else "Jupiter V6 Aggregator"
 
     # Platform fee calculation
-    fee_lamports = float(quote.get("platformFee", {}).get("amount", 0))
+    fee_lamports = float((quote.get("platformFee") or {}).get("amount", 0) or 0)
     fee_sol = fee_lamports / 1e9
 
     if user_lang == "ar":
@@ -1285,7 +1286,7 @@ async def render_positions(target, user_id: int, user_lang: str, is_edit: bool =
             InlineKeyboardButton("📈 Dex", url=f"https://dexscreener.com/solana/{mint}")
         ])
 
-    sol_price_usd = batch_prices.get("So11111111111111111111111111111111111111112", {}).get("price_usd", 150.0)
+    sol_price_usd = (batch_prices.get("So11111111111111111111111111111111111111112") or {}).get("price_usd", 150.0)
     total_sol_equiv = (total_usd / sol_price_usd) if sol_price_usd > 0 else 0.0
 
     if user_lang == "ar":

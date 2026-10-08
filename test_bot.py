@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.69.0", card_text)
+        self.assertIn("v3.70.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.69.0")
+        self.assertEqual(BOT_VERSION, "v3.70.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -4286,6 +4286,87 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
             asyncio.run(handle_text_message(mock_update, mock_context))
             mock_search.assert_called_with("pepe coin")
             self.assertTrue(mock_msg.reply_text.called)
+
+    def test_94_trending_and_batch_prices_null_safety(self):
+        """Test v3.70.0 DexScreener null safety in trending engine, batch prices, and quote card rendering."""
+        import asyncio
+        from unittest.mock import patch, MagicMock, AsyncMock
+        from trending_engine import get_trending_tokens, get_batch_token_prices
+        from telegram_bot import render_quote_card
+
+        test_uid = 99881194
+
+        import trending_engine
+        trending_engine._TRENDING_CACHE["timestamp"] = 0
+        trending_engine._TRENDING_CACHE["data"] = []
+
+        # 1. Test get_trending_tokens with null fields in DexScreener pairs
+        mock_resp_boosts = MagicMock()
+        mock_resp_boosts.status_code = 200
+        mock_resp_boosts.json.return_value = [
+            {"chainId": "solana", "tokenAddress": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"}
+        ]
+
+        mock_resp_pairs = MagicMock()
+        mock_resp_pairs.status_code = 200
+        mock_resp_pairs.json.return_value = {
+            "pairs": [
+                {
+                    "chainId": "solana",
+                    "baseToken": {"address": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", "symbol": "BONK", "name": "Bonk"},
+                    "liquidity": None,
+                    "volume": None,
+                    "priceChange": None,
+                    "priceUsd": "0.00003"
+                }
+            ]
+        }
+
+        with patch("trending_engine._SESSION.get", side_effect=[mock_resp_boosts, mock_resp_pairs]):
+            trending = get_trending_tokens(limit=1)
+            self.assertEqual(len(trending), 1)
+            self.assertEqual(trending[0]["symbol"], "BONK")
+            self.assertEqual(trending[0]["liquidity"], 0.0)
+            self.assertEqual(trending[0]["volume_24h"], 0.0)
+
+        # 2. Test get_batch_token_prices with null fields
+        mock_resp_batch = MagicMock()
+        mock_resp_batch.status_code = 200
+        mock_resp_batch.json.return_value = {
+            "pairs": [
+                {
+                    "baseToken": {"address": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", "symbol": "BONK", "name": "Bonk"},
+                    "liquidity": None,
+                    "priceChange": None,
+                    "priceUsd": "0.00003"
+                }
+            ]
+        }
+
+        with patch("trending_engine._SESSION.get", return_value=mock_resp_batch):
+            prices = get_batch_token_prices(["DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"])
+            self.assertIn("DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", prices)
+            self.assertEqual(prices["DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"]["liquidity"], 0.0)
+            self.assertEqual(prices["DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"]["change_24h"], 0.0)
+
+        # 3. Test render_quote_card with null platformFee and null swapInfo
+        mock_target = AsyncMock()
+        mock_quote_null = {
+            "inAmount": "100000000",
+            "outAmount": "5000000000",
+            "otherAmountThreshold": "4950000000",
+            "priceImpactPct": "0.01",
+            "routePlan": [
+                {"swapInfo": None}
+            ],
+            "platformFee": None
+        }
+
+        with patch("telegram_bot.get_user_settings", return_value={"slippage_bps": 100}), \
+             patch("telegram_bot.get_jupiter_quote", return_value=mock_quote_null), \
+             patch("telegram_bot.scan_token_security", return_value={"symbol": "BONK", "price_usd": 0.00003, "mint": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"}):
+            asyncio.run(render_quote_card(mock_target, test_uid, "en", "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", 0.1, is_edit=False))
+            self.assertTrue(mock_target.reply_text.called)
 
 
 if __name__ == "__main__":

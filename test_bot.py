@@ -1553,7 +1553,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         asyncio.run(version_command(mock_update, mock_context))
         self.assertTrue(mock_update.message.reply_text.called)
         card_text = mock_update.message.reply_text.call_args[0][0]
-        self.assertIn("v3.61.0", card_text)
+        self.assertIn("v3.62.0", card_text)
         self.assertIn("Jupiter V6", card_text)
         self.assertIn("AES-256", card_text)
         self.assertIn("Token-2022", card_text)
@@ -1597,7 +1597,7 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         from config import BOT_VERSION, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
         from wallet_manager import get_token_accounts
 
-        self.assertEqual(BOT_VERSION, "v3.61.0")
+        self.assertEqual(BOT_VERSION, "v3.62.0")
         self.assertEqual(TOKEN_PROGRAM_ID, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
         self.assertEqual(TOKEN_2022_PROGRAM_ID, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
@@ -3825,6 +3825,48 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         all_t_btns = [b for row in token_kb.inline_keyboard for b in row]
         token_quote_btn = next((b for b in all_t_btns if b.callback_data == f"quote_{test_mint}"), None)
         self.assertIsNotNone(token_quote_btn, "Token audit card must embed 1-click Quote button")
+
+    def test_86_watchlist_quote_and_resilient_search(self):
+        """Test v3.62.0 watchlist quote shortcut, 24h avg pulse metric, and resilient DexScreener search."""
+        import asyncio
+        from unittest.mock import patch, MagicMock, AsyncMock
+        from rugcheck_scanner import search_solana_token
+        from telegram_bot import render_watchlist
+        from wallet_manager import add_to_watchlist, get_user_watchlist
+
+        test_uid = 99881186
+        test_mint = "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"
+        add_to_watchlist(test_uid, test_mint, "BONK", 0.00002)
+
+        # 1. Test DexScreener null pairs resilience
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"pairs": None}
+        with patch("rugcheck_scanner._SESSION.get", return_value=mock_resp):
+            res = search_solana_token("nonexistent_exotic_token")
+            self.assertIsNone(res, "Null pairs from DexScreener must return None safely without raising TypeError")
+
+        # 2. Test render_watchlist incorporates 1-click Quote button and 24h Avg Pulse
+        mock_target = AsyncMock()
+        dummy_batch = {
+            test_mint: {
+                "price_usd": 0.000025,
+                "change_24h": 25.0
+            }
+        }
+        with patch("telegram_bot.get_batch_token_prices", return_value=dummy_batch):
+            asyncio.run(render_watchlist(mock_target, test_uid, "en", is_edit=False))
+            self.assertTrue(mock_target.edit_text.called or mock_target.reply_text.called)
+            call = mock_target.edit_text if mock_target.edit_text.called else mock_target.reply_text
+            msg_text = call.call_args[0][0]
+            kb = call.call_args[1]["reply_markup"]
+
+            self.assertIn("24h Avg Pulse", msg_text)
+            self.assertIn("+25.00%", msg_text)
+
+            all_btns = [b for row in kb.inline_keyboard for b in row]
+            quote_btn = next((b for b in all_btns if b.callback_data == f"quote_{test_mint}"), None)
+            self.assertIsNotNone(quote_btn, "Watchlist item must contain 1-click Quote shortcut")
 
 
 if __name__ == "__main__":

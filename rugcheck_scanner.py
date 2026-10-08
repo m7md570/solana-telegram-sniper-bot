@@ -292,7 +292,8 @@ def search_solana_token(query: str) -> Optional[Dict[str, Any]]:
         resp = _SESSION.get(url, timeout=6)
         if resp.status_code == 200:
             data = resp.json()
-            pairs = [p for p in data.get("pairs", []) if p.get("chainId") == "solana"]
+            raw_pairs = data.get("pairs") or []
+            pairs = [p for p in raw_pairs if isinstance(p, dict) and p.get("chainId") == "solana"]
             if pairs:
                 pairs.sort(key=lambda x: float(x.get("liquidity", {}).get("usd", 0) or 0), reverse=True)
                 top = pairs[0]

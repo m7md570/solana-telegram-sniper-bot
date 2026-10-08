@@ -780,8 +780,16 @@ async def render_watchlist(target, user_id: int, user_lang: str, is_edit: bool =
         kb.append([
             InlineKeyboardButton(f"🚀 Snipe ${sym}", callback_data=f"inspect_{mint}"),
             InlineKeyboardButton("💵 Price", callback_data=f"price_{mint}"),
+            InlineKeyboardButton("💱 Quote", callback_data=f"quote_{mint}"),
             InlineKeyboardButton("🗑️ Untrack", callback_data=f"untrack_{mint}")
         ])
+
+    if active_items:
+        avg_change = sum(float(batch_prices.get(item["mint"], {}).get("change_24h") or 0.0) for item in active_items) / len(active_items)
+        avg_emoji = "📈" if avg_change >= 0 else "📉"
+        pulse_label = "24h Avg Pulse" if user_lang == "en" else "متوسط النبض 24 ساعة"
+        text_lines.append(f"📊 <b>{pulse_label}</b>: {avg_emoji} <code>{avg_change:+.2f}%</code>\n")
+
     tip_text = (
         "💡 <b>Commands:</b> <code>/track [CA]</code> • <code>/untrack [CA]</code> • <code>/untrack all</code>\n"
         if user_lang == "en" else

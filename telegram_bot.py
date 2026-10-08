@@ -325,7 +325,8 @@ def build_settings_card(user_id: int, user_lang: str) -> Tuple[str, InlineKeyboa
         InlineKeyboardButton(f"{'✅ ' if current_bps == 50 else ''}0.5%", callback_data="slip_50"),
         InlineKeyboardButton(f"{'✅ ' if current_bps == 100 else ''}1.0%", callback_data="slip_100"),
         InlineKeyboardButton(f"{'✅ ' if current_bps == 200 else ''}2.0%", callback_data="slip_200"),
-        InlineKeyboardButton(f"{'✅ ' if current_bps == 500 else ''}5.0%", callback_data="slip_500")
+        InlineKeyboardButton(f"{'✅ ' if current_bps == 500 else ''}5.0%", callback_data="slip_500"),
+        InlineKeyboardButton(f"{'✅ ' if current_bps == 1000 else ''}10.0%", callback_data="slip_1000")
     ]
 
     # Priority fee row with active checkmark
@@ -1718,6 +1719,7 @@ async def render_slippage_card(target, user_id: int, user_lang: str, is_edit: bo
     s100 = f"1.0% {'✅' if current_bps == 100 else ''}".strip()
     s200 = f"2.0% {'✅' if current_bps == 200 else ''}".strip()
     s500 = f"5.0% {'✅' if current_bps == 500 else ''}".strip()
+    s1000 = f"10.0% {'✅' if current_bps == 1000 else ''}".strip()
 
     if user_lang == "ar":
         title = "🎯 <b>إعدادات نسبة الانزلاق السعري (Slippage Tolerance)</b>"
@@ -1746,7 +1748,8 @@ async def render_slippage_card(target, user_id: int, user_lang: str, is_edit: bo
             InlineKeyboardButton(s50, callback_data="slip_50"),
             InlineKeyboardButton(s100, callback_data="slip_100"),
             InlineKeyboardButton(s200, callback_data="slip_200"),
-            InlineKeyboardButton(s500, callback_data="slip_500")
+            InlineKeyboardButton(s500, callback_data="slip_500"),
+            InlineKeyboardButton(s1000, callback_data="slip_1000")
         ],
         [
             InlineKeyboardButton(refresh_label, callback_data="btn_slippage"),

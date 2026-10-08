@@ -4819,6 +4819,37 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertEqual(jup_btn.url, f"https://jup.ag/swap/SOL-{test_mint}")
         self.assertIn("Jupiter", jup_btn.text)
 
+    def test_105_ten_percent_slippage_preset_and_card_parity(self):
+        """Test v3.83.0 10.0% high-volatility slippage preset on both settings and slippage cards."""
+        import asyncio
+        from unittest.mock import MagicMock, AsyncMock
+        from telegram_bot import build_settings_card, render_slippage_card
+        from wallet_manager import get_or_create_wallet, update_user_slippage
+
+        test_uid = 99881155
+        get_or_create_wallet(test_uid)
+        update_user_slippage(test_uid, 1000)  # 10.0% slippage (1000 BPS)
+
+        # 1. Test build_settings_card contains 10.0% button with checkmark
+        text_settings, kb_settings = build_settings_card(test_uid, "en")
+        all_settings_btns = [b for row in kb_settings.inline_keyboard for b in row]
+        slip1000_settings = next((b for b in all_settings_btns if b.callback_data == "slip_1000"), None)
+        self.assertIsNotNone(slip1000_settings)
+        self.assertIn("✅", slip1000_settings.text)
+        self.assertIn("10.0%", slip1000_settings.text)
+
+        # 2. Test render_slippage_card contains 10.0% button with checkmark
+        mock_target = MagicMock()
+        mock_target.reply_text = AsyncMock()
+        asyncio.run(render_slippage_card(mock_target, test_uid, "ar", is_edit=False))
+        self.assertTrue(mock_target.reply_text.called)
+        kb_slip = mock_target.reply_text.call_args[1]["reply_markup"]
+        all_slip_btns = [b for row in kb_slip.inline_keyboard for b in row]
+        slip1000_card = next((b for b in all_slip_btns if b.callback_data == "slip_1000"), None)
+        self.assertIsNotNone(slip1000_card)
+        self.assertIn("✅", slip1000_card.text)
+        self.assertIn("10.0%", slip1000_card.text)
+
 
 if __name__ == "__main__":
     unittest.main()

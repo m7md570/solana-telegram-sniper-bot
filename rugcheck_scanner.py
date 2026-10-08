@@ -379,6 +379,9 @@ def search_solana_token(query: str) -> Optional[Dict[str, Any]]:
                         "price_usd": float(top.get("priceUsd", 0) or 0),
                         "liquidity_usd": float((top.get("liquidity") or {}).get("usd", 0) or 0),
                         "volume_24h": float((top.get("volume") or {}).get("h24", 0) or 0),
+                        "fdv": float(top.get("fdv") or top.get("marketCap") or 0),
+                        "dex_id": str(top.get("dexId") or ""),
+                        "pair_address": str(top.get("pairAddress") or ""),
                         "url": top.get("url", "")
                     }
     except Exception:

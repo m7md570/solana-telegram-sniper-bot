@@ -4871,6 +4871,25 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         self.assertEqual(gmgn_btn.url, f"https://gmgn.ai/sol/token/{test_mint}")
         self.assertIn("GMGN", gmgn_btn.text)
 
+    def test_108_search_solana_token_extended_metadata_and_ai16z_narrative(self):
+        """Test v3.86.0 search_solana_token enriched telemetry (fdv, dex_id, pair_address) and ai16z trending integration."""
+        from rugcheck_scanner import search_solana_token
+        from trending_engine import FALLBACK_TRENDING_MINTS
+
+        # 1. Check ai16z in FALLBACK_TRENDING_MINTS
+        ai16z_mint = "HeLp6NuQkmYB4pYWo2zYs22mESHXPQYzXbB8n4V98jwC"
+        self.assertIn(ai16z_mint, FALLBACK_TRENDING_MINTS)
+
+        # 2. Check search_solana_token returns extended telemetry
+        result = search_solana_token("bonk")
+        self.assertIsNotNone(result)
+        self.assertIn("fdv", result)
+        self.assertIn("dex_id", result)
+        self.assertIn("pair_address", result)
+        self.assertIsInstance(result["fdv"], float)
+        self.assertIsInstance(result["dex_id"], str)
+        self.assertIsInstance(result["pair_address"], str)
+
 
 if __name__ == "__main__":
     unittest.main()

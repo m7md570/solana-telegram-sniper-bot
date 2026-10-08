@@ -4597,6 +4597,46 @@ class TestSolanaTelegramSniperBot(unittest.TestCase):
         std_pump_btn = next((b for b in std_btns if "pump.fun" in b.url), None)
         self.assertIsNone(std_pump_btn, "Pump.fun button should not be present for non-pump tokens")
 
+    def test_99_liquidity_ratio_and_slippage_warning(self):
+        """Test v3.77.0 Liquidity-to-Market-Cap health ratio and low liquidity slippage warning."""
+        from rugcheck_scanner import format_token_card
+
+        # 1. Test low liquidity (< 5% ratio): Mcap $1,000,000 with only $20,000 liquidity (2.0%)
+        low_liq_scan = {
+            "mint": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
+            "symbol": "BONK",
+            "name": "Bonk",
+            "price_usd": 0.000025,
+            "status": "SAFE",
+            "rug_score": 10,
+            "mcap": 1_000_000.0,
+            "liquidity": 20_000.0,
+            "dex": "Raydium",
+        }
+        card_en_low = format_token_card(low_liq_scan, lang="en")
+        self.assertIn("⚠️ (Low: 2.0%)", card_en_low)
+        card_ar_low = format_token_card(low_liq_scan, lang="ar")
+        self.assertIn("⚠️ (منخفضة: 2.0%)", card_ar_low)
+
+        # 2. Test healthy liquidity (>= 5% ratio): Mcap $1,000,000 with $150,000 liquidity (15.0%)
+        healthy_liq_scan = {
+            "mint": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
+            "symbol": "BONK",
+            "name": "Bonk",
+            "price_usd": 0.000025,
+            "status": "SAFE",
+            "rug_score": 10,
+            "mcap": 1_000_000.0,
+            "liquidity": 150_000.0,
+            "dex": "Raydium",
+        }
+        card_en_healthy = format_token_card(healthy_liq_scan, lang="en")
+        self.assertIn("(15.0%)", card_en_healthy)
+        self.assertNotIn("⚠️ (Low:", card_en_healthy)
+        card_ar_healthy = format_token_card(healthy_liq_scan, lang="ar")
+        self.assertIn("(15.0%)", card_ar_healthy)
+        self.assertNotIn("⚠️ (منخفضة:", card_ar_healthy)
+
 
 if __name__ == "__main__":
     unittest.main()

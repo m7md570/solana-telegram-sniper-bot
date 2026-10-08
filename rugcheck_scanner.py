@@ -185,8 +185,8 @@ def format_token_card(scan: Dict[str, Any], lang: str = "en") -> str:
         dex = f"PumpSwap / {dex}"
     elif dex.lower() in ("pumpswap", "pumpfun"):
         dex = "PumpSwap (Pump.fun)"
-    mcap = float(scan.get("mcap") or 0.0)
-    liq = float(scan.get("liquidity_usd") or 0.0)
+    mcap = float(scan.get("mcap") or scan.get("market_cap") or 0.0)
+    liq = float(scan.get("liquidity_usd") or scan.get("liquidity") or 0.0)
     change = float(scan.get("price_change_24h") or 0.0)
     change_1h = float(scan.get("price_change_1h") or 0.0)
     score = int(scan.get("rug_score") or 0)
@@ -194,6 +194,17 @@ def format_token_card(scan: Dict[str, Any], lang: str = "en") -> str:
 
     change_emoji = "📈" if change >= 0 else "📉"
     price_sol_str = f" (<code>{price_sol:.6f} SOL</code>)" if price_sol > 0 else ""
+
+    liq_ratio_str = ""
+    liq_ratio_str_ar = ""
+    if mcap > 0 and liq > 0:
+        ratio = (liq / mcap) * 100
+        if ratio < 5.0:
+            liq_ratio_str = f" ⚠️ (Low: {ratio:.1f}%)"
+            liq_ratio_str_ar = f" ⚠️ (منخفضة: {ratio:.1f}%)"
+        else:
+            liq_ratio_str = f" ({ratio:.1f}%)"
+            liq_ratio_str_ar = f" ({ratio:.1f}%)"
 
     if lang == "ar":
         if status == "SAFE":
@@ -214,7 +225,7 @@ def format_token_card(scan: Dict[str, Any], lang: str = "en") -> str:
             f"{change_emoji} <b>التغير اللحظي</b>: <code>{change:+.2f}% (24h)</code> | <code>{change_1h:+.2f}% (1h)</code>",
             f"🏛️ <b>المنصة المضيفة (DEX)</b>: <code>{dex}</code>",
             f"💎 <b>القيمة السوقية (MCap)</b>: <code>${mcap:,.0f}</code>",
-            f"💧 <b>السيولة المتوفرة</b>: <code>${liq:,.0f}</code>",
+            f"💧 <b>السيولة المتوفرة</b>: <code>${liq:,.0f}</code>{liq_ratio_str_ar}",
             f"",
             f"🛡️ <b>فحص الأمان والتحقق</b>:",
             f"• تقييم الأمان: {badge}",
@@ -256,7 +267,7 @@ def format_token_card(scan: Dict[str, Any], lang: str = "en") -> str:
             f"{change_emoji} <b>Price Momentum</b>: <code>{change:+.2f}% (24h)</code> | <code>{change_1h:+.2f}% (1h)</code>",
             f"🏛️ <b>DEX Venue</b>: <code>{dex}</code>",
             f"💎 <b>Market Cap (MCap)</b>: <code>${mcap:,.0f}</code>",
-            f"💧 <b>Liquidity</b>: <code>${liq:,.0f}</code>",
+            f"💧 <b>Liquidity</b>: <code>${liq:,.0f}</code>{liq_ratio_str}",
             f"",
             f"🛡️ <b>Security & RugCheck Audit</b>:",
             f"• Risk Assessment: {badge}",
